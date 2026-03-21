@@ -703,6 +703,117 @@ class TestDrawingRoutes(unittest.TestCase):
         self.assertEqual(data["conflicts"][0]["badge_id"], "B2")
         self.assertEqual(data["conflicts"][0]["winner_name"], "Bob")
 
+    @patch("routes.TTEClient")
+    def test_drawing_has_view_tabs(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.post("/drawing")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"By Game", resp.data)
+        self.assertIn(b"By Winner", resp.data)
+        self.assertIn(b'id="tab-by-game"', resp.data)
+        self.assertIn(b'id="tab-by-winner"', resp.data)
+        self.assertIn(b'id="panel-by-game"', resp.data)
+        self.assertIn(b'id="panel-by-winner"', resp.data)
+
+    @patch("routes.TTEClient")
+    def test_by_game_view_shows_all_games(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+            {"id": "G2", "name": "Ticket to Ride"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.post("/drawing")
+        html = resp.data.decode()
+        # By Game panel shows both games
+        self.assertIn("Catan", html)
+        self.assertIn("Ticket to Ride", html)
+        # Game with no entries shows "No entries"
+        self.assertIn("No entries", html)
+
+    @patch("routes.TTEClient")
+    def test_by_winner_view_shows_winners_only(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+            {"id": "G2", "name": "Ticket to Ride"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.post("/drawing")
+        html = resp.data.decode()
+        # The winner table (By Winner view) should have Alice once
+        # The By Winner table is inside panel-by-winner
+        winner_panel_start = html.index('id="panel-by-winner"')
+        winner_panel = html[winner_panel_start:]
+        self.assertIn("Alice", winner_panel)
+        self.assertIn("Catan", winner_panel)
+        # Ticket to Ride has no entries, so shouldn't appear in winner table
+        winner_table_start = winner_panel.index('id="winner-table"')
+        winner_table_end = winner_panel.index('</table>')
+        winner_table = winner_panel[winner_table_start:winner_table_end]
+        self.assertNotIn("Ticket to Ride", winner_table)
+
+    @patch("routes.TTEClient")
+    def test_by_winner_view_highlights_premium(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+            {"id": "G2", "name": "Ticket to Ride"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            {"id": "e2", "badge_id": "B2", "librarygame_id": "G2", "name": "Bob"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+            sess["premium_games"] = ["G1"]
+
+        resp = self.client.post("/drawing")
+        html = resp.data.decode()
+        # By Winner table should show Premium label for Catan
+        winner_panel_start = html.index('id="panel-by-winner"')
+        winner_panel = html[winner_panel_start:]
+        self.assertIn("Premium", winner_panel)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -228,6 +228,35 @@
         margin: 0;
         font-size: 1.05rem;
     }
+
+    .view-tabs {
+        display: flex;
+        gap: 0;
+        margin-bottom: 0;
+    }
+    .view-tab {
+        padding: 0.6rem 1.5rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        border: 1px solid #dee2e6;
+        border-bottom: none;
+        background: #f8f9fa;
+        color: #555;
+        cursor: pointer;
+        border-radius: 8px 8px 0 0;
+        position: relative;
+        bottom: -1px;
+    }
+    .view-tab:hover { background: #e9ecef; }
+    .view-tab.active {
+        background: white;
+        color: #2c3e50;
+        border-color: #dee2e6;
+        border-bottom-color: white;
+        z-index: 1;
+    }
+    .view-panel { display: none; }
+    .view-panel.active { display: block; }
 </style>
 {% endblock %}
 
@@ -319,6 +348,12 @@
 {% endif %}
 </div>
 
+<div class="view-tabs">
+    <button class="view-tab active" id="tab-by-game" onclick="switchView('by-game')">By Game</button>
+    <button class="view-tab" id="tab-by-winner" onclick="switchView('by-winner')">By Winner</button>
+</div>
+
+<div class="view-panel active" id="panel-by-game">
 <table class="results-table" id="results-table">
     <thead>
         <tr>
@@ -355,11 +390,44 @@
         {% endfor %}
     </tbody>
 </table>
+</div>
+
+<div class="view-panel" id="panel-by-winner">
+<table class="results-table" id="winner-table">
+    <thead>
+        <tr>
+            <th>Winner</th>
+            <th>Badge</th>
+            <th>Game Won</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% set winners_list = results | selectattr('winner_name') | sort(attribute='winner_name') | list %}
+        {% for r in winners_list %}
+        <tr class="{{ 'premium' if r.is_premium else '' }}{{ ' in-conflict' if r.game_id in conflicted_game_ids }}">
+            <td>{{ r.winner_name }}</td>
+            <td>{{ r.winner_badge or '—' }}</td>
+            <td>
+                {{ r.game_name }}
+                {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
 
 <script>
 (function() {
     const resolutions = {};
     const totalConflicts = document.querySelectorAll('.conflict-item').length;
+
+    window.switchView = function(view) {
+        document.getElementById('tab-by-game').classList.toggle('active', view === 'by-game');
+        document.getElementById('tab-by-winner').classList.toggle('active', view === 'by-winner');
+        document.getElementById('panel-by-game').classList.toggle('active', view === 'by-game');
+        document.getElementById('panel-by-winner').classList.toggle('active', view === 'by-winner');
+    };
 
     window.selectResolution = function(badgeId, gameId) {
         resolutions[badgeId] = gameId;
@@ -463,6 +531,29 @@
                 '<td>' + r.total_entries + '</td>' +
                 '<td>' + (r.winner_name ? ((r.winner_index + 1) + ' / ' + r.total_entries) : '—') + '</td>' +
                 '<td>' + statusCell + '</td>';
+            tbody.appendChild(tr);
+        });
+
+        updateWinnerTable(results, conflictedIds);
+    }
+
+    function updateWinnerTable(results, conflictedIds) {
+        var tbody = document.querySelector('#winner-table tbody');
+        tbody.innerHTML = '';
+        var winners = results.filter(function(r) { return r.winner_name; });
+        winners.sort(function(a, b) {
+            return a.winner_name.localeCompare(b.winner_name);
+        });
+        winners.forEach(function(r) {
+            var tr = document.createElement('tr');
+            if (r.is_premium) tr.classList.add('premium');
+            if (conflictedIds.has(r.game_id)) tr.classList.add('in-conflict');
+            tr.innerHTML =
+                '<td>' + escHtml(r.winner_name) + '</td>' +
+                '<td>' + escHtml(r.winner_badge || '—') + '</td>' +
+                '<td>' + escHtml(r.game_name) +
+                    (r.is_premium ? ' <span class="premium-label">Premium</span>' : '') +
+                '</td>';
             tbody.appendChild(tr);
         });
     }
