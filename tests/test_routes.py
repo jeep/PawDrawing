@@ -373,5 +373,107 @@ class TestGamesRoute(unittest.TestCase):
         mock_instance.get_library_playtowins.assert_called_once_with("lib-1")
 
 
+class TestPremiumGamesRoute(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def test_set_premium_requires_login(self):
+        resp = self.client.post("/games/premium",
+                                json={"premium_games": ["G1"]})
+        self.assertEqual(resp.status_code, 401)
+
+    def test_set_premium_stores_in_session(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.post("/games/premium",
+                                json={"premium_games": ["G1", "G2"]})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["count"], 2)
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["premium_games"], ["G1", "G2"])
+
+    def test_set_premium_empty_list(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["premium_games"] = ["G1"]
+
+        resp = self.client.post("/games/premium",
+                                json={"premium_games": []})
+        self.assertEqual(resp.status_code, 200)
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["premium_games"], [])
+
+    def test_set_premium_invalid_body(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.post("/games/premium",
+                                data="not json",
+                                content_type="text/plain")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_set_premium_missing_key(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.post("/games/premium",
+                                json={"other": "data"})
+        self.assertEqual(resp.status_code, 400)
+
+    @patch("routes.TTEClient")
+    def test_games_page_shows_premium_styling(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+            {"id": "G2", "name": "Wingspan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"badge_id": "B1", "librarygame_id": "G1", "id": "e1"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+            sess["premium_games"] = ["G1"]
+
+        resp = self.client.get("/games")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Premium", resp.data)
+        self.assertIn(b"checked", resp.data)
+
+    @patch("routes.TTEClient")
+    def test_games_page_no_premium(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = []
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+            # no premium_games in session
+
+        resp = self.client.get("/games")
+        self.assertEqual(resp.status_code, 200)
+        # No premium-label badge should appear (the column header "Premium" will exist)
+        self.assertNotIn(b'class="premium-label"', resp.data)
+
+
 if __name__ == "__main__":
     unittest.main()

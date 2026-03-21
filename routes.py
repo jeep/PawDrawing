@@ -160,10 +160,31 @@ def games():
     game_data = group_entries_by_game(entries, all_games)
     game_data.sort(key=lambda g: g["game"].get("name", ""))
 
+    premium_games = session.get("premium_games", [])
+
     return render_template(
         "games.html",
         game_data=game_data,
         total_games=len(all_games),
         total_entries=len(entries),
         convention_name=session.get("convention_name", ""),
+        premium_games=premium_games,
     )
+
+
+@main_bp.route("/games/premium", methods=["POST"])
+def set_premium_games():
+    """AJAX endpoint: save premium game designations to session."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    data = request.get_json(silent=True)
+    if data is None or "premium_games" not in data:
+        return jsonify({"error": "Invalid request"}), 400
+
+    game_ids = data["premium_games"]
+    if not isinstance(game_ids, list):
+        return jsonify({"error": "premium_games must be a list"}), 400
+
+    session["premium_games"] = game_ids
+    return jsonify({"ok": True, "count": len(game_ids)})
