@@ -271,5 +271,107 @@ class TestConventionConfirmRoute(unittest.TestCase):
         self.assertIn("/convention", resp.headers["Location"])
 
 
+class TestGamesRoute(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def test_games_requires_login(self):
+        resp = self.client.get("/games")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/login", resp.headers["Location"])
+
+    def test_games_requires_convention(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.get("/games")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/convention", resp.headers["Location"])
+
+    @patch("routes.TTEClient")
+    def test_games_loads_and_displays(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+            {"id": "G2", "name": "Wingspan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"badge_id": "B1", "librarygame_id": "G1", "id": "e1"},
+            {"badge_id": "B2", "librarygame_id": "G1", "id": "e2"},
+            {"badge_id": "B1", "librarygame_id": "G1", "id": "e3"},  # dup
+            {"badge_id": None, "librarygame_id": "G2", "id": "e4"},  # no badge
+            {"badge_id": "B3", "librarygame_id": "G2", "id": "e5"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.get("/games")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Catan", resp.data)
+        self.assertIn(b"Wingspan", resp.data)
+        # 3 unique entries after de-dup and badge filter
+        self.assertIn(b"3", resp.data)
+
+    @patch("routes.TTEClient")
+    def test_games_shows_no_entries_badge(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = []
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.get("/games")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"No entries", resp.data)
+
+    @patch("routes.TTEClient")
+    def test_games_api_error_redirects(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.side_effect = TTEAPIError("API error")
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+
+        resp = self.client.get("/games")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/convention", resp.headers["Location"])
+
+    @patch("routes.TTEClient")
+    def test_games_uses_library_when_no_convention(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = []
+        mock_instance.get_library_playtowins.return_value = []
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_name"] = "Test"
+            # no convention_id
+
+        resp = self.client.get("/games")
+        self.assertEqual(resp.status_code, 200)
+        mock_instance.get_library_playtowins.assert_called_once_with("lib-1")
+
+
 if __name__ == "__main__":
     unittest.main()

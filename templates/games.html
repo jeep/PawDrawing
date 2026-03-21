@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}PawDrawing — Games{% endblock %}
+
+{% block nav %}
+<a href="{{ url_for('main.convention_select') }}">Change Convention</a>
+<form method="POST" action="{{ url_for('main.logout') }}" style="display:inline">
+    <button type="submit" style="background:none;border:none;color:#ecf0f1;cursor:pointer;font-size:0.9rem;">
+        Logout ({{ session.get('tte_username', '') }})
+    </button>
+</form>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .summary {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        gap: 2rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .summary h2 { margin: 0; color: #2c3e50; font-size: 1.2rem; }
+    .stat {
+        font-size: 0.9rem;
+        color: #555;
+    }
+    .stat strong {
+        color: #2c3e50;
+        font-size: 1.1rem;
+    }
+    .game-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .game-table th {
+        background: #2c3e50;
+        color: white;
+        padding: 0.75rem 1rem;
+        text-align: left;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .game-table td {
+        padding: 0.65rem 1rem;
+        border-bottom: 1px solid #eee;
+        font-size: 0.95rem;
+    }
+    .game-table tr:last-child td { border-bottom: none; }
+    .game-table tr:hover td { background: #f8f9fa; }
+    .badge-zero {
+        color: #999;
+        font-style: italic;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="summary">
+    <h2>{{ convention_name }}</h2>
+    <span class="stat"><strong>{{ total_games }}</strong> games</span>
+    <span class="stat"><strong>{{ total_entries }}</strong> unique entries</span>
+</div>
+
+{% if game_data %}
+<table class="game-table">
+    <thead>
+        <tr>
+            <th>Game</th>
+            <th>Entries</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in game_data %}
+        <tr>
+            <td>{{ item.game.get('name', 'Unknown') }}</td>
+            <td>
+                {% if item.entrant_count == 0 %}
+                    <span class="badge-zero">No entries</span>
+                {% else %}
+                    {{ item.entrant_count }}
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No Play-to-Win games found for this convention.</p>
+{% endif %}
+{% endblock %}

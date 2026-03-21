@@ -1,5 +1,6 @@
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
 
+from data_processing import group_entries_by_game, process_entries
 from tte_client import TTEAPIError, TTEClient
 
 main_bp = Blueprint("main", __name__)
@@ -122,4 +123,47 @@ def convention_confirm():
         "convention_confirm.html",
         convention_name=convention_name,
         library_name=library_name,
+    )
+
+
+@main_bp.route("/games")
+def games():
+    """Load P2W games and entries, process, and display."""
+    if not session.get("tte_session_id"):
+        flash("Please log in first.", "error")
+        return redirect(url_for("main.login"))
+
+    library_id = session.get("library_id")
+    convention_id = session.get("convention_id")
+    if not library_id:
+        flash("Please select a convention first.", "error")
+        return redirect(url_for("main.convention_select"))
+
+    client = _get_client()
+
+    try:
+        all_games = client.get_library_games(library_id, play_to_win_only=True)
+    except TTEAPIError as exc:
+        flash(f"Could not load games: {exc}", "error")
+        return redirect(url_for("main.convention_select"))
+
+    try:
+        if convention_id:
+            raw_entries = client.get_convention_playtowins(convention_id)
+        else:
+            raw_entries = client.get_library_playtowins(library_id)
+    except TTEAPIError as exc:
+        flash(f"Could not load entries: {exc}", "error")
+        return redirect(url_for("main.convention_select"))
+
+    entries = process_entries(raw_entries)
+    game_data = group_entries_by_game(entries, all_games)
+    game_data.sort(key=lambda g: g["game"].get("name", ""))
+
+    return render_template(
+        "games.html",
+        game_data=game_data,
+        total_games=len(all_games),
+        total_entries=len(entries),
+        convention_name=session.get("convention_name", ""),
     )
