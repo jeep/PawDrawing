@@ -140,6 +140,10 @@ class TTEClient:
 
     # ── Convention ─────────────────────────────────────────────────────
 
+    def search_conventions(self, query):
+        """Search conventions by name. Returns a list of matching conventions."""
+        return self._get_all_pages("/convention", params={"query": query})
+
     def get_convention(self, convention_id, include_library=False):
         """Fetch a convention by ID."""
         params = {}

@@ -10,7 +10,174 @@
 </form>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+    .select-card {
+        max-width: 550px;
+        margin: 3rem auto;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        padding: 2rem;
+    }
+    .select-card h2 { margin-bottom: 1.5rem; color: #2c3e50; }
+    .section-label {
+        font-weight: 600;
+        font-size: 0.95rem;
+        margin-bottom: 0.4rem;
+        display: block;
+    }
+    .form-row { margin-bottom: 1.5rem; }
+    .form-row input[type="text"] {
+        width: 100%;
+        padding: 0.6rem 0.75rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 1rem;
+    }
+    .form-row input:focus {
+        outline: none;
+        border-color: #2c3e50;
+        box-shadow: 0 0 0 2px rgba(44,62,80,0.15);
+    }
+    .divider {
+        text-align: center;
+        margin: 1.5rem 0;
+        color: #999;
+        font-size: 0.85rem;
+    }
+    .divider::before, .divider::after {
+        content: "";
+        display: inline-block;
+        width: 35%;
+        height: 1px;
+        background: #ddd;
+        vertical-align: middle;
+        margin: 0 0.75rem;
+    }
+    .search-results {
+        list-style: none;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        max-height: 200px;
+        overflow-y: auto;
+        margin-top: 0.4rem;
+        display: none;
+    }
+    .search-results li {
+        padding: 0.6rem 0.75rem;
+        cursor: pointer;
+        border-bottom: 1px solid #eee;
+    }
+    .search-results li:last-child { border-bottom: none; }
+    .search-results li:hover { background: #f0f4f8; }
+    .search-hint {
+        font-size: 0.8rem;
+        color: #999;
+        margin-top: 0.3rem;
+    }
+    .btn-proceed {
+        width: 100%;
+        padding: 0.7rem;
+        background: #2c3e50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 1rem;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .btn-proceed:hover { background: #34495e; }
+    .btn-proceed:disabled { background: #95a5a6; cursor: not-allowed; }
+</style>
+{% endblock %}
+
 {% block content %}
-<h2>Select Convention</h2>
-<p>Convention selection will be implemented in a future update.</p>
+<div class="select-card">
+    <h2>Select Convention</h2>
+
+    <div class="form-row">
+        <label class="section-label" for="search">Search by name</label>
+        <input type="text" id="search" placeholder="Type convention name..." autocomplete="off">
+        <div class="search-hint">Type at least 2 characters to search</div>
+        <ul class="search-results" id="search-results"></ul>
+    </div>
+
+    <div class="divider">or</div>
+
+    <form method="POST" action="{{ url_for('main.convention_confirm') }}" id="select-form">
+        <div class="form-row">
+            <label class="section-label" for="convention_id">Paste Convention ID</label>
+            <input type="text" id="convention_id" name="convention_id"
+                   placeholder="e.g. ABCD1234-5678-90EF-...">
+        </div>
+        <button type="submit" class="btn-proceed" id="btn-proceed">Load Convention</button>
+    </form>
+</div>
+
+<script>
+(function() {
+    const searchInput = document.getElementById('search');
+    const resultsList = document.getElementById('search-results');
+    const idInput = document.getElementById('convention_id');
+    let debounceTimer;
+
+    searchInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        const q = this.value.trim();
+        if (q.length < 2) {
+            resultsList.style.display = 'none';
+            resultsList.innerHTML = '';
+            return;
+        }
+        debounceTimer = setTimeout(() => fetchResults(q), 350);
+    });
+
+    function fetchResults(query) {
+        fetch('{{ url_for("main.convention_search") }}?q=' + encodeURIComponent(query))
+            .then(r => r.json())
+            .then(data => {
+                resultsList.innerHTML = '';
+                if (data.error) {
+                    resultsList.innerHTML = '<li style="color:#b71c1c;cursor:default">' +
+                        escapeHtml(data.error) + '</li>';
+                    resultsList.style.display = 'block';
+                    return;
+                }
+                if (!data.results || data.results.length === 0) {
+                    resultsList.innerHTML = '<li style="color:#999;cursor:default">No conventions found</li>';
+                    resultsList.style.display = 'block';
+                    return;
+                }
+                data.results.forEach(function(conv) {
+                    const li = document.createElement('li');
+                    li.textContent = conv.name;
+                    li.addEventListener('click', function() {
+                        idInput.value = conv.id;
+                        searchInput.value = conv.name;
+                        resultsList.style.display = 'none';
+                    });
+                    resultsList.appendChild(li);
+                });
+                resultsList.style.display = 'block';
+            })
+            .catch(() => {
+                resultsList.innerHTML = '<li style="color:#b71c1c;cursor:default">Search failed</li>';
+                resultsList.style.display = 'block';
+            });
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.appendChild(document.createTextNode(text));
+        return div.innerHTML;
+    }
+
+    document.addEventListener('click', function(e) {
+        if (!searchInput.contains(e.target) && !resultsList.contains(e.target)) {
+            resultsList.style.display = 'none';
+        }
+    });
+})();
+</script>
 {% endblock %}

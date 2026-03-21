@@ -144,5 +144,132 @@ class TestConventionSelectRoute(unittest.TestCase):
         self.assertIn(b"Select Convention", resp.data)
 
 
+class TestConventionSearchRoute(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def test_search_requires_login(self):
+        resp = self.client.get("/convention/search?q=test")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_search_short_query_returns_empty(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.get("/convention/search?q=a")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertEqual(data["results"], [])
+
+    @patch("routes.TTEClient")
+    def test_search_returns_results(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.search_conventions.return_value = [
+            {"id": "conv-1", "name": "GameFest 2026"},
+            {"id": "conv-2", "name": "GameCon 2026"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.get("/convention/search?q=game")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertEqual(len(data["results"]), 2)
+        self.assertEqual(data["results"][0]["name"], "GameFest 2026")
+
+    @patch("routes.TTEClient")
+    def test_search_api_error_returns_502(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.search_conventions.side_effect = TTEAPIError("API down")
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.get("/convention/search?q=test")
+        self.assertEqual(resp.status_code, 502)
+        data = resp.get_json()
+        self.assertIn("error", data)
+
+
+class TestConventionConfirmRoute(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def test_select_requires_login(self):
+        resp = self.client.post("/convention/select", data={"convention_id": "x"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/login", resp.headers["Location"])
+
+    def test_select_empty_id_redirects_with_error(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.post("/convention/select", data={"convention_id": ""})
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/convention", resp.headers["Location"])
+
+    @patch("routes.TTEClient")
+    def test_select_success_stores_session(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_convention.return_value = {
+            "id": "conv-1",
+            "name": "GameFest 2026",
+            "library": {"id": "lib-1", "name": "GameFest Library"},
+        }
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.post("/convention/select", data={"convention_id": "conv-1"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"GameFest 2026", resp.data)
+        self.assertIn(b"GameFest Library", resp.data)
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["convention_id"], "conv-1")
+            self.assertEqual(sess["library_id"], "lib-1")
+
+    @patch("routes.TTEClient")
+    def test_select_no_library_shows_error(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_convention.return_value = {
+            "id": "conv-1",
+            "name": "GameFest 2026",
+        }
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.post("/convention/select", data={"convention_id": "conv-1"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/convention", resp.headers["Location"])
+
+    @patch("routes.TTEClient")
+    def test_select_api_error_shows_flash(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_convention.side_effect = TTEAPIError("Not found", 404)
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.post("/convention/select", data={"convention_id": "bad-id"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/convention", resp.headers["Location"])
+
+
 if __name__ == "__main__":
     unittest.main()
