@@ -352,7 +352,10 @@ class TestRunDrawing:
         assert conflicts == []
         assert len(auto_resolved) == 1
         assert auto_resolved[0]["badge_id"] == "B1"
+        assert auto_resolved[0]["winner_name"] == "Player B1"
         assert auto_resolved[0]["kept_game_id"] == "G1"
+        assert auto_resolved[0]["kept_game_name"] == "Game 1"
+        assert auto_resolved[0]["relinquished_names"] == ["Game 2"]
         winners = get_current_winners(state)
         assert winners["G1"]["badge_id"] == "B1"
         assert winners["G2"]["badge_id"] == "B2"
@@ -368,6 +371,7 @@ class TestRunDrawing:
 
         assert len(conflicts) == 1
         assert conflicts[0]["badge_id"] == "B1"
+        assert conflicts[0]["winner_name"] == "Player B1"
         assert set(conflicts[0]["game_ids"]) == {"G1", "G2"}
 
     def test_multiple_premium_conflict_returns_for_admin(self):
@@ -405,9 +409,12 @@ class TestRunDrawing:
         # B1's conflict auto-resolved
         assert len(auto_resolved) == 1
         assert auto_resolved[0]["badge_id"] == "B1"
+        assert auto_resolved[0]["winner_name"] == "Player B1"
+        assert auto_resolved[0]["kept_game_name"] == "Game 1"
         # B2 now has a cascading conflict (wins G2 and G3)
         assert len(conflicts) == 1
         assert conflicts[0]["badge_id"] == "B2"
+        assert conflicts[0]["winner_name"] == "Player B2"
 
     def test_single_entry_game(self):
         game_data = _make_game_data([
@@ -432,3 +439,15 @@ class TestRunDrawing:
 
         assert len(conflicts) == 1
         assert len(conflicts[0]["game_ids"]) == 3
+        assert conflicts[0]["winner_name"] == "Player B1"
+
+    def test_conflict_game_names_populated(self):
+        game_data = _make_game_data([
+            ("G1", "Catan", [_make_entry("B1", "G1")]),
+            ("G2", "Ticket to Ride", [_make_entry("B1", "G2")]),
+        ])
+
+        state, conflicts, _ = run_drawing(game_data, [], rng=random.Random(42))
+
+        assert conflicts[0]["game_names"]["G1"] == "Catan"
+        assert conflicts[0]["game_names"]["G2"] == "Ticket to Ride"

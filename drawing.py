@@ -156,13 +156,25 @@ def run_drawing(game_data, premium_game_ids, rng=None):
         resolved, remaining = resolve_premium_auto(conflicts, premium_set)
 
         if resolved:
+            winners = get_current_winners(drawing_state)
+            game_name_map = {
+                item["game"]["id"]: item["game"].get("name", "Unknown")
+                for item in drawing_state
+            }
             for badge_id, kept_game_id in resolved.items():
                 their_games = conflicts[badge_id]
                 relinquished = [gid for gid in their_games if gid != kept_game_id]
+                winner_name = "Unknown"
+                w = winners.get(kept_game_id)
+                if w and w.get("name"):
+                    winner_name = w["name"]
                 auto_resolved.append({
                     "badge_id": badge_id,
+                    "winner_name": winner_name,
                     "kept_game_id": kept_game_id,
+                    "kept_game_name": game_name_map.get(kept_game_id, "Unknown"),
                     "relinquished": relinquished,
+                    "relinquished_names": [game_name_map.get(gid, "Unknown") for gid in relinquished],
                 })
             apply_resolution(drawing_state, resolved, premium_set)
             # Continue loop to check for new conflicts from cascading
@@ -170,6 +182,7 @@ def run_drawing(game_data, premium_game_ids, rng=None):
 
         if remaining:
             # Build conflict info for admin input
+            winners = get_current_winners(drawing_state)
             game_name_map = {
                 item["game"]["id"]: item["game"].get("name", "Unknown")
                 for item in drawing_state
@@ -177,8 +190,16 @@ def run_drawing(game_data, premium_game_ids, rng=None):
             conflicts_needing_input = []
             for badge_id, game_ids in remaining.items():
                 premium_wins = [gid for gid in game_ids if gid in premium_set]
+                # Get the person's name from any of their winning entries
+                winner_name = "Unknown"
+                for gid in game_ids:
+                    w = winners.get(gid)
+                    if w and w.get("name"):
+                        winner_name = w["name"]
+                        break
                 conflicts_needing_input.append({
                     "badge_id": badge_id,
+                    "winner_name": winner_name,
                     "game_ids": game_ids,
                     "game_names": {gid: game_name_map.get(gid, "Unknown") for gid in game_ids},
                     "is_premium_conflict": len(premium_wins) > 1,

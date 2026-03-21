@@ -257,11 +257,17 @@ def run_drawing_route():
 
     results.sort(key=lambda r: r["game_name"])
 
+    # Build a set of game IDs that are in conflict for highlighting
+    conflicted_game_ids = set()
+    for conflict in conflicts:
+        conflicted_game_ids.update(conflict["game_ids"])
+
     return render_template(
         "drawing_results.html",
         results=results,
         conflicts=conflicts,
         auto_resolved=auto_resolved,
+        conflicted_game_ids=conflicted_game_ids,
         convention_name=session.get("convention_name", ""),
     )
 
@@ -324,8 +330,15 @@ def resolve_conflicts():
         }
         for badge_id, game_ids in new_conflicts.items():
             premium_wins = [gid for gid in game_ids if gid in premium_games]
+            winner_name = "Unknown"
+            for gid in game_ids:
+                w = winners.get(gid)
+                if w and w.get("name"):
+                    winner_name = w["name"]
+                    break
             conflicts_out.append({
                 "badge_id": badge_id,
+                "winner_name": winner_name,
                 "game_ids": game_ids,
                 "game_names": {gid: game_name_map.get(gid, "Unknown") for gid in game_ids},
                 "is_premium_conflict": len(premium_wins) > 1,

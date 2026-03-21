@@ -544,7 +544,63 @@ class TestDrawingRoutes(unittest.TestCase):
         resp = self.client.post("/drawing")
         self.assertEqual(resp.status_code, 200)
         # B1 must win both since they're the only entrant — conflict
-        self.assertIn(b"Conflicts Requiring Resolution", resp.data)
+        self.assertIn(b"Multi-Win Conflicts", resp.data)
+        # Verify the person's name is shown, not just badge
+        self.assertIn(b"Alice", resp.data)
+        # Verify conflict badge on the results table
+        self.assertIn(b'class="conflict-badge"', resp.data)
+
+    @patch("routes.TTEClient")
+    def test_drawing_conflict_shows_rerun_button(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.post("/drawing")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Re-run Drawing", resp.data)
+
+    @patch("routes.TTEClient")
+    def test_drawing_separates_premium_conflicts(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+            {"id": "G2", "name": "Ticket to Ride"},
+            {"id": "G3", "name": "Wingspan"},
+            {"id": "G4", "name": "Azul"},
+        ]
+        # B1 wins G1+G2 (both premium), B2 wins G3+G4 (not premium)
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            {"id": "e2", "badge_id": "B1", "librarygame_id": "G2", "name": "Alice"},
+            {"id": "e3", "badge_id": "B2", "librarygame_id": "G3", "name": "Bob"},
+            {"id": "e4", "badge_id": "B2", "librarygame_id": "G4", "name": "Bob"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+            sess["premium_games"] = ["G1", "G2"]
+
+        resp = self.client.post("/drawing")
+        self.assertEqual(resp.status_code, 200)
+        # Separate sections for premium and standard conflicts
+        self.assertIn(b"Premium Game Conflicts", resp.data)
+        self.assertIn(b"Multi-Win Conflicts", resp.data)
 
     def test_resolve_requires_auth(self):
         resp = self.client.post("/drawing/resolve",
@@ -599,6 +655,53 @@ class TestDrawingRoutes(unittest.TestCase):
         winners = {r["game_id"]: r["winner_badge"] for r in data["results"]}
         self.assertEqual(winners["G1"], "B1")
         self.assertEqual(winners["G2"], "B3")
+        # Verify no remaining conflicts
+        self.assertEqual(data["conflicts"], [])
+
+    def test_resolve_cascading_conflict_returns_new_conflicts(self):
+        # B1 wins G1+G2, B2 also entered G2 and G3.
+        # Resolving B1 -> keep G1 cascades G2 to B2, who now wins G2+G3.
+        drawing_state = [
+            {
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
+                ],
+                "winner_index": 0,
+            },
+            {
+                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "shuffled": [
+                    {"badge_id": "B1", "librarygame_id": "G2", "id": "e2", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "G2", "id": "e3", "name": "Bob"},
+                ],
+                "winner_index": 0,
+            },
+            {
+                "game": {"id": "G3", "name": "Wingspan"},
+                "shuffled": [
+                    {"badge_id": "B2", "librarygame_id": "G3", "id": "e4", "name": "Bob"},
+                ],
+                "winner_index": 0,
+            },
+        ]
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = drawing_state
+            sess["premium_games"] = []
+
+        resp = self.client.post("/drawing/resolve",
+                                json={"resolutions": [
+                                    {"badge_id": "B1", "keep_game_id": "G1"}
+                                ]},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        # B2 now has a cascading conflict
+        self.assertEqual(len(data["conflicts"]), 1)
+        self.assertEqual(data["conflicts"][0]["badge_id"], "B2")
+        self.assertEqual(data["conflicts"][0]["winner_name"], "Bob")
 
 
 if __name__ == "__main__":
