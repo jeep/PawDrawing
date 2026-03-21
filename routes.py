@@ -236,6 +236,7 @@ def run_drawing_route():
     # Store drawing state in session for conflict resolution
     session["drawing_state"] = drawing_state
     session["auto_resolved"] = auto_resolved
+    session["picked_up"] = []
 
     winners = get_current_winners(drawing_state)
 
@@ -269,6 +270,7 @@ def run_drawing_route():
         auto_resolved=auto_resolved,
         conflicted_game_ids=conflicted_game_ids,
         convention_name=session.get("convention_name", ""),
+        picked_up=set(),
     )
 
 
@@ -348,4 +350,37 @@ def resolve_conflicts():
         "ok": True,
         "results": results,
         "conflicts": conflicts_out,
+    })
+
+
+@main_bp.route("/drawing/pickup", methods=["POST"])
+def toggle_pickup():
+    """Toggle the picked-up status of a game."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    if not session.get("drawing_state"):
+        return jsonify({"error": "No active drawing"}), 400
+
+    data = request.get_json(silent=True)
+    if not data or "game_id" not in data:
+        return jsonify({"error": "Invalid request"}), 400
+
+    game_id = data["game_id"]
+    picked_up = session.get("picked_up", [])
+
+    if game_id in picked_up:
+        picked_up.remove(game_id)
+        is_picked_up = False
+    else:
+        picked_up.append(game_id)
+        is_picked_up = True
+
+    session["picked_up"] = picked_up
+
+    return jsonify({
+        "ok": True,
+        "game_id": game_id,
+        "is_picked_up": is_picked_up,
+        "picked_up_count": len(picked_up),
     })

@@ -814,6 +814,134 @@ class TestDrawingRoutes(unittest.TestCase):
         winner_panel = html[winner_panel_start:]
         self.assertIn("Premium", winner_panel)
 
+    @patch("routes.TTEClient")
+    def test_drawing_shows_pickup_summary(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.post("/drawing")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"picked up", resp.data)
+        self.assertIn(b'id="pickup-count"', resp.data)
+
+    @patch("routes.TTEClient")
+    def test_drawing_shows_pickup_buttons(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+            {"id": "G2", "name": "Ticket to Ride"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.post("/drawing")
+        html = resp.data.decode()
+        # Game with winner should have pickup button
+        self.assertIn("Mark Picked Up", html)
+
+    def test_pickup_requires_auth(self):
+        resp = self.client.post("/drawing/pickup",
+                                json={"game_id": "G1"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_pickup_requires_drawing_state(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.post("/drawing/pickup",
+                                json={"game_id": "G1"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_pickup_requires_game_id(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = [{"game": {"id": "G1"}, "shuffled": [], "winner_index": 0}]
+
+        resp = self.client.post("/drawing/pickup",
+                                json={},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_pickup_toggle_marks_picked_up(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = [{"game": {"id": "G1"}, "shuffled": [], "winner_index": 0}]
+            sess["picked_up"] = []
+
+        resp = self.client.post("/drawing/pickup",
+                                json={"game_id": "G1"},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["is_picked_up"])
+        self.assertEqual(data["picked_up_count"], 1)
+
+        # Verify session was updated
+        with self.client.session_transaction() as sess:
+            self.assertIn("G1", sess["picked_up"])
+
+    def test_pickup_toggle_unmarks_picked_up(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = [{"game": {"id": "G1"}, "shuffled": [], "winner_index": 0}]
+            sess["picked_up"] = ["G1"]
+
+        resp = self.client.post("/drawing/pickup",
+                                json={"game_id": "G1"},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertFalse(data["is_picked_up"])
+        self.assertEqual(data["picked_up_count"], 0)
+
+        with self.client.session_transaction() as sess:
+            self.assertNotIn("G1", sess["picked_up"])
+
+    @patch("routes.TTEClient")
+    def test_rerun_drawing_clears_pickup(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+            sess["picked_up"] = ["G1"]
+
+        self.client.post("/drawing")
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["picked_up"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

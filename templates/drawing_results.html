@@ -257,6 +257,26 @@
     }
     .view-panel { display: none; }
     .view-panel.active { display: block; }
+
+    .results-table tr.picked-up td { background: #d4edda; }
+    .results-table tr.picked-up:hover td { background: #c3e6cb; }
+    .results-table tr.picked-up.premium td { background: #d4edda; }
+    .pickup-btn {
+        background: none;
+        border: 1px solid #aaa;
+        border-radius: 4px;
+        padding: 0.25rem 0.6rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        color: #555;
+    }
+    .pickup-btn:hover { background: #e8f5e9; border-color: #27ae60; }
+    .pickup-btn.picked {
+        background: #27ae60;
+        color: white;
+        border-color: #27ae60;
+    }
+    .pickup-btn.picked:hover { background: #219a52; }
 </style>
 {% endblock %}
 
@@ -264,6 +284,7 @@
 <div class="summary">
     <h2>Drawing Results — {{ convention_name }}</h2>
     <span class="stat"><strong>{{ results|length }}</strong> games drawn</span>
+    <span class="stat" id="pickup-summary"><strong id="pickup-count">{{ picked_up|length }}</strong> of <strong>{{ results|selectattr('winner_name')|list|length }}</strong> picked up</span>
     <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin-left:auto;">
         <button type="submit" class="rerun-btn">Re-run Drawing</button>
     </form>
@@ -363,11 +384,12 @@
             <th>Entries</th>
             <th>Draw Position</th>
             <th>Status</th>
+            <th>Pickup</th>
         </tr>
     </thead>
     <tbody>
         {% for r in results %}
-        <tr class="{{ 'premium' if r.is_premium else '' }}{{ ' no-winner' if not r.winner_name }}{{ ' in-conflict' if r.game_id in conflicted_game_ids }}"
+        <tr class="{{ 'premium' if r.is_premium else '' }}{{ ' no-winner' if not r.winner_name }}{{ ' in-conflict' if r.game_id in conflicted_game_ids }}{{ ' picked-up' if r.game_id in picked_up }}"
             data-game-id="{{ r.game_id }}">
             <td>
                 {{ r.game_name }}
@@ -386,6 +408,15 @@
                     —
                 {% endif %}
             </td>
+            <td>
+                {% if r.winner_name %}
+                <button class="pickup-btn{{ ' picked' if r.game_id in picked_up else '' }}"
+                        data-game-id="{{ r.game_id }}"
+                        onclick="togglePickup('{{ r.game_id }}')">{{ '✓ Picked Up' if r.game_id in picked_up else 'Mark Picked Up' }}</button>
+                {% else %}
+                    —
+                {% endif %}
+            </td>
         </tr>
         {% endfor %}
     </tbody>
@@ -399,17 +430,23 @@
             <th>Winner</th>
             <th>Badge</th>
             <th>Game Won</th>
+            <th>Pickup</th>
         </tr>
     </thead>
     <tbody>
         {% set winners_list = results | selectattr('winner_name') | sort(attribute='winner_name') | list %}
         {% for r in winners_list %}
-        <tr class="{{ 'premium' if r.is_premium else '' }}{{ ' in-conflict' if r.game_id in conflicted_game_ids }}">
+        <tr class="{{ 'premium' if r.is_premium else '' }}{{ ' in-conflict' if r.game_id in conflicted_game_ids }}{{ ' picked-up' if r.game_id in picked_up }}">
             <td>{{ r.winner_name }}</td>
             <td>{{ r.winner_badge or '—' }}</td>
             <td>
                 {{ r.game_name }}
                 {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
+            </td>
+            <td>
+                <button class="pickup-btn{{ ' picked' if r.game_id in picked_up else '' }}"
+                        data-game-id="{{ r.game_id }}"
+                        onclick="togglePickup('{{ r.game_id }}')">{{ '✓ Picked Up' if r.game_id in picked_up else 'Mark Picked Up' }}</button>
             </td>
         </tr>
         {% endfor %}
@@ -427,6 +464,27 @@
         document.getElementById('tab-by-winner').classList.toggle('active', view === 'by-winner');
         document.getElementById('panel-by-game').classList.toggle('active', view === 'by-game');
         document.getElementById('panel-by-winner').classList.toggle('active', view === 'by-winner');
+    };
+
+    window.togglePickup = function(gameId) {
+        fetch('{{ url_for("main.toggle_pickup") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({game_id: gameId})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.ok) return;
+            // Update all pickup buttons for this game (in both tables)
+            document.querySelectorAll('.pickup-btn[data-game-id="' + gameId + '"]').forEach(function(btn) {
+                btn.classList.toggle('picked', data.is_picked_up);
+                btn.textContent = data.is_picked_up ? '✓ Picked Up' : 'Mark Picked Up';
+                // Toggle picked-up class on the parent row
+                var row = btn.closest('tr');
+                if (row) row.classList.toggle('picked-up', data.is_picked_up);
+            });
+            document.getElementById('pickup-count').textContent = data.picked_up_count;
+        });
     };
 
     window.selectResolution = function(badgeId, gameId) {
@@ -522,6 +580,12 @@
                 statusCell = '—';
             }
 
+            var pickupCell = '—';
+            if (r.winner_name) {
+                pickupCell = '<button class="pickup-btn" data-game-id="' + escAttr(r.game_id) +
+                    '" onclick="togglePickup(\'' + escAttr(r.game_id) + '\')">Mark Picked Up</button>';
+            }
+
             tr.innerHTML =
                 '<td>' + escHtml(r.game_name) +
                     (r.is_premium ? ' <span class="premium-label">Premium</span>' : '') +
@@ -530,7 +594,8 @@
                 '<td>' + escHtml(r.winner_badge || '—') + '</td>' +
                 '<td>' + r.total_entries + '</td>' +
                 '<td>' + (r.winner_name ? ((r.winner_index + 1) + ' / ' + r.total_entries) : '—') + '</td>' +
-                '<td>' + statusCell + '</td>';
+                '<td>' + statusCell + '</td>' +
+                '<td>' + pickupCell + '</td>';
             tbody.appendChild(tr);
         });
 
@@ -553,7 +618,9 @@
                 '<td>' + escHtml(r.winner_badge || '—') + '</td>' +
                 '<td>' + escHtml(r.game_name) +
                     (r.is_premium ? ' <span class="premium-label">Premium</span>' : '') +
-                '</td>';
+                '</td>' +
+                '<td><button class="pickup-btn" data-game-id="' + escAttr(r.game_id) +
+                    '" onclick="togglePickup(\'' + escAttr(r.game_id) + '\')">Mark Picked Up</button></td>';
             tbody.appendChild(tr);
         });
     }
