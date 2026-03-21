@@ -1,0 +1,189 @@
+"""TTE (tabletop.events) API client with session management, rate limiting, and pagination."""
+
+import time
+
+import requests
+from flask import current_app
+
+
+class TTEAPIError(Exception):
+    """Raised when the TTE API returns an error or unexpected response."""
+
+    def __init__(self, message, status_code=None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+class TTEClient:
+    """Client for the tabletop.events API.
+
+    Handles authentication, rate limiting (1 req/sec), automatic pagination,
+    and error handling. Session ID is stored server-side only.
+    """
+
+    def __init__(self, base_url=None, api_key_id=None):
+        self.base_url = (base_url or current_app.config["TTE_BASE_URL"]).rstrip("/")
+        self.api_key_id = api_key_id or current_app.config["TTE_API_KEY"]
+        self.session_id = None
+        self._last_request_time = 0.0
+
+    # ── Rate limiting ──────────────────────────────────────────────────
+
+    def _throttle(self):
+        """Enforce minimum 1-second gap between requests."""
+        elapsed = time.monotonic() - self._last_request_time
+        if elapsed < 1.0:
+            time.sleep(1.0 - elapsed)
+        self._last_request_time = time.monotonic()
+
+    # ── Low-level request ──────────────────────────────────────────────
+
+    def _request(self, method, path, params=None, json_body=None):
+        """Make a rate-limited request to the TTE API.
+
+        Returns the parsed 'result' dict from the response.
+        Raises TTEAPIError on failure.
+        """
+        self._throttle()
+
+        url = f"{self.base_url}/{path.lstrip('/')}"
+
+        if params is None:
+            params = {}
+        if self.session_id:
+            params["session_id"] = self.session_id
+
+        try:
+            resp = requests.request(
+                method,
+                url,
+                params=params,
+                json=json_body,
+                timeout=30,
+            )
+        except requests.RequestException as exc:
+            raise TTEAPIError(f"Network error: {exc}") from exc
+
+        if resp.status_code == 401 or resp.status_code == 403:
+            self.session_id = None
+            raise TTEAPIError("Session expired or unauthorized. Please log in again.", resp.status_code)
+
+        if not resp.ok:
+            raise TTEAPIError(
+                f"API error {resp.status_code}: {resp.text[:200]}",
+                resp.status_code,
+            )
+
+        try:
+            data = resp.json()
+        except ValueError as exc:
+            raise TTEAPIError("Invalid JSON in API response") from exc
+
+        if "result" not in data:
+            raise TTEAPIError("Unexpected API response format (missing 'result')")
+
+        return data["result"]
+
+    # ── Pagination ─────────────────────────────────────────────────────
+
+    def _get_all_pages(self, path, params=None):
+        """Fetch all pages from a paginated endpoint. Returns a flat list of items."""
+        if params is None:
+            params = {}
+        params["_items_per_page"] = 100
+        params["_page_number"] = 1
+
+        all_items = []
+
+        while True:
+            result = self._request("GET", path, params=dict(params))
+            items = result.get("items", [])
+            all_items.extend(items)
+
+            paging = result.get("paging", {})
+            total_pages = int(paging.get("total_pages", 1))
+
+            if params["_page_number"] >= total_pages:
+                break
+            params["_page_number"] += 1
+
+        return all_items
+
+    # ── Authentication ─────────────────────────────────────────────────
+
+    def login(self, username, password):
+        """Create a session with the TTE API. Stores session_id internally."""
+        result = self._request("POST", "/session", json_body={
+            "username": username,
+            "password": password,
+            "api_key_id": self.api_key_id,
+        })
+        self.session_id = result.get("id")
+        if not self.session_id:
+            raise TTEAPIError("Login succeeded but no session ID returned")
+        return result
+
+    def logout(self):
+        """Delete the current session."""
+        if not self.session_id:
+            return
+        try:
+            self._request("DELETE", f"/session/{self.session_id}")
+        except TTEAPIError:
+            pass  # Best-effort logout
+        finally:
+            self.session_id = None
+
+    @property
+    def is_authenticated(self):
+        return self.session_id is not None
+
+    # ── Convention ─────────────────────────────────────────────────────
+
+    def get_convention(self, convention_id, include_library=False):
+        """Fetch a convention by ID."""
+        params = {}
+        if include_library:
+            params["_include_related_objects"] = "library"
+        return self._request("GET", f"/convention/{convention_id}", params=params)
+
+    # ── Library ────────────────────────────────────────────────────────
+
+    def get_library(self, library_id):
+        """Fetch a library by ID."""
+        return self._request("GET", f"/library/{library_id}")
+
+    def get_library_games(self, library_id, play_to_win_only=True):
+        """Fetch all games in a library. Returns flat list across all pages."""
+        params = {}
+        if play_to_win_only:
+            params["is_play_to_win"] = 1
+        return self._get_all_pages(f"/library/{library_id}/games", params)
+
+    def get_library_playtowins(self, library_id):
+        """Fetch all PlayToWin entries for a library."""
+        return self._get_all_pages(f"/library/{library_id}/playtowins")
+
+    # ── LibraryGame ────────────────────────────────────────────────────
+
+    def get_library_game(self, game_id):
+        """Fetch a specific library game."""
+        return self._request("GET", f"/librarygame/{game_id}")
+
+    def get_library_game_playtowins(self, game_id):
+        """Fetch all PlayToWin entries for a specific game."""
+        return self._get_all_pages(f"/librarygame/{game_id}/playtowins")
+
+    # ── PlayToWin ──────────────────────────────────────────────────────
+
+    def get_convention_playtowins(self, convention_id):
+        """Fetch all PlayToWin entries for a convention."""
+        return self._get_all_pages(f"/convention/{convention_id}/playtowins")
+
+    def get_playtowin(self, playtowin_id):
+        """Fetch a specific PlayToWin entry."""
+        return self._request("GET", f"/playtowin/{playtowin_id}")
+
+    def update_playtowin(self, playtowin_id, data):
+        """Update a PlayToWin entry (e.g., set win flag)."""
+        return self._request("PUT", f"/playtowin/{playtowin_id}", json_body=data)

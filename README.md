@@ -34,6 +34,14 @@ Edit `.env` and set:
 - `FLASK_SECRET_KEY` — a random string for session security
 - `TTE_API_KEY` — your tabletop.events API key
 
+### Git Hooks
+
+Enable the conventional commit hook:
+
+```bash
+git config core.hooksPath .githooks
+```
+
 ### Run
 
 ```bash
