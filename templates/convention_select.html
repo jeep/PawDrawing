@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}PawDrawing — Select Convention{% endblock %}
+
+{% block nav %}
+<form method="POST" action="{{ url_for('main.logout') }}" style="display:inline">
+    <button type="submit" style="background:none;border:none;color:#ecf0f1;cursor:pointer;font-size:0.9rem;">
+        Logout ({{ session.get('tte_username', '') }})
+    </button>
+</form>
+{% endblock %}
+
+{% block content %}
+<h2>Select Convention</h2>
+<p>Convention selection will be implemented in a future update.</p>
+{% endblock %}
