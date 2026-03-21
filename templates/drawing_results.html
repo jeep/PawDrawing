@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+
+{% block title %}PawDrawing — Drawing Results{% endblock %}
+
+{% block nav %}
+<a href="{{ url_for('main.games') }}">Back to Games</a>
+<form method="POST" action="{{ url_for('main.logout') }}" style="display:inline">
+    <button type="submit" style="background:none;border:none;color:#ecf0f1;cursor:pointer;font-size:0.9rem;">
+        Logout ({{ session.get('tte_username', '') }})
+    </button>
+</form>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .summary {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        gap: 2rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .summary h2 { margin: 0; color: #2c3e50; font-size: 1.2rem; }
+    .stat { font-size: 0.9rem; color: #555; }
+    .stat strong { color: #2c3e50; font-size: 1.1rem; }
+
+    .results-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .results-table th {
+        background: #2c3e50;
+        color: white;
+        padding: 0.75rem 1rem;
+        text-align: left;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .results-table td {
+        padding: 0.65rem 1rem;
+        border-bottom: 1px solid #eee;
+        font-size: 0.95rem;
+    }
+    .results-table tr:last-child td { border-bottom: none; }
+    .results-table tr:hover td { background: #f8f9fa; }
+    .results-table tr.premium td { background: #fef9e7; }
+    .results-table tr.premium:hover td { background: #fdf2d0; }
+    .results-table tr.no-winner td { color: #999; font-style: italic; }
+
+    .premium-label {
+        display: inline-block;
+        background: #f39c12;
+        color: white;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 0.15rem 0.45rem;
+        border-radius: 3px;
+        margin-left: 0.5rem;
+        text-transform: uppercase;
+        vertical-align: middle;
+    }
+
+    .conflict-panel {
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        border-radius: 8px;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .conflict-panel h3 {
+        color: #856404;
+        margin: 0 0 1rem 0;
+        font-size: 1.1rem;
+    }
+    .conflict-item {
+        background: white;
+        border: 1px solid #eee;
+        border-radius: 6px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+    }
+    .conflict-item:last-child { margin-bottom: 0; }
+    .conflict-item strong { color: #2c3e50; }
+    .conflict-choice {
+        margin-top: 0.5rem;
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    .conflict-choice button {
+        padding: 0.4rem 0.9rem;
+        border: 2px solid #2c3e50;
+        background: white;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        transition: all 0.15s;
+    }
+    .conflict-choice button:hover {
+        background: #2c3e50;
+        color: white;
+    }
+    .conflict-choice button.selected {
+        background: #27ae60;
+        border-color: #27ae60;
+        color: white;
+    }
+
+    .auto-resolved {
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        border-radius: 8px;
+        padding: 1rem 1.5rem;
+        margin-bottom: 1.5rem;
+        font-size: 0.9rem;
+        color: #155724;
+    }
+    .auto-resolved h3 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1rem;
+    }
+
+    .resolve-btn {
+        background: #e67e22;
+        color: white;
+        border: none;
+        padding: 0.65rem 1.5rem;
+        font-size: 1rem;
+        font-weight: 600;
+        border-radius: 6px;
+        cursor: pointer;
+        margin-top: 1rem;
+    }
+    .resolve-btn:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+    }
+    .resolve-status {
+        font-size: 0.85rem;
+        margin-left: 1rem;
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="summary">
+    <h2>Drawing Results — {{ convention_name }}</h2>
+    <span class="stat"><strong>{{ results|length }}</strong> games drawn</span>
+</div>
+
+{% if auto_resolved %}
+<div class="auto-resolved">
+    <h3>Auto-Resolved Premium Conflicts</h3>
+    {% for ar in auto_resolved %}
+    <p>Badge <strong>{{ ar.badge_id }}</strong> auto-assigned their premium game
+       (relinquished {{ ar.relinquished|length }} other game{{ 's' if ar.relinquished|length != 1 }}).</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if conflicts %}
+<div class="conflict-panel" id="conflict-panel">
+    <h3>Conflicts Requiring Resolution</h3>
+    <p style="font-size:0.9rem;color:#856404;margin-bottom:1rem;">
+        The following people won multiple games. Choose which game each person keeps.
+    </p>
+    {% for conflict in conflicts %}
+    <div class="conflict-item" data-badge-id="{{ conflict.badge_id }}">
+        <strong>Badge: {{ conflict.badge_id }}</strong>
+        {% if conflict.is_premium_conflict %}
+            <span class="premium-label">Multiple Premium</span>
+        {% endif %}
+        <div class="conflict-choice">
+            {% for game_id in conflict.game_ids %}
+            <button type="button"
+                    data-game-id="{{ game_id }}"
+                    onclick="selectResolution(this, '{{ conflict.badge_id }}', '{{ game_id }}')">
+                {{ conflict.game_names[game_id] }}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    <button class="resolve-btn" id="resolve-btn" onclick="submitResolutions()" disabled>
+        Apply Resolutions
+    </button>
+    <span class="resolve-status" id="resolve-status"></span>
+</div>
+{% endif %}
+
+<table class="results-table" id="results-table">
+    <thead>
+        <tr>
+            <th>Game</th>
+            <th>Winner</th>
+            <th>Badge</th>
+            <th>Entries</th>
+            <th>Draw Position</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in results %}
+        <tr class="{{ 'premium' if r.is_premium else '' }}{{ ' no-winner' if not r.winner_name }}"
+            data-game-id="{{ r.game_id }}">
+            <td>
+                {{ r.game_name }}
+                {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
+            </td>
+            <td>{{ r.winner_name or 'No entries' }}</td>
+            <td>{{ r.winner_badge or '—' }}</td>
+            <td>{{ r.total_entries }}</td>
+            <td>{{ (r.winner_index + 1) if r.winner_name else '—' }} / {{ r.total_entries }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<script>
+(function() {
+    const resolutions = {};
+
+    window.selectResolution = function(btn, badgeId, gameId) {
+        // Toggle selection within this conflict item
+        const parent = btn.closest('.conflict-choice');
+        parent.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        resolutions[badgeId] = gameId;
+
+        // Enable resolve button when all conflicts have a selection
+        const totalConflicts = document.querySelectorAll('.conflict-item').length;
+        const resolvedCount = Object.keys(resolutions).length;
+        document.getElementById('resolve-btn').disabled = (resolvedCount < totalConflicts);
+    };
+
+    window.submitResolutions = function() {
+        const btn = document.getElementById('resolve-btn');
+        const status = document.getElementById('resolve-status');
+        btn.disabled = true;
+        status.style.display = 'inline';
+        status.textContent = 'Resolving...';
+        status.style.color = '#856404';
+
+        const resList = Object.entries(resolutions).map(([badgeId, gameId]) => ({
+            badge_id: badgeId,
+            keep_game_id: gameId
+        }));
+
+        fetch('{{ url_for("main.resolve_conflicts") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({resolutions: resList})
+        })
+        .then(r => r.json())
+        .then(function(data) {
+            if (!data.ok) {
+                status.textContent = 'Error: ' + (data.error || 'Unknown');
+                status.style.color = '#b71c1c';
+                btn.disabled = false;
+                return;
+            }
+
+            // Update the results table
+            const tbody = document.querySelector('#results-table tbody');
+            tbody.innerHTML = '';
+            data.results.forEach(function(r) {
+                const tr = document.createElement('tr');
+                if (r.is_premium) tr.classList.add('premium');
+                if (!r.winner_name) tr.classList.add('no-winner');
+                tr.dataset.gameId = r.game_id;
+                tr.innerHTML =
+                    '<td>' + r.game_name +
+                        (r.is_premium ? ' <span class="premium-label">Premium</span>' : '') +
+                    '</td>' +
+                    '<td>' + (r.winner_name || 'No entries') + '</td>' +
+                    '<td>' + (r.winner_badge || '—') + '</td>' +
+                    '<td>' + r.total_entries + '</td>' +
+                    '<td>' + (r.winner_name ? ((r.winner_index + 1) + ' / ' + r.total_entries) : '—') + '</td>';
+                tbody.appendChild(tr);
+            });
+
+            if (data.conflicts && data.conflicts.length > 0) {
+                // There are cascading conflicts — reload to show them
+                status.textContent = 'New conflicts detected, reloading...';
+                location.reload();
+            } else {
+                // All resolved
+                const panel = document.getElementById('conflict-panel');
+                if (panel) {
+                    panel.innerHTML = '<h3 style="color:#155724;">All conflicts resolved!</h3>';
+                    panel.style.background = '#d4edda';
+                    panel.style.borderColor = '#c3e6cb';
+                }
+            }
+        })
+        .catch(function() {
+            status.textContent = 'Network error';
+            status.style.color = '#b71c1c';
+            btn.disabled = false;
+        });
+    };
+})();
+</script>
+{% endblock %}
