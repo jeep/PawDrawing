@@ -3,9 +3,10 @@
 # Git hook to enforce Conventional Commit format.
 # See: https://www.conventionalcommits.org/
 #
-# Format: <type>[optional scope]: <description>
+# Format: <type>[optional scope]: <description> (#<issue>)
 #
 # Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+# Issue number (#N) is required at the end of the subject line.
 
 commit_msg_file="$1"
 commit_msg=$(cat "$commit_msg_file")
@@ -18,21 +19,21 @@ if echo "$subject" | grep -qE '^Merge '; then
   exit 0
 fi
 
-# Conventional commit pattern
-pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?(!)?: .{1,}'
+# Conventional commit pattern with required issue number
+pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?(!)?: .+ \(#[0-9]+\)$'
 
 if ! echo "$subject" | grep -qE "$pattern"; then
-  echo "ERROR: Commit message does not follow Conventional Commits format."
+  echo "ERROR: Commit message does not follow the required format."
   echo ""
-  echo "  Format:  <type>[optional scope]: <description>"
+  echo "  Format:  <type>[optional scope]: <description> (#<issue>)"
   echo ""
   echo "  Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
   echo ""
   echo "  Examples:"
-  echo "    feat: add login page"
-  echo "    fix(api): handle rate limit errors"
-  echo "    docs: update README with setup steps"
-  echo "    feat!: redesign drawing algorithm"
+  echo "    feat: add login page (#3)"
+  echo "    fix(api): handle rate limit errors (#5)"
+  echo "    docs: update README with setup steps (#1)"
+  echo "    feat!: redesign drawing algorithm (#7)"
   echo ""
   echo "  Your message: $subject"
   exit 1
