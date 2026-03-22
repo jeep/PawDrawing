@@ -7,12 +7,12 @@ from data_processing import group_entries_by_game, process_entries
 
 class TestProcessEntries(unittest.TestCase):
 
-    def test_excludes_entries_without_badge_id(self):
+    def test_excludes_entries_without_badge_id_or_user_id(self):
         entries = [
             {"badge_id": "B1", "librarygame_id": "G1"},
             {"badge_id": None, "librarygame_id": "G1"},
             {"badge_id": "", "librarygame_id": "G1"},
-            {"librarygame_id": "G1"},  # missing key
+            {"librarygame_id": "G1"},  # missing both keys
         ]
         result = process_entries(entries)
         self.assertEqual(len(result), 1)
@@ -45,12 +45,39 @@ class TestProcessEntries(unittest.TestCase):
     def test_empty_input(self):
         self.assertEqual(process_entries([]), [])
 
-    def test_all_entries_missing_badge(self):
+    def test_all_entries_missing_badge_and_user(self):
         entries = [
             {"badge_id": None, "librarygame_id": "G1"},
             {"badge_id": "", "librarygame_id": "G2"},
         ]
         self.assertEqual(process_entries(entries), [])
+
+    def test_falls_back_to_user_id_when_no_badge(self):
+        entries = [
+            {"user_id": "U1", "librarygame_id": "G1", "name": "Alice"},
+            {"user_id": "U2", "librarygame_id": "G1", "name": "Bob"},
+        ]
+        result = process_entries(entries)
+        self.assertEqual(len(result), 2)
+        # badge_id should be normalized to user_id
+        self.assertEqual(result[0]["badge_id"], "U1")
+        self.assertEqual(result[1]["badge_id"], "U2")
+
+    def test_user_id_fallback_deduplicates(self):
+        entries = [
+            {"user_id": "U1", "librarygame_id": "G1", "id": "e1"},
+            {"user_id": "U1", "librarygame_id": "G1", "id": "e2"},
+        ]
+        result = process_entries(entries)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["id"], "e1")
+
+    def test_badge_id_takes_precedence_over_user_id(self):
+        entries = [
+            {"badge_id": "B1", "user_id": "U1", "librarygame_id": "G1"},
+        ]
+        result = process_entries(entries)
+        self.assertEqual(result[0]["badge_id"], "B1")
 
 
 class TestGroupEntriesByGame(unittest.TestCase):
