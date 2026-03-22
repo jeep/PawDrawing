@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}PawDrawing — Confirm Library{% endblock %}
+
+{% block nav %}
+<form method="POST" action="{{ url_for('main.logout') }}" style="display:inline">
+    <button type="submit" style="background:none;border:none;color:#ecf0f1;cursor:pointer;font-size:0.9rem;">
+        Logout ({{ session.get('tte_username', '') }})
+    </button>
+</form>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .confirm-card {
+        max-width: 500px;
+        margin: 3rem auto;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        padding: 2rem;
+    }
+    .confirm-card h2 { margin-bottom: 1.5rem; color: #2c3e50; }
+    .detail-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #eee;
+    }
+    .detail-row:last-of-type { border-bottom: none; }
+    .detail-label { font-weight: 600; color: #555; }
+    .detail-value { color: #333; }
+    .mode-note {
+        font-size: 0.85rem;
+        color: #888;
+        margin-top: 0.5rem;
+    }
+    .btn-row {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+    .btn-row a, .btn-row button {
+        flex: 1;
+        padding: 0.7rem;
+        border-radius: 4px;
+        font-size: 1rem;
+        font-weight: 600;
+        text-align: center;
+        text-decoration: none;
+        cursor: pointer;
+        border: none;
+    }
+    .btn-back {
+        background: #ecf0f1;
+        color: #2c3e50;
+    }
+    .btn-back:hover { background: #d5dbdb; }
+    .btn-proceed {
+        background: #27ae60;
+        color: white;
+    }
+    .btn-proceed:hover { background: #229954; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="confirm-card">
+    <h2>Library Selected</h2>
+    <div class="detail-row">
+        <span class="detail-label">Library</span>
+        <span class="detail-value">{{ library_name }}</span>
+    </div>
+    <div class="detail-row">
+        <span class="detail-label">Mode</span>
+        <span class="detail-value">Library only (no convention)</span>
+    </div>
+    <p class="mode-note">All Play-to-Win entries for this library will be included regardless of convention.</p>
+    <div class="btn-row">
+        <a href="{{ url_for('main.convention_select') }}" class="btn-back">Change</a>
+        <a href="{{ url_for('main.games') }}" class="btn-proceed" id="btn-proceed" onclick="this.textContent='Loading...';this.style.pointerEvents='none';">Proceed</a>
+    </div>
+</div>
+{% endblock %}

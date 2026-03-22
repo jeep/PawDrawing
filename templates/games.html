@@ -3,7 +3,7 @@
 {% block title %}PawDrawing — Games{% endblock %}
 
 {% block nav %}
-<a href="{{ url_for('main.convention_select') }}">Change Convention</a>
+<a href="{{ url_for('main.convention_select') }}">Change Source</a>
 <form method="POST" action="{{ url_for('main.logout') }}" style="display:inline">
     <button type="submit" style="background:none;border:none;color:#ecf0f1;cursor:pointer;font-size:0.9rem;">
         Logout ({{ session.get('tte_username', '') }})

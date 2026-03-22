@@ -310,6 +310,38 @@ class TestEndpoints(TTEClientTestBase):
         call_args = mock_request.call_args
         self.assertEqual(call_args[0][0], "PUT")
 
+    @patch("tte_client.requests.request")
+    def test_get_user_libraries(self, mock_request):
+        mock_resp = MagicMock()
+        mock_resp.ok = True
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "result": {
+                "items": [
+                    {"id": "lib-1", "name": "My Library"},
+                ],
+                "paging": {"total_pages": 1, "page_number": 1},
+            }
+        }
+        mock_request.return_value = mock_resp
+
+        result = self.client.get_user_libraries("user-123")
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["name"], "My Library")
+
+    @patch("tte_client.requests.request")
+    def test_login_stores_user_id(self, mock_request):
+        mock_resp = MagicMock()
+        mock_resp.ok = True
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "result": {"id": "session-123", "user_id": "user-456"}
+        }
+        mock_request.return_value = mock_resp
+
+        self.client.login("admin", "secret")
+        self.assertEqual(self.client.user_id, "user-456")
+
 
 if __name__ == "__main__":
     unittest.main()

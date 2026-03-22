@@ -34,6 +34,7 @@ class TTEClient:
         self.base_url = (base_url or current_app.config["TTE_BASE_URL"]).rstrip("/")
         self.api_key_id = api_key_id or current_app.config["TTE_API_KEY"]
         self.session_id = None
+        self.user_id = None
         self._last_request_time = 0.0
 
     # ── Rate limiting ──────────────────────────────────────────────────
@@ -123,7 +124,7 @@ class TTEClient:
     # ── Authentication ─────────────────────────────────────────────────
 
     def login(self, username, password):
-        """Create a session with the TTE API. Stores session_id internally."""
+        """Create a session with the TTE API. Stores session_id and user_id internally."""
         result = self._request("POST", "/session", json_body={
             "username": username,
             "password": password,
@@ -132,6 +133,7 @@ class TTEClient:
         self.session_id = result.get("id")
         if not self.session_id:
             raise TTEAPIError("Login succeeded but no session ID returned")
+        self.user_id = result.get("user_id")
         return result
 
     def logout(self):
@@ -161,6 +163,12 @@ class TTEClient:
         if include_library:
             params["_include_related_objects"] = "library"
         return self._request("GET", f"/convention/{convention_id}", params=params)
+
+    # ── User ─────────────────────────────────────────────────────────
+
+    def get_user_libraries(self, user_id):
+        """Fetch all libraries owned by a user."""
+        return self._get_all_pages(f"/user/{user_id}/libraries")
 
     # ── Library ────────────────────────────────────────────────────────
 

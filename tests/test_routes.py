@@ -36,6 +36,7 @@ class TestLoginRoute(unittest.TestCase):
     def test_login_success_redirects_to_convention(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.session_id = "session-123"
+        mock_instance.user_id = "user-456"
         mock_instance.login.return_value = {"id": "session-123"}
         MockClient.return_value = mock_instance
 
@@ -51,6 +52,7 @@ class TestLoginRoute(unittest.TestCase):
     def test_login_success_stores_session(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.session_id = "session-123"
+        mock_instance.user_id = "user-456"
         mock_instance.login.return_value = {"id": "session-123"}
         MockClient.return_value = mock_instance
 
@@ -65,6 +67,7 @@ class TestLoginRoute(unittest.TestCase):
         with self.client.session_transaction() as sess:
             self.assertEqual(sess["tte_session_id"], "session-123")
             self.assertEqual(sess["tte_username"], "admin")
+            self.assertEqual(sess["tte_user_id"], "user-456")
 
     @patch("routes.TTEClient")
     def test_login_failure_shows_error(self, MockClient):
@@ -141,7 +144,7 @@ class TestConventionSelectRoute(unittest.TestCase):
 
         resp = self.client.get("/convention")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn(b"Select Convention", resp.data)
+        self.assertIn(b"Convention", resp.data)
 
 
 class TestConventionSearchRoute(unittest.TestCase):
@@ -269,6 +272,216 @@ class TestConventionConfirmRoute(unittest.TestCase):
         resp = self.client.post("/convention/select", data={"convention_id": "bad-id"})
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/convention", resp.headers["Location"])
+
+
+class TestLibraryBrowseRoute(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def test_browse_requires_login(self):
+        resp = self.client.get("/library/browse")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_browse_requires_user_id(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.get("/library/browse")
+        self.assertEqual(resp.status_code, 400)
+
+    @patch("routes.TTEClient")
+    def test_browse_returns_libraries(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_user_libraries.return_value = [
+            {"id": "lib-1", "name": "My Library"},
+            {"id": "lib-2", "name": "Second Library"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["tte_user_id"] = "user-456"
+
+        resp = self.client.get("/library/browse")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertEqual(len(data["results"]), 2)
+        self.assertEqual(data["results"][0]["name"], "My Library")
+
+    @patch("routes.TTEClient")
+    def test_browse_empty_libraries(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_user_libraries.return_value = []
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["tte_user_id"] = "user-456"
+
+        resp = self.client.get("/library/browse")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertEqual(len(data["results"]), 0)
+
+    @patch("routes.TTEClient")
+    def test_browse_api_error(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_user_libraries.side_effect = TTEAPIError("Server error", 500)
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["tte_user_id"] = "user-456"
+
+        resp = self.client.get("/library/browse")
+        self.assertEqual(resp.status_code, 502)
+
+    @patch("routes.TTEClient")
+    def test_browse_auth_error_clears_session(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_user_libraries.side_effect = TTEAPIError("Unauthorized", 401)
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["tte_user_id"] = "user-456"
+
+        resp = self.client.get("/library/browse")
+        self.assertEqual(resp.status_code, 401)
+
+
+class TestLibraryConfirmRoute(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def test_library_confirm_requires_login(self):
+        resp = self.client.post("/library/select", data={"library_id": "lib-1"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/login", resp.headers["Location"])
+
+    def test_library_confirm_requires_id(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.post("/library/select", data={"library_id": ""})
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/convention", resp.headers["Location"])
+
+    @patch("routes.TTEClient")
+    def test_library_confirm_stores_session(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library.return_value = {
+            "id": "lib-1",
+            "name": "My P2W Library",
+        }
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.post("/library/select", data={"library_id": "lib-1"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"My P2W Library", resp.data)
+        self.assertIn(b"Library Selected", resp.data)
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["library_id"], "lib-1")
+            self.assertEqual(sess["library_name"], "My P2W Library")
+            self.assertNotIn("convention_id", sess)
+
+    @patch("routes.TTEClient")
+    def test_library_confirm_clears_convention(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library.return_value = {
+            "id": "lib-1",
+            "name": "My Library",
+        }
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["convention_id"] = "conv-old"
+            sess["convention_name"] = "Old Convention"
+
+        self.client.post("/library/select", data={"library_id": "lib-1"})
+
+        with self.client.session_transaction() as sess:
+            self.assertNotIn("convention_id", sess)
+            self.assertNotIn("convention_name", sess)
+            self.assertEqual(sess["library_id"], "lib-1")
+
+    @patch("routes.TTEClient")
+    def test_library_confirm_api_error(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library.side_effect = TTEAPIError("Not found", 404)
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.post("/library/select", data={"library_id": "bad-id"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/convention", resp.headers["Location"])
+
+    @patch("routes.TTEClient")
+    def test_games_page_works_in_library_only_mode(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_library_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["library_name"] = "My Library"
+
+        resp = self.client.get("/games")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Catan", resp.data)
+        self.assertIn(b"My Library", resp.data)
+        mock_instance.get_library_playtowins.assert_called_once_with("lib-1")
+
+    @patch("routes.TTEClient")
+    def test_drawing_works_in_library_only_mode(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_library_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["library_name"] = "My Library"
+
+        resp = self.client.post("/drawing")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Drawing Results", resp.data)
+        self.assertIn(b"My Library", resp.data)
+
+    def test_convention_select_shows_library_tab(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.get("/convention")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Library Only", resp.data)
+        self.assertIn(b"Browse My Libraries", resp.data)
 
 
 class TestGamesRoute(unittest.TestCase):

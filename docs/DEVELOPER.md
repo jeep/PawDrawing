@@ -32,6 +32,7 @@ PawDrawing/
 │   ├── login.html          # Login form
 │   ├── convention_select.html  # Convention search & ID entry
 │   ├── convention_confirm.html # Confirm selected convention
+│   ├── library_confirm.html    # Confirm selected library (no convention)
 │   ├── games.html          # Game list with premium toggles
 │   ├── drawing_results.html    # Results with conflicts, pickup, push, export
 │   └── redistribute.html  # Redistribution for unclaimed games
@@ -78,6 +79,8 @@ All routes live on a single Blueprint (`main_bp`). Helper functions:
 | GET | `/convention` | `convention_select` | Convention search page |
 | GET | `/convention/search` | `convention_search` | AJAX: search conventions |
 | POST | `/convention/select` | `convention_confirm` | Fetch and confirm convention |
+| GET | `/library/browse` | `library_browse` | AJAX: list user's libraries |
+| POST | `/library/select` | `library_confirm` | Fetch and confirm library (no convention) |
 | GET | `/games` | `games` | Load and display P2W games |
 | POST | `/games/premium` | `set_premium_games` | AJAX: save premium designations |
 | POST | `/drawing` | `run_drawing_route` | Execute drawing algorithm |
@@ -102,7 +105,7 @@ REST client for the tabletop.events API.
 
 - **Rate limiting:** `_throttle()` enforces a minimum 1-second gap between requests (TTE's API requirement).
 - **Pagination:** `_get_all_pages(path, params)` fetches 100 items per page and loops until `total_pages` is reached.
-- **Authentication:** `login()` POSTs to `/session` and stores the returned session ID. The session ID is passed as a query parameter on all subsequent requests.
+- **Authentication:** `login()` POSTs to `/session` and stores the returned session ID and `user_id`. The session ID is passed as a query parameter on all subsequent requests.
 - **Error handling:** 401/403 clears the client's session ID and raises. Timeouts raise `TTETimeoutError`. Network errors and bad JSON raise `TTEAPIError`.
 
 **Available methods:**
@@ -111,6 +114,7 @@ REST client for the tabletop.events API.
 |--------|----------|-----------|
 | `login(username, password)` | POST `/session` | No |
 | `logout()` | DELETE `/session/{id}` | No |
+| `get_user_libraries(user_id)` | GET `/user/{id}/libraries` | Yes |
 | `search_conventions(query)` | GET `/convention` | Yes |
 | `get_convention(id, include_library)` | GET `/convention/{id}` | No |
 | `get_library_games(id, play_to_win_only)` | GET `/library/{id}/games` | Yes |
@@ -143,13 +147,22 @@ Core drawing algorithm. Pure functions operating on data structures (no I/O).
 Login                          POST /login
   │                              └─ TTEClient.login() → session_id
   ▼
-Convention Select              GET /convention
-  │                              └─ Search: AJAX GET /convention/search
-  │                                   └─ TTEClient.search_conventions()
+Source Select                  GET /convention
+  │                              ├─ Convention tab:
+  │                              │    └─ Search: AJAX GET /convention/search
+  │                              │         └─ TTEClient.search_conventions()
+  │                              └─ Library Only tab:
+  │                                   └─ Browse: AJAX GET /library/browse
+  │                                        └─ TTEClient.get_user_libraries()
   ▼
 Convention Confirm             POST /convention/select
   │                              └─ TTEClient.get_convention(include_library=True)
   │                              └─ Stores convention_id, library_id in session
+  ▼
+Library Confirm                POST /library/select  (alternative path)
+  │                              └─ TTEClient.get_library(library_id)
+  │                              └─ Stores library_id, library_name in session
+  │                              └─ Clears convention_id, convention_name
   ▼
 Games Page                     GET /games
   │                              ├─ TTEClient.get_library_games()
@@ -187,10 +200,11 @@ All application state lives in the Flask session (cookie-based, signed with `SEC
 |-----|------|--------|---------|
 | `tte_session_id` | `str` | Login | TTE API session ID |
 | `tte_username` | `str` | Login | Display username |
-| `convention_id` | `str` | Convention select | Selected convention |
-| `convention_name` | `str` | Convention select | Convention display name |
-| `library_id` | `str` | Convention select | Associated library ID |
-| `library_name` | `str` | Convention select | Library display name |
+| `tte_user_id` | `str` | Login | TTE user ID (for library browsing) |
+| `convention_id` | `str` | Convention select | Selected convention (absent in library-only mode) |
+| `convention_name` | `str` | Convention select | Convention display name (absent in library-only mode) |
+| `library_id` | `str` | Convention/library select | Associated library ID |
+| `library_name` | `str` | Convention/library select | Library display name |
 | `premium_games` | `list[str]` | Premium toggle | Game IDs marked as premium |
 | `drawing_state` | `list[dict]` | Drawing | Full shuffled state with winner indices |
 | `auto_resolved` | `list[dict]` | Drawing | Auto-resolved premium conflicts |
@@ -243,8 +257,8 @@ python -m pytest tests/ -v
 
 | File | Tests | Covers |
 |------|-------|--------|
-| `test_routes.py` | ~140 | All routes, auth guards, AJAX endpoints, error handling |
-| `test_tte_client.py` | ~20 | Rate limiting, auth, error handling, pagination, endpoints |
+| `test_routes.py` | ~155 | All routes, auth guards, AJAX endpoints, error handling |
+| `test_tte_client.py` | ~22 | Rate limiting, auth, error handling, pagination, endpoints |
 | `test_drawing.py` | varies | Shuffle, conflicts, resolution, cascading |
 | `test_data_processing.py` | varies | Entry processing, grouping |
 

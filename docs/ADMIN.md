@@ -72,9 +72,13 @@ This is the step-by-step process for running a Play-to-Win drawing at a conventi
 
 Navigate to the app and log in with your tabletop.events credentials. The app creates a session with the TTE API using your credentials and the configured API key.
 
-### 2. Select a convention
+### 2. Select a source
 
-Search for your convention by name, or paste the convention ID directly. The app fetches the convention details and its associated game library.
+The source selection page has two tabs:
+
+**Convention tab** (default): Search for your convention by name, or paste the convention ID directly. The app fetches the convention details and its associated game library. Play-to-Win entries are scoped to the convention.
+
+**Library Only tab**: If you want to draw from a library without a convention (or the library exists independently), switch to the "Library Only" tab. You can browse your libraries (libraries associated with your TTE account) or paste a library ID directly. In library-only mode, all Play-to-Win entries in the library are included regardless of convention.
 
 ### 3. Review games
 
@@ -179,6 +183,7 @@ The filename follows the pattern `PawDrawing_ConventionName_2026-03-21.csv`.
 | **Request timed out. The server may be busy — please try again.** | A TTE API request took longer than 30 seconds. | Retry the action. If persistent, check your network or TTE server status. |
 | **Could not load games / entries** | API error when fetching game or entry data. | Check that the convention ID is correct and the convention has a library with P2W games. Retry. |
 | **No library found for this convention.** | The selected convention doesn't have an associated game library. | Verify you selected the correct convention. The convention must have a library configured in TTE. |
+| **Could not load your libraries** | API error when browsing user's libraries. | Check your network connection and try again. If the issue persists, paste the library ID directly instead of browsing. |
 | **Network error** | No network connectivity or DNS resolution failure. | Check your internet connection and that `tabletop.events` is reachable. |
 | **Login failed** | Invalid username, password, or API key. | Verify credentials. Check that `TTE_API_KEY` in `.env` is correct. |
 | **No games marked as picked up** (Push to TTE) | Attempted to push with no games in the picked-up list. | Mark at least one game as picked up before pushing. |

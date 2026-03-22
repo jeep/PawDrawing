@@ -65,6 +65,7 @@ def login():
 
         session["tte_session_id"] = client.session_id
         session["tte_username"] = username
+        session["tte_user_id"] = client.user_id
         return redirect(url_for("main.convention_select"))
 
     return render_template("login.html")
@@ -90,6 +91,60 @@ def convention_select():
         flash("Please log in first.", "error")
         return redirect(url_for("main.login"))
     return render_template("convention_select.html")
+
+
+@main_bp.route("/library/browse")
+def library_browse():
+    """AJAX endpoint: list libraries owned by the logged-in user."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    user_id = session.get("tte_user_id")
+    if not user_id:
+        return jsonify({"error": "No user ID available"}), 400
+
+    client = _get_client()
+    try:
+        libraries = client.get_user_libraries(user_id)
+    except TTEAPIError as exc:
+        if getattr(exc, 'status_code', None) in (401, 403):
+            session.clear()
+            return jsonify({"error": "Session expired \u2014 please log in again."}), 401
+        return jsonify({"error": str(exc)}), 502
+
+    results = [{"id": lib.get("id"), "name": lib.get("name", "Unnamed")} for lib in libraries]
+    return jsonify({"results": results})
+
+
+@main_bp.route("/library/select", methods=["POST"])
+def library_confirm():
+    """Fetch library details and store in session (no convention)."""
+    if not session.get("tte_session_id"):
+        flash("Please log in first.", "error")
+        return redirect(url_for("main.login"))
+
+    library_id = request.form.get("library_id", "").strip()
+    if not library_id:
+        flash("Please enter or select a library.", "error")
+        return redirect(url_for("main.convention_select"))
+
+    client = _get_client()
+    try:
+        library = client.get_library(library_id)
+    except TTEAPIError as exc:
+        return _handle_api_error(exc, url_for("main.convention_select"), "load library")
+
+    library_name = library.get("name", "Unknown")
+
+    session.pop("convention_id", None)
+    session.pop("convention_name", None)
+    session["library_id"] = library_id
+    session["library_name"] = library_name
+
+    return render_template(
+        "library_confirm.html",
+        library_name=library_name,
+    )
 
 
 @main_bp.route("/convention/search")
@@ -195,7 +250,7 @@ def games():
         game_data=game_data,
         total_games=len(all_games),
         total_entries=len(entries),
-        convention_name=session.get("convention_name", ""),
+        convention_name=session.get("convention_name") or session.get("library_name", ""),
         premium_games=premium_games,
         data_loaded_at=data_loaded_at,
     )
@@ -292,7 +347,7 @@ def run_drawing_route():
         conflicts=conflicts,
         auto_resolved=auto_resolved,
         conflicted_game_ids=conflicted_game_ids,
-        convention_name=session.get("convention_name", ""),
+        convention_name=session.get("convention_name") or session.get("library_name", ""),
         picked_up=set(),
         drawing_timestamp=session.get("drawing_timestamp", ""),
     )
@@ -461,7 +516,7 @@ def redistribute():
     return render_template(
         "redistribute.html",
         unclaimed_games=unclaimed_games,
-        convention_name=session.get("convention_name", ""),
+        convention_name=session.get("convention_name") or session.get("library_name", ""),
     )
 
 
