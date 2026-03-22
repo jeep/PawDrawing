@@ -942,6 +942,212 @@ class TestDrawingRoutes(unittest.TestCase):
         with self.client.session_transaction() as sess:
             self.assertEqual(sess["picked_up"], [])
 
+    @patch("routes.TTEClient")
+    def test_drawing_shows_redistribution_button(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.post("/drawing")
+        self.assertIn(b"Start Redistribution", resp.data)
+
+
+class TestRedistributionRoutes(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def _setup_drawing_state(self, picked_up=None):
+        """Helper to set up session with a drawing state."""
+        drawing_state = [
+            {
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "G1", "id": "e2", "name": "Bob"},
+                    {"badge_id": "B3", "librarygame_id": "G1", "id": "e3", "name": "Carol"},
+                ],
+                "winner_index": 0,
+            },
+            {
+                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "shuffled": [
+                    {"badge_id": "B4", "librarygame_id": "G2", "id": "e4", "name": "Dave"},
+                ],
+                "winner_index": 0,
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = drawing_state
+            sess["convention_name"] = "GameFest"
+            sess["picked_up"] = picked_up or []
+            sess["redistribution_declined"] = {}
+            sess["redistribution_winners"] = {}
+
+    def test_redistribute_requires_auth(self):
+        resp = self.client.get("/drawing/redistribute")
+        self.assertEqual(resp.status_code, 302)
+
+    def test_redistribute_requires_drawing_state(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+        resp = self.client.get("/drawing/redistribute")
+        self.assertEqual(resp.status_code, 302)
+
+    def test_redistribute_shows_unclaimed_games(self):
+        self._setup_drawing_state(picked_up=["G2"])
+        resp = self.client.get("/drawing/redistribute")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode()
+        # G1 is unclaimed, so it should appear
+        self.assertIn("Catan", html)
+        # G2 is picked up, so it should NOT appear
+        self.assertNotIn("Ticket to Ride", html)
+        # Shows unclaimed count
+        self.assertIn("1", html)
+
+    def test_redistribute_shows_entrant_list(self):
+        self._setup_drawing_state(picked_up=["G2"])
+        resp = self.client.get("/drawing/redistribute")
+        html = resp.data.decode()
+        # All 3 entrants should be listed for Catan
+        self.assertIn("Alice", html)
+        self.assertIn("Bob", html)
+        self.assertIn("Carol", html)
+        # Original winner tag
+        self.assertIn("Original Winner", html)
+
+    def test_redistribute_all_picked_up(self):
+        self._setup_drawing_state(picked_up=["G1", "G2"])
+        resp = self.client.get("/drawing/redistribute")
+        html = resp.data.decode()
+        self.assertIn("All games have been picked up", html)
+
+    def test_redistribute_claim_requires_auth(self):
+        resp = self.client.post("/drawing/redistribute/claim",
+                                json={"game_id": "G1", "badge_id": "B2", "action": "claim"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_redistribute_claim_requires_drawing_state(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+        resp = self.client.post("/drawing/redistribute/claim",
+                                json={"game_id": "G1", "badge_id": "B2", "action": "claim"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_redistribute_claim_validates_input(self):
+        self._setup_drawing_state()
+        resp = self.client.post("/drawing/redistribute/claim",
+                                json={"game_id": "G1"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_redistribute_claim_invalid_action(self):
+        self._setup_drawing_state()
+        resp = self.client.post("/drawing/redistribute/claim",
+                                json={"game_id": "G1", "badge_id": "B2", "action": "invalid"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_redistribute_claim_marks_winner(self):
+        self._setup_drawing_state()
+        resp = self.client.post("/drawing/redistribute/claim",
+                                json={"game_id": "G1", "badge_id": "B2", "action": "claim"},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["action"], "claim")
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["redistribution_winners"]["G1"], "B2")
+
+    def test_redistribute_decline_stores_in_session(self):
+        self._setup_drawing_state()
+        resp = self.client.post("/drawing/redistribute/claim",
+                                json={"game_id": "G1", "badge_id": "B1", "action": "decline"},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+
+        with self.client.session_transaction() as sess:
+            self.assertIn("B1", sess["redistribution_declined"]["G1"])
+
+    def test_redistribute_decline_removes_winner(self):
+        self._setup_drawing_state()
+        # First claim B2
+        self.client.post("/drawing/redistribute/claim",
+                         json={"game_id": "G1", "badge_id": "B2", "action": "claim"},
+                         content_type="application/json")
+        # Then decline B2
+        self.client.post("/drawing/redistribute/claim",
+                         json={"game_id": "G1", "badge_id": "B2", "action": "decline"},
+                         content_type="application/json")
+
+        with self.client.session_transaction() as sess:
+            self.assertNotIn("G1", sess["redistribution_winners"])
+
+    def test_redistribute_page_shows_declined(self):
+        self._setup_drawing_state(picked_up=["G2"])
+        # Decline B1
+        self.client.post("/drawing/redistribute/claim",
+                         json={"game_id": "G1", "badge_id": "B1", "action": "decline"},
+                         content_type="application/json")
+        resp = self.client.get("/drawing/redistribute")
+        html = resp.data.decode()
+        self.assertIn("Declined / Absent", html)
+
+    def test_redistribute_page_shows_new_winner(self):
+        self._setup_drawing_state(picked_up=["G2"])
+        # Claim B2 as new winner
+        self.client.post("/drawing/redistribute/claim",
+                         json={"game_id": "G1", "badge_id": "B2", "action": "claim"},
+                         content_type="application/json")
+        resp = self.client.get("/drawing/redistribute")
+        html = resp.data.decode()
+        self.assertIn("New Winner", html)
+
+    @patch("routes.TTEClient")
+    def test_rerun_clears_redistribution(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+            sess["redistribution_declined"] = {"G1": ["B1"]}
+            sess["redistribution_winners"] = {"G1": "B2"}
+
+        self.client.post("/drawing")
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["redistribution_declined"], {})
+            self.assertEqual(sess["redistribution_winners"], {})
+
 
 if __name__ == "__main__":
     unittest.main()

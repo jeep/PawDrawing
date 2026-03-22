@@ -237,6 +237,8 @@ def run_drawing_route():
     session["drawing_state"] = drawing_state
     session["auto_resolved"] = auto_resolved
     session["picked_up"] = []
+    session["redistribution_declined"] = {}
+    session["redistribution_winners"] = {}
 
     winners = get_current_winners(drawing_state)
 
@@ -383,4 +385,105 @@ def toggle_pickup():
         "game_id": game_id,
         "is_picked_up": is_picked_up,
         "picked_up_count": len(picked_up),
+    })
+
+
+@main_bp.route("/drawing/redistribute")
+def redistribute():
+    """Show redistribution page for unclaimed games."""
+    if not session.get("tte_session_id"):
+        flash("Please log in first.", "error")
+        return redirect(url_for("main.login"))
+
+    drawing_state = session.get("drawing_state")
+    if not drawing_state:
+        flash("No active drawing to redistribute.", "error")
+        return redirect(url_for("main.games"))
+
+    picked_up = set(session.get("picked_up", []))
+    winners = get_current_winners(drawing_state)
+    declined = session.get("redistribution_declined", {})
+
+    unclaimed_games = []
+    for item in drawing_state:
+        game = item["game"]
+        game_id = game["id"]
+        winner = winners.get(game_id)
+
+        # Only include games that have a winner but were not picked up
+        if winner and game_id not in picked_up:
+            # Build the full entrant list in shuffled order
+            game_declined = set(declined.get(game_id, []))
+            entrants = []
+            new_winner_badge = session.get("redistribution_winners", {}).get(game_id)
+            for i, entry in enumerate(item["shuffled"]):
+                badge_id = entry.get("badge_id", "")
+                entrants.append({
+                    "name": entry.get("name", "Unknown"),
+                    "badge_id": badge_id,
+                    "position": i + 1,
+                    "is_original_winner": i == item["winner_index"],
+                    "is_declined": badge_id in game_declined,
+                    "is_new_winner": badge_id == new_winner_badge,
+                })
+
+            unclaimed_games.append({
+                "game_name": game.get("name", "Unknown"),
+                "game_id": game_id,
+                "entrants": entrants,
+                "has_new_winner": new_winner_badge is not None,
+            })
+
+    unclaimed_games.sort(key=lambda g: g["game_name"])
+
+    return render_template(
+        "redistribute.html",
+        unclaimed_games=unclaimed_games,
+        convention_name=session.get("convention_name", ""),
+    )
+
+
+@main_bp.route("/drawing/redistribute/claim", methods=["POST"])
+def redistribute_claim():
+    """Mark an entrant as claimed (new winner) or declined for a game."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    drawing_state = session.get("drawing_state")
+    if not drawing_state:
+        return jsonify({"error": "No active drawing"}), 400
+
+    data = request.get_json(silent=True)
+    if not data or "game_id" not in data or "badge_id" not in data or "action" not in data:
+        return jsonify({"error": "Invalid request"}), 400
+
+    game_id = data["game_id"]
+    badge_id = data["badge_id"]
+    action = data["action"]
+
+    if action not in ("claim", "decline"):
+        return jsonify({"error": "Invalid action"}), 400
+
+    declined = session.get("redistribution_declined", {})
+    redistribution_winners = session.get("redistribution_winners", {})
+
+    if action == "decline":
+        if game_id not in declined:
+            declined[game_id] = []
+        if badge_id not in declined[game_id]:
+            declined[game_id].append(badge_id)
+        # If this person was the new winner, remove them
+        if redistribution_winners.get(game_id) == badge_id:
+            del redistribution_winners[game_id]
+    elif action == "claim":
+        redistribution_winners[game_id] = badge_id
+
+    session["redistribution_declined"] = declined
+    session["redistribution_winners"] = redistribution_winners
+
+    return jsonify({
+        "ok": True,
+        "game_id": game_id,
+        "badge_id": badge_id,
+        "action": action,
     })

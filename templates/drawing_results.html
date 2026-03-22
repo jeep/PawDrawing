@@ -288,6 +288,7 @@
     <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin-left:auto;">
         <button type="submit" class="rerun-btn">Re-run Drawing</button>
     </form>
+    <a href="{{ url_for('main.redistribute') }}" class="rerun-btn" style="text-decoration:none;">Start Redistribution</a>
 </div>
 
 {% if auto_resolved %}
