@@ -277,6 +277,30 @@
         border-color: #27ae60;
     }
     .pickup-btn.picked:hover { background: #219a52; }
+
+    .push-btn {
+        background: #8e44ad;
+        color: white;
+        border: none;
+        padding: 0.65rem 1.5rem;
+        font-size: 1rem;
+        font-weight: 600;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+    .push-btn:hover { background: #7d3c98; }
+    .push-btn:disabled { background: #ccc; cursor: not-allowed; }
+    .push-result {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        padding: 1rem 1.5rem;
+        margin-bottom: 1.5rem;
+        font-size: 0.95rem;
+    }
+    .push-result.success { border-left: 4px solid #27ae60; }
+    .push-result.partial { border-left: 4px solid #f39c12; }
+    .push-result.error { border-left: 4px solid #e74c3c; }
 </style>
 {% endblock %}
 
@@ -289,7 +313,10 @@
         <button type="submit" class="rerun-btn">Re-run Drawing</button>
     </form>
     <a href="{{ url_for('main.redistribute') }}" class="rerun-btn" style="text-decoration:none;">Start Redistribution</a>
+    <button class="push-btn" id="push-btn" onclick="pushToTTE()">Push to TTE</button>
 </div>
+
+<div id="push-result" style="display:none;"></div>
 
 {% if auto_resolved %}
 <div class="auto-resolved">
@@ -692,6 +719,55 @@
     function escAttr(str) {
         return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
+
+    window.pushToTTE = function() {
+        var count = document.getElementById('pickup-count').textContent;
+        if (!confirm('This will update ' + count + ' games in TTE. Proceed?')) return;
+
+        var btn = document.getElementById('push-btn');
+        var resultDiv = document.getElementById('push-result');
+        btn.disabled = true;
+        btn.textContent = 'Pushing...';
+        resultDiv.style.display = 'block';
+        resultDiv.className = 'push-result';
+        resultDiv.textContent = 'Pushing results to TTE...';
+
+        fetch('{{ url_for("main.push_to_tte") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.ok) {
+                resultDiv.className = 'push-result error';
+                resultDiv.textContent = 'Error: ' + (data.error || 'Unknown error');
+                btn.disabled = false;
+                btn.textContent = 'Push to TTE';
+                return;
+            }
+            if (data.failures.length === 0) {
+                resultDiv.className = 'push-result success';
+                resultDiv.innerHTML = '<strong>Success!</strong> Updated ' + data.successes + ' of ' + data.total + ' games in TTE.';
+            } else {
+                resultDiv.className = 'push-result partial';
+                var html = '<strong>Partial success:</strong> ' + data.successes + ' of ' + data.total + ' updated.<br>';
+                html += '<strong>Failures:</strong><ul>';
+                data.failures.forEach(function(f) {
+                    html += '<li>Game ' + escHtml(f.game_id) + ': ' + escHtml(f.error) + '</li>';
+                });
+                html += '</ul>';
+                resultDiv.innerHTML = html;
+            }
+            btn.textContent = 'Push to TTE';
+            btn.disabled = false;
+        })
+        .catch(function() {
+            resultDiv.className = 'push-result error';
+            resultDiv.textContent = 'Network error — please try again.';
+            btn.disabled = false;
+            btn.textContent = 'Push to TTE';
+        });
+    };
 })();
 </script>
 {% endblock %}

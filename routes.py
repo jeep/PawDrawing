@@ -487,3 +487,68 @@ def redistribute_claim():
         "badge_id": badge_id,
         "action": action,
     })
+
+
+@main_bp.route("/drawing/push", methods=["POST"])
+def push_to_tte():
+    """Push win flags to TTE for all picked-up games."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    drawing_state = session.get("drawing_state")
+    if not drawing_state:
+        return jsonify({"error": "No active drawing"}), 400
+
+    picked_up = set(session.get("picked_up", []))
+    if not picked_up:
+        return jsonify({"error": "No games marked as picked up"}), 400
+
+    winners = get_current_winners(drawing_state)
+    redistribution_winners = session.get("redistribution_winners", {})
+
+    # Build a map of game_id -> shuffled entries for redistribution lookups
+    game_entries_map = {}
+    for item in drawing_state:
+        game_entries_map[item["game"]["id"]] = item["shuffled"]
+
+    # Collect PlayToWin entry IDs for picked-up games
+    entries_to_update = []
+    for game_id in picked_up:
+        redist_badge = redistribution_winners.get(game_id)
+        if redist_badge:
+            # Redistribution winner: find entry by badge_id
+            for entry in game_entries_map.get(game_id, []):
+                if entry.get("badge_id") == redist_badge:
+                    entries_to_update.append({
+                        "playtowin_id": entry["id"],
+                        "game_id": game_id,
+                    })
+                    break
+        else:
+            winner = winners.get(game_id)
+            if winner:
+                entries_to_update.append({
+                    "playtowin_id": winner["id"],
+                    "game_id": game_id,
+                })
+
+    client = _get_client()
+    successes = []
+    failures = []
+
+    for entry in entries_to_update:
+        try:
+            client.update_playtowin(entry["playtowin_id"], {"win": 1})
+            successes.append(entry["game_id"])
+        except TTEAPIError as exc:
+            failures.append({
+                "game_id": entry["game_id"],
+                "error": str(exc),
+            })
+
+    return jsonify({
+        "ok": True,
+        "total": len(entries_to_update),
+        "successes": len(successes),
+        "failures": failures,
+    })

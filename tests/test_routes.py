@@ -1149,5 +1149,134 @@ class TestRedistributionRoutes(unittest.TestCase):
             self.assertEqual(sess["redistribution_winners"], {})
 
 
+class TestPushToTTE(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def _setup_session(self, picked_up=None, redist_winners=None):
+        drawing_state = [
+            {
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "G1", "id": "e2", "name": "Bob"},
+                ],
+                "winner_index": 0,
+            },
+            {
+                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "shuffled": [
+                    {"badge_id": "B3", "librarygame_id": "G2", "id": "e3", "name": "Carol"},
+                ],
+                "winner_index": 0,
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = drawing_state
+            sess["picked_up"] = picked_up or []
+            sess["redistribution_winners"] = redist_winners or {}
+
+    def test_push_requires_auth(self):
+        resp = self.client.post("/drawing/push",
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_push_requires_drawing_state(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+        resp = self.client.post("/drawing/push",
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_push_requires_picked_up(self):
+        self._setup_session(picked_up=[])
+        resp = self.client.post("/drawing/push",
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+        data = resp.get_json()
+        self.assertIn("No games", data["error"])
+
+    @patch("routes.TTEClient")
+    def test_push_updates_picked_up_games(self, MockClient):
+        mock_instance = MagicMock()
+        MockClient.return_value = mock_instance
+
+        self._setup_session(picked_up=["G1", "G2"])
+        resp = self.client.post("/drawing/push",
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["successes"], 2)
+        self.assertEqual(data["total"], 2)
+        self.assertEqual(data["failures"], [])
+
+        # Verify update_playtowin was called for each game's winner entry
+        calls = mock_instance.update_playtowin.call_args_list
+        called_ids = {call[0][0] for call in calls}
+        self.assertEqual(called_ids, {"e1", "e3"})
+        for call in calls:
+            self.assertEqual(call[0][1], {"win": 1})
+
+    @patch("routes.TTEClient")
+    def test_push_uses_redistribution_winner(self, MockClient):
+        mock_instance = MagicMock()
+        MockClient.return_value = mock_instance
+
+        # G1 was redistributed to B2 (entry e2)
+        self._setup_session(picked_up=["G1"], redist_winners={"G1": "B2"})
+        resp = self.client.post("/drawing/push",
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["successes"], 1)
+
+        # Should update e2 (Bob's entry), not e1 (Alice's)
+        mock_instance.update_playtowin.assert_called_once_with("e2", {"win": 1})
+
+    @patch("routes.TTEClient")
+    def test_push_handles_partial_failure(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.update_playtowin.side_effect = [
+            None,  # first call succeeds
+            TTEAPIError("Server error", 500),  # second call fails
+        ]
+        MockClient.return_value = mock_instance
+
+        self._setup_session(picked_up=["G1", "G2"])
+        resp = self.client.post("/drawing/push",
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["successes"], 1)
+        self.assertEqual(len(data["failures"]), 1)
+        self.assertIn("Server error", data["failures"][0]["error"])
+
+    @patch("routes.TTEClient")
+    def test_push_button_in_results(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.post("/drawing")
+        self.assertIn(b"Push to TTE", resp.data)
+        self.assertIn(b'id="push-btn"', resp.data)
+
+
 if __name__ == "__main__":
     unittest.main()
