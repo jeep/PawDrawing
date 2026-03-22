@@ -194,6 +194,12 @@
 <script>
 (function() {
     window.redistributeAction = function(gameId, badgeId, action) {
+        var panel = document.getElementById('game-' + gameId);
+        var item = panel.querySelector('.entrant-item[data-badge-id="' + badgeId + '"]');
+        var actions = item.querySelector('.entrant-actions');
+        var originalHtml = actions.innerHTML;
+        actions.innerHTML = '<span style="color:#856404;">Saving...</span>';
+
         fetch('{{ url_for("main.redistribute_claim") }}', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -201,11 +207,10 @@
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            if (!data.ok) return;
-
-            var panel = document.getElementById('game-' + gameId);
-            var item = panel.querySelector('.entrant-item[data-badge-id="' + badgeId + '"]');
-            var actions = item.querySelector('.entrant-actions');
+            if (!data.ok) {
+                actions.innerHTML = originalHtml;
+                return;
+            }
 
             if (action === 'claim') {
                 // Mark as new winner
@@ -231,6 +236,16 @@
                     panel.classList.remove('has-new-winner');
                 }
             }
+        })
+        .catch(function() {
+            actions.innerHTML = originalHtml;
+            var errSpan = document.createElement('span');
+            errSpan.style.color = '#b71c1c';
+            errSpan.style.fontSize = '0.8rem';
+            errSpan.style.marginLeft = '0.5rem';
+            errSpan.textContent = 'Network error — try again';
+            actions.appendChild(errSpan);
+            setTimeout(function() { if (errSpan.parentNode) errSpan.remove(); }, 3000);
         });
     };
 })();

@@ -309,7 +309,7 @@
     <h2>Drawing Results — {{ convention_name }}</h2>
     <span class="stat"><strong>{{ results|length }}</strong> games drawn</span>
     <span class="stat" id="pickup-summary"><strong id="pickup-count">{{ picked_up|length }}</strong> of <strong>{{ results|selectattr('winner_name')|list|length }}</strong> picked up</span>
-    <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin-left:auto;">
+    <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin-left:auto;" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running...';">
         <button type="submit" class="rerun-btn">Re-run Drawing</button>
     </form>
     <a href="{{ url_for('main.redistribute') }}" class="rerun-btn" style="text-decoration:none;">Start Redistribution</a>
@@ -496,6 +496,9 @@
     };
 
     window.togglePickup = function(gameId) {
+        var btns = document.querySelectorAll('.pickup-btn[data-game-id="' + gameId + '"]');
+        btns.forEach(function(b) { b.disabled = true; b.textContent = 'Saving...'; });
+
         fetch('{{ url_for("main.toggle_pickup") }}', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -503,9 +506,13 @@
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            if (!data.ok) return;
+            if (!data.ok) {
+                btns.forEach(function(b) { b.disabled = false; b.textContent = 'Mark Picked Up'; });
+                return;
+            }
             // Update all pickup buttons for this game (in both tables)
             document.querySelectorAll('.pickup-btn[data-game-id="' + gameId + '"]').forEach(function(btn) {
+                btn.disabled = false;
                 btn.classList.toggle('picked', data.is_picked_up);
                 btn.textContent = data.is_picked_up ? '✓ Picked Up' : 'Mark Picked Up';
                 // Toggle picked-up class on the parent row
@@ -513,6 +520,14 @@
                 if (row) row.classList.toggle('picked-up', data.is_picked_up);
             });
             document.getElementById('pickup-count').textContent = data.picked_up_count;
+        })
+        .catch(function() {
+            btns.forEach(function(b) {
+                b.disabled = false;
+                b.textContent = 'Error — Retry';
+                b.style.borderColor = '#e74c3c';
+                setTimeout(function() { b.style.borderColor = ''; }, 3000);
+            });
         });
     };
 

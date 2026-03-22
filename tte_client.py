@@ -14,6 +14,15 @@ class TTEAPIError(Exception):
         self.status_code = status_code
 
 
+class TTETimeoutError(TTEAPIError):
+    """Raised when a TTE API request times out."""
+
+    def __init__(self):
+        super().__init__(
+            "Request timed out. The server may be busy — please try again."
+        )
+
+
 class TTEClient:
     """Client for the tabletop.events API.
 
@@ -61,6 +70,8 @@ class TTEClient:
                 json=json_body,
                 timeout=30,
             )
+        except requests.Timeout as exc:
+            raise TTETimeoutError() from exc
         except requests.RequestException as exc:
             raise TTEAPIError(f"Network error: {exc}") from exc
 

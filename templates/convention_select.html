@@ -99,7 +99,7 @@
     <div class="form-row">
         <label class="section-label" for="search">Search by name</label>
         <input type="text" id="search" placeholder="Type convention name..." autocomplete="off">
-        <div class="search-hint">Type at least 2 characters to search</div>
+        <div class="search-hint" id="search-hint">Type at least 2 characters to search</div>
         <ul class="search-results" id="search-results"></ul>
     </div>
 
@@ -120,6 +120,7 @@
     const searchInput = document.getElementById('search');
     const resultsList = document.getElementById('search-results');
     const idInput = document.getElementById('convention_id');
+    const hintEl = document.getElementById('search-hint');
     let debounceTimer;
 
     searchInput.addEventListener('input', function() {
@@ -128,8 +129,10 @@
         if (q.length < 2) {
             resultsList.style.display = 'none';
             resultsList.innerHTML = '';
+            hintEl.textContent = 'Type at least 2 characters to search';
             return;
         }
+        hintEl.textContent = 'Searching...';
         debounceTimer = setTimeout(() => fetchResults(q), 350);
     });
 
@@ -137,6 +140,7 @@
         fetch('{{ url_for("main.convention_search") }}?q=' + encodeURIComponent(query))
             .then(r => r.json())
             .then(data => {
+                hintEl.textContent = '';
                 resultsList.innerHTML = '';
                 if (data.error) {
                     resultsList.innerHTML = '<li style="color:#b71c1c;cursor:default">' +
@@ -162,7 +166,8 @@
                 resultsList.style.display = 'block';
             })
             .catch(() => {
-                resultsList.innerHTML = '<li style="color:#b71c1c;cursor:default">Search failed</li>';
+                hintEl.textContent = '';
+                resultsList.innerHTML = '<li style="color:#b71c1c;cursor:default">Search failed — please try again</li>';
                 resultsList.style.display = 'block';
             });
     }

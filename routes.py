@@ -12,7 +12,7 @@ from drawing import (
     get_current_winners,
     run_drawing,
 )
-from tte_client import TTEAPIError, TTEClient
+from tte_client import TTEAPIError, TTEClient, TTETimeoutError
 
 main_bp = Blueprint("main", __name__)
 
@@ -22,6 +22,21 @@ def _get_client():
     client = TTEClient()
     client.session_id = session.get("tte_session_id")
     return client
+
+
+def _handle_api_error(exc, fallback_url, action="complete this request"):
+    """Handle TTEAPIError with appropriate flash message and redirect.
+
+    Clears the Flask session on auth errors (401/403) so the user
+    is prompted to log in again.
+    """
+    if getattr(exc, "status_code", None) in (401, 403):
+        session.clear()
+        flash("Session expired — please log in again.", "error")
+        return redirect(url_for("main.login"))
+
+    flash(f"Could not {action}: {exc}", "error")
+    return redirect(fallback_url)
 
 
 @main_bp.route("/")
@@ -91,6 +106,9 @@ def convention_search():
     try:
         conventions = client.search_conventions(query)
     except TTEAPIError as exc:
+        if getattr(exc, 'status_code', None) in (401, 403):
+            session.clear()
+            return jsonify({"error": "Session expired — please log in again."}), 401
         return jsonify({"error": str(exc)}), 502
 
     results = [{"id": c.get("id"), "name": c.get("name", "Unnamed")} for c in conventions]
@@ -113,8 +131,7 @@ def convention_confirm():
     try:
         convention = client.get_convention(convention_id, include_library=True)
     except TTEAPIError as exc:
-        flash(f"Could not load convention: {exc}", "error")
-        return redirect(url_for("main.convention_select"))
+        return _handle_api_error(exc, url_for("main.convention_select"), "load convention")
 
     convention_name = convention.get("name", "Unknown")
     library = convention.get("library")
@@ -155,8 +172,7 @@ def games():
     try:
         all_games = client.get_library_games(library_id, play_to_win_only=True)
     except TTEAPIError as exc:
-        flash(f"Could not load games: {exc}", "error")
-        return redirect(url_for("main.convention_select"))
+        return _handle_api_error(exc, url_for("main.convention_select"), "load games")
 
     try:
         if convention_id:
@@ -164,8 +180,7 @@ def games():
         else:
             raw_entries = client.get_library_playtowins(library_id)
     except TTEAPIError as exc:
-        flash(f"Could not load entries: {exc}", "error")
-        return redirect(url_for("main.convention_select"))
+        return _handle_api_error(exc, url_for("main.convention_select"), "load entries")
 
     entries = process_entries(raw_entries)
     game_data = group_entries_by_game(entries, all_games)
@@ -219,8 +234,7 @@ def run_drawing_route():
     try:
         all_games = client.get_library_games(library_id, play_to_win_only=True)
     except TTEAPIError as exc:
-        flash(f"Could not load games: {exc}", "error")
-        return redirect(url_for("main.games"))
+        return _handle_api_error(exc, url_for("main.games"), "load games")
 
     try:
         if convention_id:
@@ -228,8 +242,7 @@ def run_drawing_route():
         else:
             raw_entries = client.get_library_playtowins(library_id)
     except TTEAPIError as exc:
-        flash(f"Could not load entries: {exc}", "error")
-        return redirect(url_for("main.games"))
+        return _handle_api_error(exc, url_for("main.games"), "load entries")
 
     entries = process_entries(raw_entries)
     game_data = group_entries_by_game(entries, all_games)
@@ -545,6 +558,9 @@ def push_to_tte():
             client.update_playtowin(entry["playtowin_id"], {"win": 1})
             successes.append(entry["game_id"])
         except TTEAPIError as exc:
+            if getattr(exc, 'status_code', None) in (401, 403):
+                session.clear()
+                return jsonify({"error": "Session expired — please log in again."}), 401
             failures.append({
                 "game_id": entry["game_id"],
                 "error": str(exc),

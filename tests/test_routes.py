@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 
 from app import create_app
-from tte_client import TTEAPIError
+from tte_client import TTEAPIError, TTETimeoutError
 
 
 class TestLoginRoute(unittest.TestCase):
@@ -1427,6 +1427,189 @@ class TestCSVExport(unittest.TestCase):
             MockClient.return_value = mock_instance
             resp = self.client.post("/drawing")
         self.assertIn(b"Export CSV", resp.data)
+
+
+class TestErrorHandlingRoutes(unittest.TestCase):
+    """Tests for consistent error handling across routes."""
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def _setup_session(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "Test Con"
+            sess["library_id"] = "lib-1"
+            sess["library_name"] = "P2W Library"
+            sess["premium_games"] = []
+
+    # ── Auth expiration clears session ─────────────────────────────────
+
+    @patch("routes.TTEClient")
+    def test_convention_select_auth_error_clears_session(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_convention.side_effect = TTEAPIError("Unauthorized", 401)
+        MockClient.return_value = mock_instance
+        self._setup_session()
+
+        resp = self.client.post("/convention/select",
+                                data={"convention_id": "conv-1"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/login", resp.headers["Location"])
+
+        with self.client.session_transaction() as sess:
+            self.assertNotIn("tte_session_id", sess)
+
+    @patch("routes.TTEClient")
+    def test_games_auth_error_clears_session(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.side_effect = TTEAPIError("Forbidden", 403)
+        MockClient.return_value = mock_instance
+        self._setup_session()
+
+        resp = self.client.get("/games")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/login", resp.headers["Location"])
+
+        with self.client.session_transaction() as sess:
+            self.assertNotIn("tte_session_id", sess)
+
+    @patch("routes.TTEClient")
+    def test_drawing_auth_error_clears_session(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.side_effect = TTEAPIError("Expired", 401)
+        MockClient.return_value = mock_instance
+        self._setup_session()
+
+        resp = self.client.post("/drawing")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/login", resp.headers["Location"])
+
+        with self.client.session_transaction() as sess:
+            self.assertNotIn("tte_session_id", sess)
+
+    @patch("routes.TTEClient")
+    def test_search_auth_error_returns_401(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.search_conventions.side_effect = TTEAPIError("Expired", 401)
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.get("/convention/search?q=test")
+        self.assertEqual(resp.status_code, 401)
+        data = resp.get_json()
+        self.assertIn("expired", data["error"].lower())
+
+    @patch("routes.TTEClient")
+    def test_push_auth_error_returns_401(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.update_playtowin.side_effect = TTEAPIError("Expired", 401)
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = [{
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [{"badge_id": "B1", "id": "e1", "name": "Alice"}],
+                "winner_index": 0,
+            }]
+            sess["picked_up"] = ["G1"]
+            sess["redistribution_winners"] = {}
+
+        resp = self.client.post("/drawing/push",
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 401)
+        data = resp.get_json()
+        self.assertIn("expired", data["error"].lower())
+
+    # ── Timeout produces friendly message ──────────────────────────────
+
+    @patch("routes.TTEClient")
+    def test_games_timeout_shows_friendly_message(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.side_effect = TTETimeoutError()
+        MockClient.return_value = mock_instance
+        self._setup_session()
+
+        resp = self.client.get("/games", follow_redirects=True)
+        self.assertIn(b"timed out", resp.data)
+        self.assertIn(b"try again", resp.data.lower())
+
+    @patch("routes.TTEClient")
+    def test_drawing_timeout_shows_friendly_message(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.side_effect = TTETimeoutError()
+        MockClient.return_value = mock_instance
+        self._setup_session()
+
+        resp = self.client.post("/drawing", follow_redirects=True)
+        self.assertIn(b"timed out", resp.data)
+
+    @patch("routes.TTEClient")
+    def test_convention_timeout_shows_friendly_message(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_convention.side_effect = TTETimeoutError()
+        MockClient.return_value = mock_instance
+        self._setup_session()
+
+        resp = self.client.post("/convention/select",
+                                data={"convention_id": "conv-1"},
+                                follow_redirects=True)
+        self.assertIn(b"timed out", resp.data)
+
+    @patch("routes.TTEClient")
+    def test_search_timeout_returns_error(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.search_conventions.side_effect = TTETimeoutError()
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.get("/convention/search?q=test")
+        self.assertEqual(resp.status_code, 502)
+        data = resp.get_json()
+        self.assertIn("timed out", data["error"].lower())
+
+    # ── Non-auth API errors show descriptive flash ─────────────────────
+
+    @patch("routes.TTEClient")
+    def test_games_500_error_shows_action_message(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.side_effect = TTEAPIError("Server error", 500)
+        MockClient.return_value = mock_instance
+        self._setup_session()
+
+        resp = self.client.get("/games", follow_redirects=True)
+        self.assertIn(b"Could not load games", resp.data)
+
+    @patch("routes.TTEClient")
+    def test_games_entry_loading_error_shows_action(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = []
+        mock_instance.get_convention_playtowins.side_effect = TTEAPIError("Server error", 500)
+        MockClient.return_value = mock_instance
+        self._setup_session()
+
+        resp = self.client.get("/games", follow_redirects=True)
+        self.assertIn(b"Could not load entries", resp.data)
+
+    @patch("routes.TTEClient")
+    def test_drawing_entry_loading_error_shows_action(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = []
+        mock_instance.get_convention_playtowins.side_effect = TTEAPIError("Not found", 404)
+        MockClient.return_value = mock_instance
+        self._setup_session()
+
+        resp = self.client.post("/drawing", follow_redirects=True)
+        self.assertIn(b"Could not load entries", resp.data)
 
 
 if __name__ == "__main__":

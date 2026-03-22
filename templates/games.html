@@ -176,7 +176,7 @@
 {% endif %}
 
 <div style="margin-top: 1.5rem; text-align: center;">
-    <form method="POST" action="{{ url_for('main.run_drawing_route') }}">
+    <form method="POST" action="{{ url_for('main.run_drawing_route') }}" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running Drawing...';">
         <button type="submit" style="background:#27ae60;color:white;border:none;padding:0.75rem 2rem;
             font-size:1.1rem;border-radius:6px;cursor:pointer;font-weight:600;">
             Run Drawing

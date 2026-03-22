@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import requests
 
 from app import create_app
-from tte_client import TTEAPIError, TTEClient
+from tte_client import TTEAPIError, TTEClient, TTETimeoutError
 
 
 class TTEClientTestBase(unittest.TestCase):
@@ -185,6 +185,17 @@ class TestErrorHandling(TTEClientTestBase):
         with self.assertRaises(TTEAPIError) as ctx:
             self.client._request("GET", "/test")
         self.assertIn("Network error", str(ctx.exception))
+
+    @patch("tte_client.requests.request", side_effect=requests.Timeout("timed out"))
+    def test_timeout_raises_timeout_error(self, mock_request):
+        with self.assertRaises(TTETimeoutError) as ctx:
+            self.client._request("GET", "/test")
+        self.assertIn("timed out", str(ctx.exception).lower())
+
+    @patch("tte_client.requests.request", side_effect=requests.Timeout("timed out"))
+    def test_timeout_error_is_subclass_of_api_error(self, mock_request):
+        with self.assertRaises(TTEAPIError):
+            self.client._request("GET", "/test")
 
 
 class TestPagination(TTEClientTestBase):
