@@ -122,6 +122,20 @@
     .save-status.visible { opacity: 1; }
     .th-premium { text-align: center; width: 90px; }
     .td-premium { text-align: center; }
+    .refresh-btn {
+        margin-left: auto;
+        background: #3498db;
+        color: white;
+        border: none;
+        padding: 0.4rem 1rem;
+        font-size: 0.85rem;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-block;
+    }
+    .refresh-btn:hover { background: #2980b9; }
 </style>
 {% endblock %}
 
@@ -130,7 +144,9 @@
     <h2>{{ convention_name }}</h2>
     <span class="stat"><strong>{{ total_games }}</strong> games</span>
     <span class="stat"><strong>{{ total_entries }}</strong> unique entries</span>
+    <span class="stat" style="font-size:0.8rem;color:#888;">Loaded {{ data_loaded_at }}</span>
     <span class="save-status" id="save-status">Saved</span>
+    <a href="{{ url_for('main.games') }}" class="refresh-btn" id="refresh-btn" onclick="this.textContent='Refreshing...';this.style.pointerEvents='none';this.style.opacity='0.6';">Refresh Data</a>
 </div>
 
 {% if game_data %}

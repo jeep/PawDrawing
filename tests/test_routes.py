@@ -1612,5 +1612,147 @@ class TestErrorHandlingRoutes(unittest.TestCase):
         self.assertIn(b"Could not load entries", resp.data)
 
 
+class TestRefreshData(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    @patch("routes.TTEClient")
+    def test_games_page_shows_refresh_button(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.get("/games")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Refresh Data", resp.data)
+
+    @patch("routes.TTEClient")
+    def test_games_page_shows_loaded_timestamp(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = []
+        mock_instance.get_convention_playtowins.return_value = []
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.get("/games")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Loaded", resp.data)
+
+    @patch("routes.TTEClient")
+    def test_refresh_preserves_premium_selections(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+            {"id": "G2", "name": "Wingspan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1"},
+            {"id": "e2", "badge_id": "B2", "librarygame_id": "G2"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+            sess["premium_games"] = ["G1"]
+
+        resp = self.client.get("/games")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b'checked', resp.data)
+        self.assertIn(b'Premium', resp.data)
+
+        # Premium selections still in session after refresh
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["premium_games"], ["G1"])
+
+    @patch("routes.TTEClient")
+    def test_refresh_fetches_fresh_data(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = []
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        # First load
+        self.client.get("/games")
+        # Second load (refresh)
+        self.client.get("/games")
+        # API called twice — fresh data each time
+        self.assertEqual(mock_instance.get_library_games.call_count, 2)
+
+    @patch("routes.TTEClient")
+    def test_drawing_results_shows_timestamp(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.post("/drawing")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Data from", resp.data)
+
+    @patch("routes.TTEClient")
+    def test_drawing_stores_timestamp_in_session(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        self.client.post("/drawing")
+
+        with self.client.session_transaction() as sess:
+            self.assertIn("drawing_timestamp", sess)
+            self.assertTrue(len(sess["drawing_timestamp"]) > 0)
+
+
 if __name__ == "__main__":
     unittest.main()

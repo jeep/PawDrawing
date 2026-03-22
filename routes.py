@@ -1,6 +1,6 @@
 import csv
 import io
-from datetime import date
+from datetime import date, datetime
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for, Response
 
@@ -188,6 +188,8 @@ def games():
 
     premium_games = session.get("premium_games", [])
 
+    data_loaded_at = datetime.now().strftime("%-I:%M %p")
+
     return render_template(
         "games.html",
         game_data=game_data,
@@ -195,6 +197,7 @@ def games():
         total_entries=len(entries),
         convention_name=session.get("convention_name", ""),
         premium_games=premium_games,
+        data_loaded_at=data_loaded_at,
     )
 
 
@@ -256,6 +259,7 @@ def run_drawing_route():
     session["picked_up"] = []
     session["redistribution_declined"] = {}
     session["redistribution_winners"] = {}
+    session["drawing_timestamp"] = datetime.now().strftime("%-I:%M %p")
 
     winners = get_current_winners(drawing_state)
 
@@ -290,6 +294,7 @@ def run_drawing_route():
         conflicted_game_ids=conflicted_game_ids,
         convention_name=session.get("convention_name", ""),
         picked_up=set(),
+        drawing_timestamp=session.get("drawing_timestamp", ""),
     )
 
 

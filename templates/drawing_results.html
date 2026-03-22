@@ -309,6 +309,9 @@
     <h2>Drawing Results — {{ convention_name }}</h2>
     <span class="stat"><strong>{{ results|length }}</strong> games drawn</span>
     <span class="stat" id="pickup-summary"><strong id="pickup-count">{{ picked_up|length }}</strong> of <strong>{{ results|selectattr('winner_name')|list|length }}</strong> picked up</span>
+    {% if drawing_timestamp %}
+    <span class="stat" style="font-size:0.8rem;color:#888;">Data from {{ drawing_timestamp }}</span>
+    {% endif %}
     <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin-left:auto;" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running...';">
         <button type="submit" class="rerun-btn">Re-run Drawing</button>
     </form>
