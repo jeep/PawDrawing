@@ -437,7 +437,7 @@ class TestLibraryConfirmRoute(unittest.TestCase):
         mock_instance.get_library_games.return_value = [
             {"id": "G1", "name": "Catan"},
         ]
-        mock_instance.get_library_playtowins.return_value = [
+        mock_instance.get_library_game_playtowins.return_value = [
             {"id": "e1", "badge_id": "B1", "librarygame_id": "G1"},
         ]
         MockClient.return_value = mock_instance
@@ -451,7 +451,7 @@ class TestLibraryConfirmRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Catan", resp.data)
         self.assertIn(b"My Library", resp.data)
-        mock_instance.get_library_playtowins.assert_called_once_with("lib-1")
+        mock_instance.get_library_game_playtowins.assert_called_once_with("G1")
 
     @patch("routes.TTEClient")
     def test_drawing_works_in_library_only_mode(self, MockClient):
@@ -459,7 +459,7 @@ class TestLibraryConfirmRoute(unittest.TestCase):
         mock_instance.get_library_games.return_value = [
             {"id": "G1", "name": "Catan"},
         ]
-        mock_instance.get_library_playtowins.return_value = [
+        mock_instance.get_library_game_playtowins.return_value = [
             {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
         ]
         MockClient.return_value = mock_instance
@@ -571,8 +571,10 @@ class TestGamesRoute(unittest.TestCase):
     @patch("routes.TTEClient")
     def test_games_uses_library_when_no_convention(self, MockClient):
         mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = []
-        mock_instance.get_library_playtowins.return_value = []
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "TestGame"},
+        ]
+        mock_instance.get_library_game_playtowins.return_value = []
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
@@ -583,7 +585,7 @@ class TestGamesRoute(unittest.TestCase):
 
         resp = self.client.get("/games")
         self.assertEqual(resp.status_code, 200)
-        mock_instance.get_library_playtowins.assert_called_once_with("lib-1")
+        mock_instance.get_library_game_playtowins.assert_called_once_with("G1")
 
 
 class TestPremiumGamesRoute(unittest.TestCase):

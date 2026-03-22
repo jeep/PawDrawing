@@ -233,7 +233,11 @@ def games():
         if convention_id:
             raw_entries = client.get_convention_playtowins(convention_id)
         else:
-            raw_entries = client.get_library_playtowins(library_id)
+            raw_entries = []
+            for game in all_games:
+                game_id = game.get("id")
+                if game_id:
+                    raw_entries.extend(client.get_library_game_playtowins(game_id))
     except TTEAPIError as exc:
         return _handle_api_error(exc, url_for("main.convention_select"), "load entries")
 
@@ -298,7 +302,11 @@ def run_drawing_route():
         if convention_id:
             raw_entries = client.get_convention_playtowins(convention_id)
         else:
-            raw_entries = client.get_library_playtowins(library_id)
+            raw_entries = []
+            for game in all_games:
+                game_id = game.get("id")
+                if game_id:
+                    raw_entries.extend(client.get_library_game_playtowins(game_id))
     except TTEAPIError as exc:
         return _handle_api_error(exc, url_for("main.games"), "load entries")
 
