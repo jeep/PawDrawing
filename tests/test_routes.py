@@ -1278,5 +1278,156 @@ class TestPushToTTE(unittest.TestCase):
         self.assertIn(b'id="push-btn"', resp.data)
 
 
+class TestCSVExport(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def _setup_session(self, picked_up=None, premium=None, redist_winners=None,
+                       convention_name="PawCon 2026"):
+        drawing_state = [
+            {
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "G1", "id": "e2", "name": "Bob"},
+                ],
+                "winner_index": 0,
+            },
+            {
+                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "shuffled": [
+                    {"badge_id": "B3", "librarygame_id": "G2", "id": "e3", "name": "Carol"},
+                ],
+                "winner_index": 0,
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["convention_name"] = convention_name
+            sess["drawing_state"] = drawing_state
+            sess["picked_up"] = picked_up or []
+            sess["premium_games"] = premium or []
+            sess["redistribution_winners"] = redist_winners or {}
+
+    def test_export_requires_auth(self):
+        resp = self.client.get("/drawing/export")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/login", resp.headers["Location"])
+
+    def test_export_requires_drawing_state(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+        resp = self.client.get("/drawing/export")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/games", resp.headers["Location"])
+
+    def test_export_returns_csv_content_type(self):
+        self._setup_session()
+        resp = self.client.get("/drawing/export")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("text/csv", resp.content_type)
+
+    def test_export_has_content_disposition(self):
+        self._setup_session()
+        resp = self.client.get("/drawing/export")
+        disposition = resp.headers.get("Content-Disposition", "")
+        self.assertIn("attachment", disposition)
+        self.assertIn("PawDrawing_", disposition)
+        self.assertIn(".csv", disposition)
+
+    def test_export_filename_contains_convention_name(self):
+        self._setup_session(convention_name="PawCon 2026")
+        resp = self.client.get("/drawing/export")
+        disposition = resp.headers["Content-Disposition"]
+        self.assertIn("PawCon_2026", disposition)
+
+    def test_export_filename_sanitizes_special_chars(self):
+        self._setup_session(convention_name="Con/Event: Test!")
+        resp = self.client.get("/drawing/export")
+        disposition = resp.headers["Content-Disposition"]
+        # Special chars removed, spaces become underscores
+        self.assertNotIn("/", disposition.split("filename=")[1])
+        self.assertNotIn(":", disposition.split("filename=")[1])
+        self.assertNotIn("!", disposition.split("filename=")[1])
+
+    def test_export_csv_headers(self):
+        self._setup_session()
+        resp = self.client.get("/drawing/export")
+        lines = resp.data.decode().strip().split("\r\n")
+        self.assertEqual(lines[0], "Game,Premium,Entries,Winner,Badge,Picked Up")
+
+    def test_export_csv_data_rows(self):
+        self._setup_session()
+        resp = self.client.get("/drawing/export")
+        lines = resp.data.decode().strip().split("\r\n")
+        # Header + 2 data rows
+        self.assertEqual(len(lines), 3)
+        # Rows sorted by game name: Catan before Ticket to Ride
+        self.assertTrue(lines[1].startswith("Catan,"))
+        self.assertTrue(lines[2].startswith("Ticket to Ride,"))
+
+    def test_export_csv_winner_data(self):
+        self._setup_session()
+        resp = self.client.get("/drawing/export")
+        lines = resp.data.decode().strip().split("\r\n")
+        # Catan: winner is Alice (index 0), 2 entries
+        self.assertIn("Alice", lines[1])
+        self.assertIn("B1", lines[1])
+        self.assertIn(",2,", lines[1])
+        # Ticket to Ride: winner is Carol, 1 entry
+        self.assertIn("Carol", lines[2])
+        self.assertIn("B3", lines[2])
+        self.assertIn(",1,", lines[2])
+
+    def test_export_premium_column(self):
+        self._setup_session(premium=["G1"])
+        resp = self.client.get("/drawing/export")
+        lines = resp.data.decode().strip().split("\r\n")
+        # Catan is premium
+        self.assertIn("Catan,Yes,", lines[1])
+        # Ticket to Ride is not premium
+        self.assertIn("Ticket to Ride,No,", lines[2])
+
+    def test_export_picked_up_column(self):
+        self._setup_session(picked_up=["G1"])
+        resp = self.client.get("/drawing/export")
+        lines = resp.data.decode().strip().split("\r\n")
+        # Catan picked up -> Yes
+        self.assertTrue(lines[1].endswith(",Yes"))
+        # Ticket to Ride not picked up -> No
+        self.assertTrue(lines[2].endswith(",No"))
+
+    def test_export_redistribution_winner(self):
+        # G1 redistribution winner is Bob (B2)
+        self._setup_session(redist_winners={"G1": "B2"})
+        resp = self.client.get("/drawing/export")
+        lines = resp.data.decode().strip().split("\r\n")
+        # Winner should be Bob instead of Alice
+        self.assertIn("Bob", lines[1])
+        self.assertIn("B2", lines[1])
+
+    def test_export_button_on_results_page(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "Test Con"
+            sess["library_id"] = "lib-1"
+            sess["library_name"] = "P2W Library"
+            sess["premium_games"] = []
+        with patch("routes.TTEClient") as MockClient:
+            mock_instance = MagicMock()
+            mock_instance.get_playtowin_entries.return_value = [
+                {"librarygame_id": "G1", "badge_id": "B1", "id": "e1",
+                 "name": "Alice", "gamename": "Catan"},
+            ]
+            MockClient.return_value = mock_instance
+            resp = self.client.post("/drawing")
+        self.assertIn(b"Export CSV", resp.data)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,8 @@
-from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
+import csv
+import io
+from datetime import date
+
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for, Response
 
 from data_processing import group_entries_by_game, process_entries
 from drawing import (
@@ -552,3 +556,71 @@ def push_to_tte():
         "successes": len(successes),
         "failures": failures,
     })
+
+
+@main_bp.route("/drawing/export")
+def export_csv():
+    """Export drawing results as a CSV file."""
+    if not session.get("tte_session_id"):
+        flash("Please log in first.", "error")
+        return redirect(url_for("main.login"))
+
+    drawing_state = session.get("drawing_state")
+    if not drawing_state:
+        flash("No active drawing to export.", "error")
+        return redirect(url_for("main.games"))
+
+    picked_up = set(session.get("picked_up", []))
+    premium_games = set(session.get("premium_games", []))
+    winners = get_current_winners(drawing_state)
+    redistribution_winners = session.get("redistribution_winners", {})
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Game", "Premium", "Entries", "Winner", "Badge", "Picked Up"])
+
+    rows = []
+    for item in drawing_state:
+        game = item["game"]
+        game_id = game["id"]
+        winner = winners.get(game_id)
+        is_premium = game_id in premium_games
+
+        # Check for redistribution winner
+        redist_badge = redistribution_winners.get(game_id)
+        if redist_badge:
+            for entry in item["shuffled"]:
+                if entry.get("badge_id") == redist_badge:
+                    winner = entry
+                    break
+
+        rows.append({
+            "game_name": game.get("name", "Unknown"),
+            "is_premium": is_premium,
+            "total_entries": len(item["shuffled"]),
+            "winner_name": winner.get("name", "Unknown") if winner else "",
+            "winner_badge": winner.get("badge_id", "") if winner else "",
+            "picked_up": game_id in picked_up,
+        })
+
+    rows.sort(key=lambda r: r["game_name"])
+
+    for row in rows:
+        writer.writerow([
+            row["game_name"],
+            "Yes" if row["is_premium"] else "No",
+            row["total_entries"],
+            row["winner_name"],
+            row["winner_badge"],
+            "Yes" if row["picked_up"] else "No",
+        ])
+
+    convention_name = session.get("convention_name", "Drawing")
+    safe_name = "".join(c if c.isalnum() or c in " -_" else "" for c in convention_name).strip().replace(" ", "_")
+    filename = f"PawDrawing_{safe_name}_{date.today().isoformat()}.csv"
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
