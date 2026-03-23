@@ -236,9 +236,8 @@ class TestConventionConfirmRoute(unittest.TestCase):
             sess["tte_session_id"] = "session-123"
 
         resp = self.client.post("/convention/select", data={"convention_id": "conv-1"})
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn(b"GameFest 2026", resp.data)
-        self.assertIn(b"GameFest Library", resp.data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/convention/confirm", resp.headers["Location"])
 
         with self.client.session_transaction() as sess:
             self.assertEqual(sess["convention_id"], "conv-1")
@@ -257,10 +256,32 @@ class TestConventionConfirmRoute(unittest.TestCase):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
 
-        resp = self.client.post("/convention/select", data={"convention_id": "conv-1"})
+        resp = self.client.post("/convention/select", data={"convention_id": "conv-1"}, follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"loading-overlay", resp.data)
         self.assertIn(b"may take a minute or two", resp.data)
+
+    def test_convention_confirm_get_requires_login(self):
+        resp = self.client.get("/convention/confirm")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/login", resp.headers["Location"])
+
+    def test_convention_confirm_get_requires_convention(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+        resp = self.client.get("/convention/confirm")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/convention", resp.headers["Location"])
+
+    def test_convention_confirm_get_renders_page(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["convention_name"] = "GameFest 2026"
+            sess["library_name"] = "GameFest Library"
+        resp = self.client.get("/convention/confirm")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"GameFest 2026", resp.data)
+        self.assertIn(b"GameFest Library", resp.data)
 
     @patch("routes.TTEClient")
     def test_select_no_library_shows_error(self, MockClient):
@@ -406,9 +427,8 @@ class TestLibraryConfirmRoute(unittest.TestCase):
             sess["tte_session_id"] = "session-123"
 
         resp = self.client.post("/library/select", data={"library_id": "lib-1"})
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn(b"My P2W Library", resp.data)
-        self.assertIn(b"Library Selected", resp.data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/library/confirm", resp.headers["Location"])
 
         with self.client.session_transaction() as sess:
             self.assertEqual(sess["library_id"], "lib-1")
@@ -448,10 +468,31 @@ class TestLibraryConfirmRoute(unittest.TestCase):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
 
-        resp = self.client.post("/library/select", data={"library_id": "lib-1"})
+        # POST redirects, then follow to GET /library/confirm
+        resp = self.client.post("/library/select", data={"library_id": "lib-1"}, follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"loading-overlay", resp.data)
         self.assertIn(b"may take a minute or two", resp.data)
+
+    def test_library_confirm_get_requires_login(self):
+        resp = self.client.get("/library/confirm")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/login", resp.headers["Location"])
+
+    def test_library_confirm_get_requires_library(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+        resp = self.client.get("/library/confirm")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/convention", resp.headers["Location"])
+
+    def test_library_confirm_get_renders_page(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_name"] = "Test Library"
+        resp = self.client.get("/library/confirm")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Test Library", resp.data)
 
     @patch("routes.TTEClient")
     def test_library_confirm_api_error(self, MockClient):
@@ -472,7 +513,7 @@ class TestLibraryConfirmRoute(unittest.TestCase):
         mock_instance.get_library_games.return_value = [
             {"id": "G1", "name": "Catan"},
         ]
-        mock_instance.get_library_game_playtowins.return_value = [
+        mock_instance.get_library_playtowins.return_value = [
             {"id": "e1", "badge_id": "B1", "librarygame_id": "G1"},
         ]
         MockClient.return_value = mock_instance
@@ -486,7 +527,7 @@ class TestLibraryConfirmRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Catan", resp.data)
         self.assertIn(b"My Library", resp.data)
-        mock_instance.get_library_game_playtowins.assert_called_once_with("G1")
+        mock_instance.get_library_playtowins.assert_called_once_with("lib-1")
 
     def test_drawing_works_in_library_only_mode(self):
         with self.client.session_transaction() as sess:
@@ -603,7 +644,7 @@ class TestGamesRoute(unittest.TestCase):
         mock_instance.get_library_games.return_value = [
             {"id": "G1", "name": "TestGame"},
         ]
-        mock_instance.get_library_game_playtowins.return_value = []
+        mock_instance.get_library_playtowins.return_value = []
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
@@ -614,7 +655,7 @@ class TestGamesRoute(unittest.TestCase):
 
         resp = self.client.get("/games")
         self.assertEqual(resp.status_code, 200)
-        mock_instance.get_library_game_playtowins.assert_called_once_with("G1")
+        mock_instance.get_library_playtowins.assert_called_once_with("lib-1")
 
 
 class TestPremiumGamesRoute(unittest.TestCase):

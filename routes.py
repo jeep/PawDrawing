@@ -148,10 +148,20 @@ def library_select_route():
     session["library_name"] = library_name
     session.pop("ejected_entries", None)
 
-    return render_template(
-        "library_confirm.html",
-        library_name=library_name,
-    )
+    return redirect(url_for("main.library_confirm"))
+
+
+@main_bp.route("/library/confirm")
+def library_confirm():
+    """Show library confirmation page (GET-safe after PRG redirect)."""
+    if not session.get("tte_session_id"):
+        flash("Please log in first.", "error")
+        return redirect(url_for("main.login"))
+    library_name = session.get("library_name")
+    if not library_name:
+        flash("Please select a library.", "error")
+        return redirect(url_for("main.convention_select"))
+    return render_template("library_confirm.html", library_name=library_name)
 
 
 @main_bp.route("/convention/search")
@@ -210,6 +220,20 @@ def convention_select_route():
     session["library_name"] = library_name
     session.pop("ejected_entries", None)
 
+    return redirect(url_for("main.convention_confirm"))
+
+
+@main_bp.route("/convention/confirm")
+def convention_confirm():
+    """Show convention confirmation page (GET-safe after PRG redirect)."""
+    if not session.get("tte_session_id"):
+        flash("Please log in first.", "error")
+        return redirect(url_for("main.login"))
+    convention_name = session.get("convention_name")
+    library_name = session.get("library_name")
+    if not convention_name or not library_name:
+        flash("Please select a convention.", "error")
+        return redirect(url_for("main.convention_select"))
     return render_template(
         "convention_confirm.html",
         convention_name=convention_name,
@@ -246,11 +270,7 @@ def games():
             if convention_id:
                 raw_entries = client.get_convention_playtowins(convention_id)
             else:
-                raw_entries = []
-                for game in all_games:
-                    game_id = game.get("id")
-                    if game_id:
-                        raw_entries.extend(client.get_library_game_playtowins(game_id))
+                raw_entries = client.get_library_playtowins(library_id)
         except TTEAPIError as exc:
             return _handle_api_error(exc, url_for("main.convention_select"), "load entries")
 
