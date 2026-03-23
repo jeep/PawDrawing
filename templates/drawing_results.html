@@ -227,7 +227,7 @@
         background: #ccc;
         cursor: not-allowed;
     }
-    .rerun-btn {
+    .rerun-btn, .push-btn, .redraw-toggle, .redraw-btn {
         background: #3498db;
         color: white;
         border: none;
@@ -237,7 +237,16 @@
         border-radius: 6px;
         cursor: pointer;
     }
-    .rerun-btn:hover { background: #2980b9; }
+    .rerun-btn:hover, .redraw-btn:hover { background: #2980b9; }
+    .push-btn { background: #8e44ad; }
+    .push-btn:hover { background: #7d3c98; }
+    .push-btn:disabled { background: #ccc; cursor: not-allowed; }
+    .redraw-toggle:hover { background: #2980b9; }
+    .redraw-toggle.active { background: #e74c3c; }
+    .redraw-toggle.active:hover { background: #c0392b; }
+    .redraw-btn { background: #e67e22; }
+    .redraw-btn:hover { background: #d35400; }
+    .redraw-btn:disabled { background: #ccc; cursor: not-allowed; }
     .resolve-status {
         font-size: 0.85rem;
         display: none;
@@ -284,14 +293,19 @@
     .view-panel { display: none; }
     .view-panel.active { display: block; }
 
+    .pickup-btn, .award-next-btn, .not-here-btn {
+        border: none;
+        border-radius: 4px;
+        padding: 0.3rem 0.7rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
     .pickup-btn {
         background: none;
         border: 1px solid #aaa;
-        border-radius: 4px;
-        padding: 0.25rem 0.6rem;
-        font-size: 0.8rem;
-        cursor: pointer;
         color: #555;
+        font-weight: 400;
     }
     .pickup-btn:hover { background: #e8f5e9; border-color: #27ae60; }
     .pickup-btn.picked {
@@ -301,18 +315,6 @@
     }
     .pickup-btn.picked:hover { background: #219a52; }
 
-    .push-btn {
-        background: #8e44ad;
-        color: white;
-        border: none;
-        padding: 0.65rem 1.5rem;
-        font-size: 1rem;
-        font-weight: 600;
-        border-radius: 6px;
-        cursor: pointer;
-    }
-    .push-btn:hover { background: #7d3c98; }
-    .push-btn:disabled { background: #ccc; cursor: not-allowed; }
     .push-result {
         background: white;
         border-radius: 8px;
@@ -345,12 +347,6 @@
     .award-next-btn {
         background: #e67e22;
         color: white;
-        border: none;
-        border-radius: 4px;
-        padding: 0.25rem 0.6rem;
-        font-size: 0.8rem;
-        cursor: pointer;
-        font-weight: 600;
     }
     .award-next-btn:hover { background: #d35400; }
     .award-next-btn:disabled { background: #ccc; cursor: not-allowed; }
@@ -358,11 +354,8 @@
     .not-here-btn {
         background: none;
         border: 1px solid #e74c3c;
-        border-radius: 4px;
-        padding: 0.25rem 0.6rem;
-        font-size: 0.75rem;
-        cursor: pointer;
         color: #e74c3c;
+        font-size: 0.75rem;
     }
     .not-here-btn:hover { background: #fdecea; }
     .not-here-btn:disabled { background: #eee; color: #aaa; border-color: #ccc; cursor: not-allowed; }
@@ -389,19 +382,6 @@
     body.redraw-mode .not-here-btn { display: inline-block; }
     body.redraw-mode .not-here-badge { display: inline-block; }
     body.redraw-mode .redraw-bar { display: flex; }
-    .redraw-toggle {
-        background: #3498db;
-        color: white;
-        border: none;
-        padding: 0.65rem 1.5rem;
-        font-size: 1rem;
-        font-weight: 600;
-        border-radius: 6px;
-        cursor: pointer;
-    }
-    .redraw-toggle:hover { background: #2980b9; }
-    .redraw-toggle.active { background: #e74c3c; }
-    .redraw-toggle.active:hover { background: #c0392b; }
 
     .redraw-bar {
         gap: 1rem;
@@ -409,18 +389,6 @@
         margin: 0.5rem 0 0 0;
         flex-wrap: wrap;
     }
-    .redraw-btn {
-        background: #e67e22;
-        color: white;
-        border: none;
-        padding: 0.5rem 1.2rem;
-        font-size: 0.9rem;
-        font-weight: 600;
-        border-radius: 6px;
-        cursor: pointer;
-    }
-    .redraw-btn:hover { background: #d35400; }
-    .redraw-btn:disabled { background: #ccc; cursor: not-allowed; }
     .redraw-mode {
         font-size: 0.85rem;
         display: flex;
