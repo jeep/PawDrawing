@@ -197,6 +197,27 @@
         border-color: #27ae60;
         font-weight: 600;
     }
+    .conflict-choice .game-option {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+    .conflict-dismiss-btn {
+        margin-left: 0.4rem;
+        padding: 0 0.3rem;
+        border: none;
+        background: transparent;
+        color: #999;
+        font-size: 1rem;
+        cursor: pointer;
+        line-height: 1;
+        border-radius: 3px;
+        transition: all 0.15s;
+    }
+    .conflict-dismiss-btn:hover {
+        color: #c0392b;
+        background: #fde8e8;
+    }
 
     .auto-resolved {
         background: #d4edda;
@@ -554,11 +575,15 @@
         <div class="conflict-choice">
             {% for game_id in conflict.game_ids %}
             <label>
-                <input type="radio" name="conflict-{{ conflict.badge_id }}"
-                       value="{{ game_id }}"
-                       onchange="resolveConflict('{{ conflict.badge_id }}', '{{ game_id }}')">
-                {{ conflict.game_names[game_id] }}
-                {% if game_id in (conflicted_game_ids or []) %}<span class="premium-label">Premium</span>{% endif %}
+                <span class="game-option">
+                    <input type="radio" name="conflict-{{ conflict.badge_id }}"
+                           value="{{ game_id }}"
+                           onchange="resolveConflict('{{ conflict.badge_id }}', '{{ game_id }}')">
+                    {{ conflict.game_names[game_id] }}
+                    {% if game_id in (conflicted_game_ids or []) %}<span class="premium-label">Premium</span>{% endif %}
+                    <button type="button" class="conflict-dismiss-btn" title="Dismiss this game"
+                            onclick="event.preventDefault(); dismissConflictGame('{{ conflict.badge_id }}', '{{ game_id }}')">&#x2715;</button>
+                </span>
             </label>
             {% endfor %}
             <button type="button" class="conflict-random-btn" data-badge-id="{{ conflict.badge_id }}" data-game-ids='{{ conflict.game_ids | tojson }}' onclick="resolveConflictRandom(this)">&#x1f3b2; Random</button>
@@ -581,10 +606,14 @@
         <div class="conflict-choice">
             {% for game_id in conflict.game_ids %}
             <label>
-                <input type="radio" name="conflict-{{ conflict.badge_id }}"
-                       value="{{ game_id }}"
-                       onchange="resolveConflict('{{ conflict.badge_id }}', '{{ game_id }}')">
-                {{ conflict.game_names[game_id] }}
+                <span class="game-option">
+                    <input type="radio" name="conflict-{{ conflict.badge_id }}"
+                           value="{{ game_id }}"
+                           onchange="resolveConflict('{{ conflict.badge_id }}', '{{ game_id }}')">
+                    {{ conflict.game_names[game_id] }}
+                    <button type="button" class="conflict-dismiss-btn" title="Dismiss this game"
+                            onclick="event.preventDefault(); dismissConflictGame('{{ conflict.badge_id }}', '{{ game_id }}')">&#x2715;</button>
+                </span>
             </label>
             {% endfor %}
             <button type="button" class="conflict-random-btn" data-badge-id="{{ conflict.badge_id }}" data-game-ids='{{ conflict.game_ids | tojson }}' onclick="resolveConflictRandom(this)">&#x1f3b2; Random</button>
@@ -721,7 +750,7 @@
                 {{ r.game_name }}
                 {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
             </td>
-            <td>{% if r.has_entries %}To the box!{% else %}No entries{% endif %}</td>
+            <td>{% if r.is_solo_dismissed %}Dismissed (redraw eligible){% elif r.has_entries %}To the box!{% else %}No entries{% endif %}</td>
         </tr>
         {% endfor %}
     </tbody>
@@ -1046,6 +1075,35 @@
         var gameIds = JSON.parse(btn.getAttribute('data-game-ids'));
         var randomId = gameIds[Math.floor(Math.random() * gameIds.length)];
         window.resolveConflict(badgeId, randomId);
+    };
+
+    window.dismissConflictGame = function(badgeId, gameId) {
+        var item = document.querySelector('.conflict-item[data-badge-id="' + badgeId + '"');
+        if (item) {
+            item.classList.add('resolving');
+        }
+
+        fetch('{{ url_for("main.dismiss_conflict_game") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({badge_id: badgeId, game_id: gameId})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.ok) {
+                if (item) item.classList.remove('resolving');
+                alert('Error: ' + (data.error || 'Unknown'));
+                return;
+            }
+            if (item) {
+                item.classList.add('resolved');
+            }
+            setTimeout(function() { window.location.reload(); }, 400);
+        })
+        .catch(function() {
+            if (item) item.classList.remove('resolving');
+            alert('Network error — please try again.');
+        });
     };
 
     // ── Search / Filter ──────────────────────────────────────────────

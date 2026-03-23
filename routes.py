@@ -475,6 +475,7 @@ def _build_results_from_session():
     drawing_state = session.get("drawing_state", [])
     premium_games = session.get("premium_games", [])
     picked_up = set(session.get("picked_up", []))
+    solo_dismissed = set(session.get("solo_dismissed_games", []))
     winners = get_current_winners(drawing_state)
 
     results = []
@@ -493,6 +494,7 @@ def _build_results_from_session():
             "is_picked_up": game_id in picked_up,
             "has_winner": winner is not None,
             "has_entries": len(item["shuffled"]) > 0,
+            "is_solo_dismissed": game_id in solo_dismissed,
         })
 
     results.sort(key=lambda r: r["game_name"])
@@ -533,6 +535,7 @@ def run_drawing_route():
     session["picked_up"] = []
     session["not_here"] = []
     session["not_here_warning_dismissed"] = False
+    session["solo_dismissed_games"] = []
     session["drawing_timestamp"] = datetime.now().strftime("%-I:%M %p")
 
     return redirect(url_for("main.drawing_results"))
@@ -650,6 +653,111 @@ def resolve_conflicts():
         "ok": True,
         "results": results,
         "conflicts": conflicts_out,
+    })
+
+
+@main_bp.route("/drawing/dismiss-game", methods=["POST"])
+def dismiss_conflict_game():
+    """Dismiss a single game from a multi-win conflict.
+
+    Advances the winner on the dismissed game. If only one game remains
+    for that person, auto-resolves the conflict. Tracks single-entrant
+    dismissed games so they aren't shown as "To the box".
+    """
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    drawing_state = session.get("drawing_state")
+    if not drawing_state:
+        return jsonify({"error": "No active drawing"}), 400
+
+    data = request.get_json(silent=True)
+    if not data or "badge_id" not in data or "game_id" not in data:
+        return jsonify({"error": "Invalid request"}), 400
+
+    badge_id = data["badge_id"]
+    game_id = data["game_id"]
+
+    # Find how many entrants this game has
+    total_entrants = 0
+    for item in drawing_state:
+        if item["game"]["id"] == game_id:
+            total_entrants = len(item["shuffled"])
+            break
+
+    not_here = set(session.get("not_here", []))
+    found = advance_winner(drawing_state, game_id, not_here=not_here)
+
+    # If the game had only one entrant (and is now exhausted), track it
+    # so it doesn't show as "To the box" — it should be eligible for redraw only
+    if not found and total_entrants == 1:
+        solo_dismissed = session.get("solo_dismissed_games", [])
+        if game_id not in solo_dismissed:
+            solo_dismissed.append(game_id)
+        session["solo_dismissed_games"] = solo_dismissed
+
+    session["drawing_state"] = drawing_state
+
+    # Update conflicts: remove the dismissed game from the badge's conflict
+    conflicts = session.get("drawing_conflicts", [])
+    updated_conflicts = []
+    for c in conflicts:
+        if c["badge_id"] == badge_id:
+            remaining_games = [gid for gid in c["game_ids"] if gid != game_id]
+            remaining_names = {gid: c["game_names"][gid] for gid in remaining_games}
+            if len(remaining_games) > 1:
+                # Still a conflict — update in place
+                premium_games = set(session.get("premium_games", []))
+                premium_wins = [gid for gid in remaining_games if gid in premium_games]
+                updated_conflicts.append({
+                    "badge_id": c["badge_id"],
+                    "winner_name": c["winner_name"],
+                    "game_ids": remaining_games,
+                    "game_names": remaining_names,
+                    "is_premium_conflict": len(premium_wins) > 1,
+                })
+            # If only 1 game left, conflict is auto-resolved (no action needed)
+        else:
+            updated_conflicts.append(c)
+
+    # Check for new cascading conflicts (the advanced winner might conflict)
+    new_conflicts = detect_conflicts(drawing_state)
+    if new_conflicts:
+        existing_badge_ids = {c["badge_id"] for c in updated_conflicts}
+        winners = get_current_winners(drawing_state)
+        game_name_map = {
+            item["game"]["id"]: item["game"].get("name", "Unknown")
+            for item in drawing_state
+        }
+        premium_games = set(session.get("premium_games", []))
+        for cbid, game_ids in new_conflicts.items():
+            if cbid in existing_badge_ids:
+                continue
+            premium_wins = [gid for gid in game_ids if gid in premium_games]
+            winner_name = "Unknown"
+            for gid in game_ids:
+                w = winners.get(gid)
+                if w and w.get("name"):
+                    winner_name = w["name"]
+                    break
+            updated_conflicts.append({
+                "badge_id": cbid,
+                "winner_name": winner_name,
+                "game_ids": game_ids,
+                "game_names": {gid: game_name_map.get(gid, "Unknown") for gid in game_ids},
+                "is_premium_conflict": len(premium_wins) > 1,
+            })
+
+    session["drawing_conflicts"] = updated_conflicts
+
+    results = _build_results_from_session()
+
+    return jsonify({
+        "ok": True,
+        "results": results,
+        "conflicts": updated_conflicts,
+        "dismissed_game_id": game_id,
+        "was_solo_entrant": not found and total_entrants == 1,
     })
 
 
@@ -845,6 +953,7 @@ def redraw_all_unclaimed():
     )
 
     session["drawing_state"] = drawing_state
+    session["solo_dismissed_games"] = []
     if conflicts:
         session["drawing_conflicts"] = conflicts
     else:

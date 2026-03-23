@@ -1193,6 +1193,275 @@ class TestDrawingRoutes(unittest.TestCase):
         self.assertIn(b"Filter by game name", resp.data)
 
 
+class TestDismissConflictGameRoute(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def _multi_win_state(self):
+        """B1 wins G1 + G2 (conflict). G1 also has B3, G2 also has B2."""
+        return [
+            {
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B3", "id": "e3", "name": "Carol"},
+                ],
+                "winner_index": 0,
+            },
+            {
+                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "shuffled": [
+                    {"badge_id": "B1", "id": "e2", "name": "Alice"},
+                    {"badge_id": "B2", "id": "e4", "name": "Bob"},
+                ],
+                "winner_index": 0,
+            },
+        ]
+
+    def test_dismiss_requires_auth(self):
+        resp = self.client.post("/drawing/dismiss-game",
+                                json={"badge_id": "B1", "game_id": "G1"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_dismiss_requires_drawing_state(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+        resp = self.client.post("/drawing/dismiss-game",
+                                json={"badge_id": "B1", "game_id": "G1"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_dismiss_requires_badge_and_game(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = self._multi_win_state()
+        resp = self.client.post("/drawing/dismiss-game",
+                                json={"badge_id": "B1"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_dismiss_advances_winner_on_dismissed_game(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = self._multi_win_state()
+            sess["drawing_conflicts"] = [{
+                "badge_id": "B1", "winner_name": "Alice",
+                "game_ids": ["G1", "G2"],
+                "game_names": {"G1": "Catan", "G2": "Ticket to Ride"},
+                "is_premium_conflict": False,
+            }]
+            sess["premium_games"] = []
+
+        resp = self.client.post("/drawing/dismiss-game",
+                                json={"badge_id": "B1", "game_id": "G1"},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+
+        # G1 advanced to Carol, B1 still wins G2
+        winners = {r["game_id"]: r["winner_badge"] for r in data["results"]}
+        self.assertEqual(winners["G1"], "B3")  # Carol
+        self.assertEqual(winners["G2"], "B1")  # Alice keeps G2
+
+        # Conflict auto-resolved (only 1 game left for B1)
+        self.assertEqual(data["conflicts"], [])
+
+    def test_dismiss_keeps_conflict_with_three_games(self):
+        """If person wins 3 games and dismisses 1, still 2 remain -> still a conflict."""
+        state = self._multi_win_state()
+        state.append({
+            "game": {"id": "G3", "name": "Wingspan"},
+            "shuffled": [
+                {"badge_id": "B1", "id": "e5", "name": "Alice"},
+                {"badge_id": "B4", "id": "e6", "name": "Dave"},
+            ],
+            "winner_index": 0,
+        })
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = state
+            sess["drawing_conflicts"] = [{
+                "badge_id": "B1", "winner_name": "Alice",
+                "game_ids": ["G1", "G2", "G3"],
+                "game_names": {"G1": "Catan", "G2": "Ticket to Ride", "G3": "Wingspan"},
+                "is_premium_conflict": False,
+            }]
+            sess["premium_games"] = []
+
+        resp = self.client.post("/drawing/dismiss-game",
+                                json={"badge_id": "B1", "game_id": "G1"},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+
+        # Still a conflict for B1 with G2 + G3
+        self.assertEqual(len(data["conflicts"]), 1)
+        self.assertEqual(set(data["conflicts"][0]["game_ids"]), {"G2", "G3"})
+
+    def test_dismiss_solo_entrant_marks_game(self):
+        """Dismissing a game where the winner was the only entrant -> solo_dismissed."""
+        state = [
+            {
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "id": "e1", "name": "Alice"},
+                ],
+                "winner_index": 0,
+            },
+            {
+                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "shuffled": [
+                    {"badge_id": "B1", "id": "e2", "name": "Alice"},
+                    {"badge_id": "B2", "id": "e3", "name": "Bob"},
+                ],
+                "winner_index": 0,
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = state
+            sess["drawing_conflicts"] = [{
+                "badge_id": "B1", "winner_name": "Alice",
+                "game_ids": ["G1", "G2"],
+                "game_names": {"G1": "Catan", "G2": "Ticket to Ride"},
+                "is_premium_conflict": False,
+            }]
+            sess["premium_games"] = []
+
+        resp = self.client.post("/drawing/dismiss-game",
+                                json={"badge_id": "B1", "game_id": "G1"},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["was_solo_entrant"])
+        self.assertEqual(data["dismissed_game_id"], "G1")
+
+        # Session should track the solo dismissal
+        with self.client.session_transaction() as sess:
+            self.assertIn("G1", sess["solo_dismissed_games"])
+
+        # The results should show the game as solo-dismissed
+        solo = [r for r in data["results"] if r["game_id"] == "G1"]
+        self.assertTrue(solo[0]["is_solo_dismissed"])
+        self.assertFalse(solo[0]["has_winner"])
+
+    def test_dismiss_non_solo_not_marked(self):
+        """Dismissing a game with multiple entrants should NOT mark as solo dismissed."""
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = self._multi_win_state()
+            sess["drawing_conflicts"] = [{
+                "badge_id": "B1", "winner_name": "Alice",
+                "game_ids": ["G1", "G2"],
+                "game_names": {"G1": "Catan", "G2": "Ticket to Ride"},
+                "is_premium_conflict": False,
+            }]
+            sess["premium_games"] = []
+
+        resp = self.client.post("/drawing/dismiss-game",
+                                json={"badge_id": "B1", "game_id": "G1"},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertFalse(data["was_solo_entrant"])
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess.get("solo_dismissed_games", []), [])
+
+    def test_dismiss_cascading_conflict(self):
+        """Dismissing G1 advances to B2 who already wins G3 -> new conflict."""
+        state = [
+            {
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "id": "e3", "name": "Bob"},
+                ],
+                "winner_index": 0,
+            },
+            {
+                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "shuffled": [
+                    {"badge_id": "B1", "id": "e2", "name": "Alice"},
+                ],
+                "winner_index": 0,
+            },
+            {
+                "game": {"id": "G3", "name": "Wingspan"},
+                "shuffled": [
+                    {"badge_id": "B2", "id": "e4", "name": "Bob"},
+                ],
+                "winner_index": 0,
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = state
+            sess["drawing_conflicts"] = [{
+                "badge_id": "B1", "winner_name": "Alice",
+                "game_ids": ["G1", "G2"],
+                "game_names": {"G1": "Catan", "G2": "Ticket to Ride"},
+                "is_premium_conflict": False,
+            }]
+            sess["premium_games"] = []
+
+        resp = self.client.post("/drawing/dismiss-game",
+                                json={"badge_id": "B1", "game_id": "G1"},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+
+        # B1's conflict is resolved (only G2 left), but B2 now has G1+G3
+        self.assertEqual(len(data["conflicts"]), 1)
+        self.assertEqual(data["conflicts"][0]["badge_id"], "B2")
+        self.assertEqual(set(data["conflicts"][0]["game_ids"]), {"G1", "G3"})
+
+    def test_dismiss_shown_in_results_template(self):
+        """Solo-dismissed game shows 'Dismissed (redraw eligible)' not 'To the box!'."""
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = [
+                {
+                    "game": {"id": "G1", "name": "Catan"},
+                    "shuffled": [
+                        {"badge_id": "B1", "id": "e1", "name": "Alice"},
+                    ],
+                    "winner_index": 1,  # exhausted
+                },
+            ]
+            sess["solo_dismissed_games"] = ["G1"]
+
+        resp = self.client.get("/drawing/results")
+        html = resp.data.decode()
+        self.assertIn("Dismissed (redraw eligible)", html)
+        # The no-entries table should NOT show "To the box!" for this game
+        no_entries_start = html.index('id="no-entries-table"')
+        no_entries_end = html.index("</table>", no_entries_start)
+        no_entries_table = html[no_entries_start:no_entries_end]
+        self.assertNotIn("To the box!", no_entries_table)
+
+    def test_new_drawing_clears_solo_dismissed(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+            sess["solo_dismissed_games"] = ["G1"]
+            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            ]
+
+        self.client.post("/drawing")
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["solo_dismissed_games"], [])
+
+
 class TestAwardNextRoute(unittest.TestCase):
 
     def setUp(self):
