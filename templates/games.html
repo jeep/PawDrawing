@@ -3,7 +3,6 @@
 {% block title %}PawDrawing — Games{% endblock %}
 
 {% block nav %}
-<a href="{{ url_for('main.convention_select') }}">Change Source</a>
 <form method="POST" action="{{ url_for('main.logout') }}" style="display:inline">
     <button type="submit" style="background:none;border:none;color:#ecf0f1;cursor:pointer;font-size:0.9rem;">
         Logout ({{ session.get('tte_username', '') }})
@@ -122,7 +121,7 @@
     .save-status.visible { opacity: 1; }
     .th-premium { text-align: center; width: 90px; }
     .td-premium { text-align: center; }
-    .refresh-btn {
+    .refresh-btn, .change-source-btn {
         margin-left: auto;
         background: #3498db;
         color: white;
@@ -135,7 +134,8 @@
         text-decoration: none;
         display: inline-block;
     }
-    .refresh-btn:hover { background: #2980b9; }
+    .change-source-btn { margin-left: 0; }
+    .refresh-btn:hover, .change-source-btn:hover { background: #2980b9; }
 
     /* Ejection panel */
     .eject-panel {
@@ -300,6 +300,7 @@
     <span class="stat" style="font-size:0.8rem;color:#888;">Loaded {{ data_loaded_at }}</span>
     <span class="save-status" id="save-status">Saved</span>
     <a href="{{ url_for('main.games', refresh='1') }}" class="refresh-btn" id="refresh-btn" onclick="document.getElementById('loading-overlay').classList.add('active');this.style.pointerEvents='none';this.style.opacity='0.6';">Refresh Data</a>
+    <a href="{{ url_for('main.convention_select') }}" class="change-source-btn">Change Source</a>
 </div>
 
 <div class="eject-panel" id="eject-panel">
