@@ -2,104 +2,26 @@
 
 A web application for managing Play-to-Win drawings at tabletop gaming conventions. Integrates with the [tabletop.events](https://tabletop.events) API.
 
-## Setup
-
-### Prerequisites
-
-- Python 3.12+
-
-### Installation
-
-```bash
-# Clone the repo
-git clone git@github.com:jeep/PawDrawing.git
-cd PawDrawing
-
-# Create and activate a virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r Requirements.txt
-```
-
-### Configuration
-
-```bash
-# Copy the example env file
-cp .env.example .env
-```
-
-Edit `.env` and set:
-- `FLASK_SECRET_KEY` — a random string for session security
-- `TTE_API_KEY` — your tabletop.events API key
-
-### Git Hooks
-
-Enable the conventional commit hook:
-
-```bash
-git config core.hooksPath .githooks
-```
-
-### Run Locally
-
-```bash
-python run.py
-```
-
-The app will be available at `http://localhost:5000`.
-
-## Deployment
-
-The app is deployed to **Azure App Service** and accessible at:
+## Live App
 
 > https://pawdrawing.azurewebsites.net
 
-Pushing to `main` triggers the GitHub Actions CI/CD pipeline (`.github/workflows/deploy.yml`), which runs the test suite and then deploys automatically via `az webapp up`.
+Log in with your tabletop.events credentials to get started.
 
-See [Developer Guide — Deployment](docs/DEVELOPER.md#deployment) for details.
+## What It Does
+
+1. **Pull convention data** — select a convention or library from tabletop.events and load all Play-to-Win games and entries.
+2. **Manage players** — optionally remove players from the drawing before running it.
+3. **Run a fair drawing** — randomly shuffles entries, picks winners, and detects one-person-winning-multiple-games conflicts.
+4. **Resolve conflicts** — auto-resolves premium game priority; manually resolve the rest.
+5. **Track pickups** — mark games as picked up as winners claim their prizes.
+6. **Redraw unclaimed** — re-draw any games that haven't been picked up, with original winners deprioritized.
+7. **Push results** — write winning entries back to tabletop.events.
+8. **Export CSV** — download a spreadsheet of the results.
+
+For the full workflow walkthrough, see the [User Guide](docs/USER_GUIDE.md).
 
 ## Documentation
 
 - [User Guide](docs/USER_GUIDE.md) — workflow, features, and troubleshooting
-- [Developer Guide](docs/DEVELOPER.md) — architecture, module reference, and testing
-
-## Project Structure
-
-```
-PawDrawing/
-├── app.py                  # Flask app factory
-├── config.py               # Configuration (reads from .env)
-├── run.py                  # Dev server entry point
-├── routes.py               # All Flask routes (Blueprint)
-├── tte_client.py           # TTE API client with rate limiting & pagination
-├── drawing.py              # Drawing algorithm (shuffle, conflicts, resolution)
-├── data_processing.py      # Entry validation, de-duplication, grouping
-├── requirements.txt        # Python dependencies
-├── .env.example            # Environment variable template
-├── startup.sh              # Azure App Service startup command
-├── .githooks/
-│   └── commit-msg          # Conventional Commits hook
-├── .github/
-│   └── workflows/
-│       └── deploy.yml      # CI/CD: test + deploy to Azure
-├── templates/
-│   ├── base.html               # Base layout with flash messages & loading overlay
-│   ├── login.html              # Login form
-│   ├── convention_select.html  # Convention search & library browse
-│   ├── convention_confirm.html # Confirm selected convention
-│   ├── library_confirm.html    # Confirm selected library (no convention)
-│   ├── games.html              # Game list with premium toggles, sorting & search
-│   ├── players.html            # Player management with remove/restore controls
-│   └── drawing_results.html    # Results with conflicts, pickup, push, export
-├── tests/
-│   ├── test_routes.py          # Route/view tests
-│   ├── test_tte_client.py      # API client tests
-│   ├── test_drawing.py         # Drawing algorithm tests
-│   └── test_data_processing.py # Data processing tests
-└── docs/
-    ├── USER_GUIDE.md       # User guide
-    ├── DEVELOPER.md        # Developer & architecture guide
-    └── Requirements.md     # Project requirements document
-```
+- [Developer Guide](docs/DEVELOPER.md) — setup, architecture, testing, and deployment
