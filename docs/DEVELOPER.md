@@ -23,10 +23,14 @@ PawDrawing/
 ├── tte_client.py           # TTE API client with rate limiting & pagination
 ├── drawing.py              # Drawing algorithm (shuffle, conflicts, resolution)
 ├── data_processing.py      # Entry validation, de-duplication, grouping
-├── Requirements.txt        # pip dependencies
+├── requirements.txt        # pip dependencies
 ├── .env.example            # Template for environment variables
+├── startup.sh              # Azure App Service startup command
 ├── .githooks/
 │   └── commit-msg          # Conventional Commits hook
+├── .github/
+│   └── workflows/
+│       └── deploy.yml      # CI/CD: test + deploy to Azure App Service
 ├── templates/
 │   ├── base.html               # Base layout with flash messages & loading overlay
 │   ├── login.html              # Login form
@@ -62,7 +66,7 @@ Loads `.env` via `python-dotenv`, then exposes:
 | `SECRET_KEY` | `FLASK_SECRET_KEY` | `"dev-key-change-me"` | Flask session signing |
 | `TTE_API_KEY` | `TTE_API_KEY` | `""` | tabletop.events API key |
 | `TTE_BASE_URL` | — | `https://tabletop.events/api` | API base URL (hardcoded) || `SESSION_TYPE` | — | `"cachelib"` | flask-session backend type |
-| `SESSION_CACHELIB` | — | `FileSystemCache("flask_session")` | Server-side session storage in `flask_session/` dir |
+| `SESSION_CACHELIB` | — | `FileSystemCache("flask_session")` | Server-side session storage; overridden on Azure via `SESSION_FILE_DIR` env var |
 ### `routes.py`
 
 All routes live on a single Blueprint (`main_bp`). Helper functions:
@@ -91,6 +95,7 @@ All routes live on a single Blueprint (`main_bp`). Helper functions:
 | GET | `/games/entrants/<game_id>` | `get_entrants` | AJAX: list entrants for a game |
 | POST | `/drawing` | `run_drawing_route` | Execute drawing algorithm (redirects to results) |
 | GET | `/drawing/results` | `drawing_results` | Display drawing results from session |
+| POST | `/drawing/dismiss-game` | `dismiss_conflict_game` | AJAX: dismiss a game from conflict resolution |
 | POST | `/drawing/resolve` | `resolve_conflicts` | AJAX: apply conflict resolutions |
 | POST | `/drawing/pickup` | `toggle_pickup` | AJAX: toggle pickup status |
 | POST | `/drawing/award-next` | `award_next` | AJAX: advance to next winner |
@@ -288,7 +293,7 @@ python -m pytest tests/ -v
 
 | File | Tests | Covers |
 |------|-------|--------|
-| `test_routes.py` | 161 | All routes, auth guards, AJAX endpoints, error handling |
+| `test_routes.py` | 181 | All routes, auth guards, AJAX endpoints, error handling |
 | `test_drawing.py` | 40 | Shuffle, conflicts, resolution, cascading, redraw |
 | `test_tte_client.py` | 22 | Rate limiting, auth, error handling, pagination, endpoints |
 | `test_data_processing.py` | 21 | Entry processing, ejection filtering, grouping |
@@ -369,3 +374,43 @@ docs: update README with setup steps (#1)
 ### Branch strategy
 
 All work is done on `main`. Each commit references a GitHub issue number.
+
+## Deployment
+
+### Azure App Service
+
+The app is deployed to **Azure App Service** (Linux, Python 3.12, F1 free tier):
+
+> https://pawdrawing.azurewebsites.net
+
+### CI/CD Pipeline
+
+The GitHub Actions workflow (`.github/workflows/deploy.yml`) runs on every push to `main`:
+
+1. **Test job:** Checks out code, installs dependencies, runs `python -m pytest`.
+2. **Deploy job:** (only if tests pass) Logs into Azure via service principal (`azure/login@v2`) and deploys with `az webapp up`.
+
+The workflow can also be triggered manually via `workflow_dispatch`.
+
+### Azure Configuration
+
+Environment variables are set as **Azure App Settings** (not committed to source):
+
+| Setting | Purpose |
+|---------|--------|
+| `FLASK_SECRET_KEY` | Session cookie signing key |
+| `TTE_API_KEY` | tabletop.events API key |
+| `SESSION_FILE_DIR` | `/home/flask_session` — persists across deploys |
+
+The startup command is defined in `startup.sh`:
+
+```bash
+gunicorn --bind=0.0.0.0:8000 --timeout=120 --workers=2 run:app
+```
+
+### GitHub Secrets
+
+| Secret/Variable | Purpose |
+|-----------------|--------|
+| `AZURE_CREDENTIALS` | Service principal JSON for `azure/login@v2` |
+| `AZURE_WEBAPP_NAME` (variable) | App Service name (used in `az webapp up`) |

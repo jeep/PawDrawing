@@ -34,16 +34,21 @@ python run.py
 
 The app runs at `http://127.0.0.1:5000`.
 
-### Production deployment
+### Production deployment (Azure App Service)
 
-For production, use a WSGI server instead of the built-in Flask development server:
+The app is deployed to **Azure App Service** (Linux, Python 3.12, F1 free tier) and is accessible at:
+
+> https://pawdrawing.azurewebsites.net
+
+Deployment is automatic — pushing to `main` triggers the GitHub Actions CI/CD pipeline, which runs the test suite and deploys via `az webapp up`.
+
+The app runs under gunicorn via `startup.sh`:
 
 ```bash
-pip install gunicorn
-gunicorn -w 4 -b 0.0.0.0:8000 "app:create_app()"
+gunicorn --bind=0.0.0.0:8000 --timeout=120 --workers=2 run:app
 ```
 
-Place behind a reverse proxy (nginx, Caddy, etc.) that terminates TLS. Do **not** expose the Flask dev server to the internet.
+Environment variables (`FLASK_SECRET_KEY`, `TTE_API_KEY`, `SESSION_FILE_DIR`) are configured as Azure App Settings. Session files are stored at `/home/flask_session` on the Azure filesystem, which persists across deployments.
 
 ## Configuration
 
@@ -51,8 +56,9 @@ All configuration is done through environment variables. Copy `.env.example` to 
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `FLASK_SECRET_KEY` | **Yes** | `dev-key-change-me` | Signs session cookies. Must be a long random string in production. |
-| `TTE_API_KEY` | **Yes** | *(empty)* | Your tabletop.events API key. Obtain from your TTE account settings. |
+| `FLASK_SECRET_KEY` | **Yes** | `dev-key-change-me` | Signs session cookies. Must be a long random string in production. Set as an Azure App Setting in production. |
+| `TTE_API_KEY` | **Yes** | *(empty)* | Your tabletop.events API key. Obtain from your TTE account settings. Set as an Azure App Setting in production. |
+| `SESSION_FILE_DIR` | No | `flask_session` | Directory for server-side session files. Set to `/home/flask_session` on Azure for persistence across deployments. |
 
 The TTE API base URL is hardcoded to `https://tabletop.events/api` and is not configurable via environment variables.
 
@@ -120,6 +126,8 @@ To pick up the latest data from TTE before drawing, click **Refresh Data** on th
 
 If any conflicts remain after auto-resolution, you'll see conflict panels at the top of the results page. For each conflicting person, select which game they should keep. Click **Resolve** to apply.
 
+You can also click the **dismiss (✕)** button on a specific game to remove that person from it and advance to the next candidate. If there are no more candidates, the game is marked **"No winner (redraw eligible)"** — it remains available in the redraw rather than being sent to the box.
+
 Resolution may cascade — new conflicts can appear when an alternate winner is selected. Repeat until all conflicts are resolved.
 
 ### 8. Track pickups
@@ -136,7 +144,7 @@ While in Redraw Mode, three additional controls are available:
 
 Click **Award to Next** on any awaiting game to advance to the next person in the shuffled entry list. This is useful when a winner declines their prize or cannot be reached.
 
-If there are no more eligible players for a game, the app shows a **"To the box!"** alert and moves the game to the "No Entries" section with a "To the box!" status, indicating it should be returned to the prize pool.
+If there are no more eligible players for a game, the app shows a **"To the box!"** alert and moves the game to the "No Entries" section, indicating it should be returned to the prize pool.
 
 #### Not Here
 
@@ -179,7 +187,7 @@ Rows are sorted alphabetically by game name. The filename follows the pattern `P
 
 ### Session management
 
-- Application state (drawing data, login session) is stored in server-side sessions using `flask-session` with a `cachelib` filesystem backend. Session files are stored in the `flask_session/` directory on the server.
+- Application state (drawing data, login session) is stored in server-side sessions using `flask-session` with a `cachelib` filesystem backend. Session files are stored in the `flask_session/` directory locally, or `/home/flask_session` on Azure App Service.
 - A session ID cookie (signed with `FLASK_SECRET_KEY`) is sent to the browser. The cookie contains only the session ID, not the actual data.
 - If the TTE API returns 401 or 403, the entire Flask session is cleared and the user must log in again.
 
@@ -198,8 +206,8 @@ Rows are sorted alphabetically by game name. The filename follows the pattern `P
 
 ### HTTPS
 
-- Always deploy behind a reverse proxy with TLS termination.
-- Session cookies should be transmitted over HTTPS only in production.
+- Azure App Service provides TLS termination automatically.
+- Session cookies are transmitted over HTTPS in production.
 - The TTE API endpoint uses HTTPS by default.
 
 ### Credentials
@@ -239,7 +247,7 @@ If some games fail to push while others succeed, the push result panel shows whi
 
 ### Session state
 
-Application state is stored in server-side session files in the `flask_session/` directory on the server.
+Application state is stored in server-side session files. Locally these are in the `flask_session/` directory; on Azure App Service they're in `/home/flask_session` (persisted across deployments via the Azure filesystem).
 
 **Implications:**
 - Session data persists across browser refreshes and even browser restarts (tied to the session ID cookie).

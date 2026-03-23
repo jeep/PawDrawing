@@ -42,13 +42,23 @@ Enable the conventional commit hook:
 git config core.hooksPath .githooks
 ```
 
-### Run
+### Run Locally
 
 ```bash
 python run.py
 ```
 
 The app will be available at `http://localhost:5000`.
+
+## Deployment
+
+The app is deployed to **Azure App Service** and accessible at:
+
+> https://pawdrawing.azurewebsites.net
+
+Pushing to `main` triggers the GitHub Actions CI/CD pipeline (`.github/workflows/deploy.yml`), which runs the test suite and then deploys automatically via `az webapp up`.
+
+See [Developer Guide — Deployment](docs/DEVELOPER.md#deployment) for details.
 
 ## Documentation
 
@@ -66,10 +76,14 @@ PawDrawing/
 ├── tte_client.py           # TTE API client with rate limiting & pagination
 ├── drawing.py              # Drawing algorithm (shuffle, conflicts, resolution)
 ├── data_processing.py      # Entry validation, de-duplication, grouping
-├── Requirements.txt        # Python dependencies
+├── requirements.txt        # Python dependencies
 ├── .env.example            # Environment variable template
+├── startup.sh              # Azure App Service startup command
 ├── .githooks/
 │   └── commit-msg          # Conventional Commits hook
+├── .github/
+│   └── workflows/
+│       └── deploy.yml      # CI/CD: test + deploy to Azure
 ├── templates/
 │   ├── base.html               # Base layout with flash messages & loading overlay
 │   ├── login.html              # Login form
