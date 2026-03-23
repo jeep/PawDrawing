@@ -10,7 +10,7 @@ PawDrawing is a web application for running Play-to-Win (P2W) prize drawings at 
 - **requests** for HTTP communication with the TTE REST API
 - **python-dotenv** for environment variable management
 - **pytest** for testing (with `unittest.mock`)
-- Server-side session storage (Flask default cookie-based sessions)
+- Server-side session storage via **flask-session** with **cachelib** (`FileSystemCache`)
 
 ## Project Structure
 
@@ -28,12 +28,12 @@ PawDrawing/
 ├── .githooks/
 │   └── commit-msg          # Conventional Commits hook
 ├── templates/
-│   ├── base.html               # Base layout with flash messages
+│   ├── base.html               # Base layout with flash messages & loading overlay
 │   ├── login.html              # Login form
 │   ├── convention_select.html  # Convention search & library browse
 │   ├── convention_confirm.html # Confirm selected convention
 │   ├── library_confirm.html    # Confirm selected library (no convention)
-│   ├── games.html              # Game list with premium toggles & player management
+│   ├── games.html              # Game list with premium toggles, sorting & search
 │   ├── players.html            # Player management with remove/restore controls
 │   └── drawing_results.html    # Results with conflicts, pickup, push, export
 ├── tests/
@@ -51,7 +51,7 @@ PawDrawing/
 
 ### `app.py`
 
-App factory. `create_app()` instantiates Flask, loads `Config`, and registers the `main_bp` blueprint from `routes.py`. No other setup (no database, no migration).
+App factory. `create_app()` instantiates Flask, loads `Config`, initializes server-side sessions via `Session(app)` from `flask-session`, and registers the `main_bp` blueprint from `routes.py`. No database or migration.
 
 ### `config.py`
 
@@ -61,8 +61,8 @@ Loads `.env` via `python-dotenv`, then exposes:
 |-----------|---------|---------|---------|
 | `SECRET_KEY` | `FLASK_SECRET_KEY` | `"dev-key-change-me"` | Flask session signing |
 | `TTE_API_KEY` | `TTE_API_KEY` | `""` | tabletop.events API key |
-| `TTE_BASE_URL` | — | `https://tabletop.events/api` | API base URL (hardcoded) |
-
+| `TTE_BASE_URL` | — | `https://tabletop.events/api` | API base URL (hardcoded) || `SESSION_TYPE` | — | `"cachelib"` | flask-session backend type |
+| `SESSION_CACHELIB` | — | `FileSystemCache("flask_session")` | Server-side session storage in `flask_session/` dir |
 ### `routes.py`
 
 All routes live on a single Blueprint (`main_bp`). Helper functions:
@@ -186,6 +186,8 @@ Games Page                     GET /games
   │                              ├─ Library-only mode:
   │                              │    └─ TTEClient.get_library_game_playtowins() per game
   │                              └─ process_entries() + apply_ejections() + group_entries_by_game()
+  │                              └─ Caches all_games and entries in session for reuse
+  │                              └─ Sortable columns & search/filter bar
   │                              └─ Premium toggles: AJAX POST /games/premium
   │                              └─ Manage Players: GET /games/players
   │                              └─ Remove player: AJAX POST /games/eject
@@ -193,7 +195,7 @@ Games Page                     GET /games
   │                              └─ View entrants: AJAX GET /games/entrants/<game_id>
   ▼
 Run Drawing                    POST /drawing → 302 → GET /drawing/results
-  │                              ├─ Re-fetches games + entries from TTE
+  │                              ├─ Uses cached games + entries from session (no API calls)
   │                              └─ apply_ejections() → run_drawing() → drawing_state, conflicts, auto_resolved
   │                              └─ Stores drawing_state in session, redirects (PRG pattern)
   ▼
@@ -293,7 +295,8 @@ python -m pytest tests/ -v
 
 ### Mocking patterns
 
-- **TTEClient in routes:** `@patch("routes.TTEClient")` — mock the class, configure the instance via `MockClient.return_value`.
+- **TTEClient in routes:** `@patch("routes.TTEClient")` — mock the class, configure the instance via `MockClient.return_value`. Used for routes that call the TTE API directly (games, login, convention/library select).
+- **Cached session data in routes:** Drawing and player routes use cached session data (`cached_games`, `cached_entries`) instead of API calls. Tests populate these keys via `session_transaction()` rather than mocking TTEClient.
 - **requests in tte_client:** `@patch("tte_client.requests.request")` — mock the raw HTTP call, return a `MagicMock` response with `.status_code`, `.ok`, `.json()`, `.text`.
 - **Session setup:** Use `self.client.session_transaction()` context manager to pre-populate Flask session keys before making requests.
 - **Drawing randomness:** Pass a seeded `random.Random` instance to `run_drawing()` / `shuffle_entries()` for deterministic tests.

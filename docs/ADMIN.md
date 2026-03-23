@@ -84,6 +84,10 @@ The source selection page has two tabs:
 
 The games page shows all Play-to-Win games in the selected source (convention library or standalone library), along with the number of entries (people who played) for each game.
 
+The game list supports **sortable columns** (click headers to sort by game name, entries, etc.) and a **search bar** to filter games by name.
+
+A loading overlay with a progress spinner is shown while data loads from TTE. Large conventions with many games and entries may take a minute or two to load.
+
 ### 4. Manage players (optional)
 
 Click **Manage Players** on the games page to open the player management screen. This page lists every player who entered a Play-to-Win game, along with their badge ID, the number of games they entered, and which games.
@@ -102,13 +106,15 @@ Premium designations are auto-saved as you toggle them.
 
 ### 6. Run the drawing
 
-Click **Run Drawing**. The app:
+Click **Run Drawing**. A loading overlay with a spinner is shown while the drawing runs. The app:
 
-1. Re-fetches current game and entry data from TTE (to capture any last-minute entries).
+1. Uses the game and entry data cached from the games page (no additional API calls).
 2. Randomly shuffles all entries for each game.
 3. Selects the first person in each shuffled list as the initial winner.
 4. Detects conflicts (one person winning multiple games).
 5. Auto-resolves premium conflicts where possible.
+
+To pick up the latest data from TTE before drawing, click **Refresh Data** on the games page first.
 
 ### 7. Resolve conflicts
 
@@ -162,8 +168,8 @@ The filename follows the pattern `PawDrawing_ConventionName_2026-03-21.csv`.
 
 ### Session management
 
-- All application state (drawing data, login session) is stored in Flask's signed cookie-based sessions.
-- Sessions are signed with `FLASK_SECRET_KEY`. Anyone with this key can forge sessions.
+- Application state (drawing data, login session) is stored in server-side sessions using `flask-session` with a `cachelib` filesystem backend. Session files are stored in the `flask_session/` directory on the server.
+- A session ID cookie (signed with `FLASK_SECRET_KEY`) is sent to the browser. The cookie contains only the session ID, not the actual data.
 - If the TTE API returns 401 or 403, the entire Flask session is cleared and the user must log in again.
 
 ### Secret key
@@ -171,6 +177,7 @@ The filename follows the pattern `PawDrawing_ConventionName_2026-03-21.csv`.
 - **Never** use the default `dev-key-change-me` in production.
 - Rotate the key by changing `FLASK_SECRET_KEY` and restarting the app. All active sessions will be invalidated.
 - Store the key securely — do not commit `.env` to version control.
+- The key signs session ID cookies. Anyone with this key can impersonate a session.
 
 ### API key
 
@@ -187,7 +194,7 @@ The filename follows the pattern `PawDrawing_ConventionName_2026-03-21.csv`.
 ### Credentials
 
 - User passwords are sent to the TTE API for authentication and are not stored locally.
-- The TTE session ID is stored in the Flask session cookie (signed, not encrypted).
+- The TTE session ID is stored in the server-side session (not exposed to the browser).
 
 ## Troubleshooting
 
@@ -221,17 +228,18 @@ If some games fail to push while others succeed, the push result panel shows whi
 
 ### Session state
 
-All application state lives in the browser's session cookie. There is no server-side database.
+Application state is stored in server-side session files in the `flask_session/` directory on the server.
 
 **Implications:**
-- Closing the browser tab preserves the session (cookies persist until expiration).
-- Clearing browser cookies or cookies expiring will lose all drawing state.
+- Session data persists across browser refreshes and even browser restarts (tied to the session ID cookie).
+- Clearing browser cookies will start a new session, but the old session data remains on the server until it expires.
 - Each browser/device has its own independent session.
+- The `flask_session/` directory should be included in any server backups if data preservation is important.
 
 ### Re-running a drawing
 
 Clicking **Re-run Drawing** discards the current drawing state and starts fresh. This:
-- Re-fetches all games and entries from TTE.
+- Uses the cached game and entry data from the games page (click **Refresh Data** first if you want the latest from TTE).
 - Performs a new random shuffle.
 - Resets pickup tracking, redraw state, and conflict resolution.
 

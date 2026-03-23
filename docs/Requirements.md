@@ -107,6 +107,8 @@ PawDrawing is a web application for managing Play-and-Win drawings at tabletop g
 - **FR-DATA-05:** The "number of entries" displayed for each game shall be the count of unique entrants (unique `badge_id` values).
 - **FR-DATA-06:** The system shall handle paginated API responses, fetching all pages as needed.
 - **FR-DATA-07:** The system shall respect the TTE rate limit of 1 request per second.
+- **FR-DATA-08:** The system shall cache retrieved game and entry data in the server-side session so that the drawing and player management routes can reuse it without additional API calls.
+- **FR-DATA-09:** The games page shall provide a **Refresh Data** button to re-fetch data from TTE when the administrator wants the latest entries.
 
 ### 4.4 Drawing Algorithm
 
@@ -122,12 +124,13 @@ PawDrawing is a web application for managing Play-and-Win drawings at tabletop g
 - **FR-DRAW-10:** The drawing algorithm shall continue iterating until there are no remaining conflicts (each game has a unique winner).
 - **FR-DRAW-11:** The drawing may be re-run by the administrator if there is an issue. Re-running generates a new random shuffle.
 
-### 4.5 Ejection
+### 4.5 Player Management
 
-- **FR-EJECT-01:** The administrator shall be able to eject a player from a specific game or from all games before running the drawing.
-- **FR-EJECT-02:** Ejected players shall be excluded from the drawing.
-- **FR-EJECT-03:** Ejections can be undone before the drawing is run.
-- **FR-EJECT-04:** Ejections shall be cleared when the convention or library source changes.
+- **FR-EJECT-01:** The administrator shall be able to remove a player from a specific game or from all games before running the drawing.
+- **FR-EJECT-02:** Removed players shall be excluded from the drawing.
+- **FR-EJECT-03:** Removals can be undone before the drawing is run.
+- **FR-EJECT-04:** Removals shall be cleared when the convention or library source changes.
+- **FR-EJECT-05:** The system shall provide a dedicated player management page listing all players with their badge ID, game count, and individual game entries.
 
 ### 4.6 Results Display
 
@@ -139,6 +142,12 @@ PawDrawing is a web application for managing Play-and-Win drawings at tabletop g
 - **FR-DISP-04:** Games with zero entries shall be displayed with a "No entries" indicator.
 - **FR-DISP-05:** Results are displayed in the browser during the active session.
 - **FR-DISP-06:** The system shall provide a "Save" / "Export" button to download results as a CSV file.
+
+### 4.6.1 Games Page Display
+
+- **FR-GDISP-01:** The games page shall support sortable column headers (game name, entry count, etc.).
+- **FR-GDISP-02:** The games page shall provide a search/filter bar to filter games by name.
+- **FR-GDISP-03:** The system shall display a loading overlay with a spinner and warning message during data-intensive operations (loading games from TTE, running the drawing).
 
 ### 4.7 Pickup & Redraw
 

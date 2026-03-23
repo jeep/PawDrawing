@@ -71,12 +71,13 @@ PawDrawing/
 ├── .githooks/
 │   └── commit-msg          # Conventional Commits hook
 ├── templates/
-│   ├── base.html               # Base layout with flash messages
+│   ├── base.html               # Base layout with flash messages & loading overlay
 │   ├── login.html              # Login form
 │   ├── convention_select.html  # Convention search & library browse
 │   ├── convention_confirm.html # Confirm selected convention
 │   ├── library_confirm.html    # Confirm selected library (no convention)
-│   ├── games.html              # Game list with premium toggles & ejections
+│   ├── games.html              # Game list with premium toggles, sorting & search
+│   ├── players.html            # Player management with remove/restore controls
 │   └── drawing_results.html    # Results with conflicts, pickup, push, export
 ├── tests/
 │   ├── test_routes.py          # Route/view tests
