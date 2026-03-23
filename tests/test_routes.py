@@ -2449,28 +2449,24 @@ class TestPlayersRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/convention", resp.headers["Location"])
 
-    @patch("routes.TTEClient")
-    def test_players_lists_all_players(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-            {"id": "G2", "name": "Wingspan"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"badge_id": "B1", "librarygame_id": "G1", "id": "e1",
-             "name": "Alice"},
-            {"badge_id": "B2", "librarygame_id": "G1", "id": "e2",
-             "name": "Bob"},
-            {"badge_id": "B1", "librarygame_id": "G2", "id": "e3",
-             "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_players_lists_all_players(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [
+                {"id": "G1", "name": "Catan"},
+                {"id": "G2", "name": "Wingspan"},
+            ]
+            sess["cached_entries"] = [
+                {"badge_id": "B1", "librarygame_id": "G1", "id": "e1",
+                 "name": "Alice"},
+                {"badge_id": "B2", "librarygame_id": "G1", "id": "e2",
+                 "name": "Bob"},
+                {"badge_id": "B1", "librarygame_id": "G2", "id": "e3",
+                 "name": "Alice"},
+            ]
 
         resp = self.client.get("/games/players")
         self.assertEqual(resp.status_code, 200)
@@ -2478,26 +2474,22 @@ class TestPlayersRoute(unittest.TestCase):
         self.assertIn(b"Bob", resp.data)
         self.assertIn(b"Player Management", resp.data)
 
-    @patch("routes.TTEClient")
-    def test_players_shows_game_count(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-            {"id": "G2", "name": "Wingspan"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"badge_id": "B1", "librarygame_id": "G1", "id": "e1",
-             "name": "Alice"},
-            {"badge_id": "B1", "librarygame_id": "G2", "id": "e2",
-             "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_players_shows_game_count(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [
+                {"id": "G1", "name": "Catan"},
+                {"id": "G2", "name": "Wingspan"},
+            ]
+            sess["cached_entries"] = [
+                {"badge_id": "B1", "librarygame_id": "G1", "id": "e1",
+                 "name": "Alice"},
+                {"badge_id": "B1", "librarygame_id": "G2", "id": "e2",
+                 "name": "Alice"},
+            ]
 
         resp = self.client.get("/games/players")
         self.assertEqual(resp.status_code, 200)
@@ -2505,23 +2497,19 @@ class TestPlayersRoute(unittest.TestCase):
         self.assertIn(b"Catan", resp.data)
         self.assertIn(b"Wingspan", resp.data)
 
-    @patch("routes.TTEClient")
-    def test_players_shows_removed_badge(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"badge_id": "B1", "librarygame_id": "G1", "id": "e1",
-             "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_players_shows_removed_badge(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [
+                {"id": "G1", "name": "Catan"},
+            ]
+            sess["cached_entries"] = [
+                {"badge_id": "B1", "librarygame_id": "G1", "id": "e1",
+                 "name": "Alice"},
+            ]
             sess["ejected_entries"] = [["B1", "*"]]
 
         resp = self.client.get("/games/players")
@@ -2529,79 +2517,62 @@ class TestPlayersRoute(unittest.TestCase):
         self.assertIn(b"Removed", resp.data)
         self.assertIn(b"Restore to Drawing", resp.data)
 
-    @patch("routes.TTEClient")
-    def test_players_shows_partial_removal(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-            {"id": "G2", "name": "Wingspan"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"badge_id": "B1", "librarygame_id": "G1", "id": "e1",
-             "name": "Alice"},
-            {"badge_id": "B1", "librarygame_id": "G2", "id": "e2",
-             "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_players_shows_partial_removal(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [
+                {"id": "G1", "name": "Catan"},
+                {"id": "G2", "name": "Wingspan"},
+            ]
+            sess["cached_entries"] = [
+                {"badge_id": "B1", "librarygame_id": "G1", "id": "e1",
+                 "name": "Alice"},
+                {"badge_id": "B1", "librarygame_id": "G2", "id": "e2",
+                 "name": "Alice"},
+            ]
             sess["ejected_entries"] = [["B1", "G1"]]
 
         resp = self.client.get("/games/players")
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Partial", resp.data)
 
-    @patch("routes.TTEClient")
-    def test_players_library_only_mode(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-        ]
-        mock_instance.get_library_game_playtowins.return_value = [
-            {"badge_id": "B1", "librarygame_id": "G1", "id": "e1",
-             "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_players_library_only_mode(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["library_name"] = "My Library"
+            sess["cached_games"] = [
+                {"id": "G1", "name": "Catan"},
+            ]
+            sess["cached_entries"] = [
+                {"badge_id": "B1", "librarygame_id": "G1", "id": "e1",
+                 "name": "Alice"},
+            ]
 
         resp = self.client.get("/games/players")
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Alice", resp.data)
         self.assertIn(b"My Library", resp.data)
 
-    @patch("routes.TTEClient")
-    def test_players_empty_list(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = []
-        MockClient.return_value = mock_instance
-
+    def test_players_empty_list(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [
+                {"id": "G1", "name": "Catan"},
+            ]
+            sess["cached_entries"] = []
 
         resp = self.client.get("/games/players")
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"No players found", resp.data)
 
-    @patch("routes.TTEClient")
-    def test_players_api_error(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.side_effect = TTEAPIError("Server error", 500)
-        MockClient.return_value = mock_instance
-
+    def test_players_redirects_without_cache(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
@@ -2610,6 +2581,7 @@ class TestPlayersRoute(unittest.TestCase):
 
         resp = self.client.get("/games/players")
         self.assertEqual(resp.status_code, 302)
+        self.assertIn("/games", resp.headers["Location"])
 
     @patch("routes.TTEClient")
     def test_players_has_manage_players_link_from_games(self, MockClient):
