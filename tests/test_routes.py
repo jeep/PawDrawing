@@ -1700,7 +1700,7 @@ class TestCSVExport(unittest.TestCase):
         self._setup_session()
         resp = self.client.get("/drawing/export")
         lines = resp.data.decode().strip().split("\r\n")
-        self.assertEqual(lines[0], "Game,Premium,Entries,Winner,Badge,Picked Up")
+        self.assertEqual(lines[0], "Game,Winner")
 
     def test_export_csv_data_rows(self):
         self._setup_session()
@@ -1716,32 +1716,36 @@ class TestCSVExport(unittest.TestCase):
         self._setup_session()
         resp = self.client.get("/drawing/export")
         lines = resp.data.decode().strip().split("\r\n")
-        # Catan: winner is Alice (index 0), 2 entries
-        self.assertIn("Alice", lines[1])
-        self.assertIn("B1", lines[1])
-        self.assertIn(",2,", lines[1])
-        # Ticket to Ride: winner is Carol, 1 entry
-        self.assertIn("Carol", lines[2])
-        self.assertIn("B3", lines[2])
-        self.assertIn(",1,", lines[2])
+        # Catan: winner is Alice (index 0)
+        self.assertEqual(lines[1], "Catan,Alice")
+        # Ticket to Ride: winner is Carol
+        self.assertEqual(lines[2], "Ticket to Ride,Carol")
 
-    def test_export_premium_column(self):
-        self._setup_session(premium=["G1"])
+    def test_export_only_game_and_winner(self):
+        self._setup_session()
         resp = self.client.get("/drawing/export")
         lines = resp.data.decode().strip().split("\r\n")
-        # Catan is premium
-        self.assertIn("Catan,Yes,", lines[1])
-        # Ticket to Ride is not premium
-        self.assertIn("Ticket to Ride,No,", lines[2])
+        # Each data row should have exactly 2 columns
+        for line in lines[1:]:
+            self.assertEqual(len(line.split(",")), 2)
 
-    def test_export_picked_up_column(self):
-        self._setup_session(picked_up=["G1"])
+    def test_export_no_winner_shows_empty(self):
+        drawing_state = [
+            {
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [],
+                "winner_index": -1,
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["convention_name"] = "PawCon 2026"
+            sess["drawing_state"] = drawing_state
+            sess["picked_up"] = []
+            sess["premium_games"] = []
         resp = self.client.get("/drawing/export")
         lines = resp.data.decode().strip().split("\r\n")
-        # Catan picked up -> Yes
-        self.assertTrue(lines[1].endswith(",Yes"))
-        # Ticket to Ride not picked up -> No
-        self.assertTrue(lines[2].endswith(",No"))
+        self.assertEqual(lines[1], "Catan,")
 
     def test_export_advanced_winner(self):
         # G1 winner was advanced to index 1 (Bob)
@@ -1764,8 +1768,7 @@ class TestCSVExport(unittest.TestCase):
         resp = self.client.get("/drawing/export")
         lines = resp.data.decode().strip().split("\r\n")
         # Winner should be Bob instead of Alice
-        self.assertIn("Bob", lines[1])
-        self.assertIn("B2", lines[1])
+        self.assertEqual(lines[1], "Catan,Bob")
 
     def test_export_button_on_results_page(self):
         with self.client.session_transaction() as sess:

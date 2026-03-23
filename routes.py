@@ -893,28 +893,21 @@ def export_csv():
         flash("No active drawing to export.", "error")
         return redirect(url_for("main.games"))
 
-    picked_up = set(session.get("picked_up", []))
-    premium_games = set(session.get("premium_games", []))
     winners = get_current_winners(drawing_state)
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Game", "Premium", "Entries", "Winner", "Badge", "Picked Up"])
+    writer.writerow(["Game", "Winner"])
 
     rows = []
     for item in drawing_state:
         game = item["game"]
         game_id = game["id"]
         winner = winners.get(game_id)
-        is_premium = game_id in premium_games
 
         rows.append({
             "game_name": game.get("name", "Unknown"),
-            "is_premium": is_premium,
-            "total_entries": len(item["shuffled"]),
             "winner_name": winner.get("name", "Unknown") if winner else "",
-            "winner_badge": winner.get("badge_id", "") if winner else "",
-            "picked_up": game_id in picked_up,
         })
 
     rows.sort(key=lambda r: r["game_name"])
@@ -922,11 +915,7 @@ def export_csv():
     for row in rows:
         writer.writerow([
             row["game_name"],
-            "Yes" if row["is_premium"] else "No",
-            row["total_entries"],
             row["winner_name"],
-            row["winner_badge"],
-            "Yes" if row["picked_up"] else "No",
         ])
 
     convention_name = session.get("convention_name", "Drawing")
