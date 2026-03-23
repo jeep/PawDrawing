@@ -1056,17 +1056,16 @@ class TestDrawingRoutes(unittest.TestCase):
 
         resp = self.client.post("/drawing", follow_redirects=True)
         html = resp.data.decode()
-        # The winner table (By Winner view) should have Alice once
-        # The By Winner table is inside panel-by-winner
+        # The By Winner panel should have Alice once in the awaiting table
         winner_panel_start = html.index('id="panel-by-winner"')
         winner_panel = html[winner_panel_start:]
         self.assertIn("Alice", winner_panel)
         self.assertIn("Catan", winner_panel)
-        # Ticket to Ride has no entries, so shouldn't appear in winner table
-        winner_table_start = winner_panel.index('id="winner-table"')
-        winner_table_end = winner_panel.index('</table>')
-        winner_table = winner_panel[winner_table_start:winner_table_end]
-        self.assertNotIn("Ticket to Ride", winner_table)
+        # Ticket to Ride has no entries — should be in "No Winner" section, not awaiting
+        awaiting_start = winner_panel.index('id="winner-awaiting-table"')
+        awaiting_end = winner_panel.index('</table>', awaiting_start)
+        awaiting_table = winner_panel[awaiting_start:awaiting_end]
+        self.assertNotIn("Ticket to Ride", awaiting_table)
 
     def test_by_winner_view_highlights_premium(self):
         with self.client.session_transaction() as sess:

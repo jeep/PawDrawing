@@ -753,20 +753,30 @@
 </div>
 
 <div class="view-panel" id="panel-by-winner">
-<table class="results-table" id="winner-table">
+
+{% set winners_awaiting = results | selectattr('has_winner') | rejectattr('is_picked_up') | sort(attribute='winner_name') | list %}
+{% set winners_picked = results | selectattr('has_winner') | selectattr('is_picked_up') | sort(attribute='winner_name') | list %}
+{% set winners_none = results | rejectattr('has_winner') | sort(attribute='game_name') | list %}
+
+{# Awaiting Pickup — by Winner #}
+<div class="section-header">
+    <h3>Awaiting Pickup</h3>
+    <span class="section-count" id="winner-awaiting-count">{{ winners_awaiting|length }}</span>
+</div>
+{% if winners_awaiting %}
+<table class="results-table" id="winner-awaiting-table">
     <thead>
         <tr>
             <th>Winner</th>
             <th>Badge</th>
             <th>Game Won</th>
-            <th>Status</th>
-            <th>Pickup</th>
+            <th>Actions</th>
         </tr>
     </thead>
     <tbody>
-        {% set winners_list = results | selectattr('winner_name') | sort(attribute='winner_name') | list %}
-        {% for r in winners_list %}
-        <tr class="{{ 'premium' if r.is_premium }}{{ ' in-conflict' if r.game_id in conflicted_game_ids }}">
+        {% for r in winners_awaiting %}
+        <tr class="{{ 'premium' if r.is_premium }}{{ ' in-conflict' if r.game_id in conflicted_game_ids }}"
+            data-game-id="{{ r.game_id }}" data-badge-id="{{ r.winner_badge }}">
             <td>
                 {{ r.winner_name }}
                 {% if r.winner_badge in not_here %}<span class="not-here-badge">Not Here</span>{% endif %}
@@ -775,22 +785,85 @@
             <td>
                 {{ r.game_name }}
                 {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
+                {% if r.game_id in conflicted_game_ids %}<span class="conflict-badge">Conflict</span>{% endif %}
             </td>
             <td>
-                {% if r.is_picked_up %}✓ Picked Up
-                {% elif r.game_id in conflicted_game_ids %}<span class="conflict-badge">Conflict</span>
-                {% else %}Awaiting
-                {% endif %}
-            </td>
-            <td>
-                <button class="pickup-btn{{ ' picked' if r.is_picked_up }}"
-                        data-game-id="{{ r.game_id }}"
-                        onclick="togglePickup('{{ r.game_id }}')">{{ '✓ Picked Up' if r.is_picked_up else 'Mark Picked Up' }}</button>
+                <button class="pickup-btn" data-game-id="{{ r.game_id }}" onclick="togglePickup('{{ r.game_id }}')">Mark Picked Up</button>
             </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+{% else %}
+<p style="color:#888;font-style:italic;margin:0.5rem 0;">All games have been picked up or have no winner.</p>
+{% endif %}
+
+{# Picked Up — by Winner #}
+<div class="section-header">
+    <h3>Picked Up</h3>
+    <span class="section-count" id="winner-picked-up-count">{{ winners_picked|length }}</span>
+</div>
+<div class="picked-up-section">
+{% if winners_picked %}
+<table class="results-table" id="winner-picked-table">
+    <thead>
+        <tr>
+            <th>Winner</th>
+            <th>Badge</th>
+            <th>Game Won</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in winners_picked %}
+        <tr class="{{ 'premium' if r.is_premium }}" data-game-id="{{ r.game_id }}">
+            <td>{{ r.winner_name }}</td>
+            <td>{{ r.winner_badge or '—' }}</td>
+            <td>
+                {{ r.game_name }}
+                {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
+            </td>
+            <td>
+                <button class="pickup-btn picked" data-game-id="{{ r.game_id }}" onclick="togglePickup('{{ r.game_id }}')">✓ Picked Up</button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p style="color:#888;font-style:italic;margin:0.5rem 0;">No games picked up yet.</p>
+{% endif %}
+</div>
+
+{# No Winner — by Winner #}
+{% if winners_none %}
+<div class="section-header">
+    <h3>No Winner</h3>
+    <span class="section-count">{{ winners_none|length }}</span>
+</div>
+<div class="no-entries-section">
+<table class="results-table" id="winner-no-winner-table">
+    <thead>
+        <tr>
+            <th>Game</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in winners_none %}
+        <tr>
+            <td>
+                {{ r.game_name }}
+                {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
+            </td>
+            <td>{% if r.is_solo_dismissed %}No winner (redraw eligible){% elif r.has_entries %}To the box!{% else %}No entries{% endif %}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+
 </div>
 
 <div class="modal-overlay" id="not-here-modal">
@@ -887,7 +960,14 @@
         document.getElementById('tab-by-winner').classList.toggle('active', view === 'by-winner');
         document.getElementById('panel-by-game').classList.toggle('active', view === 'by-game');
         document.getElementById('panel-by-winner').classList.toggle('active', view === 'by-winner');
+        sessionStorage.setItem('activeTab', view);
     };
+
+    // Restore active tab after page reload
+    var savedTab = sessionStorage.getItem('activeTab');
+    if (savedTab === 'by-winner') {
+        switchView('by-winner');
+    }
 
     window.togglePickup = function(gameId) {
         var btns = document.querySelectorAll('.pickup-btn[data-game-id="' + gameId + '"]');
@@ -1145,24 +1225,28 @@
     }
 
     function filterByWinnerView(query) {
-        var table = document.getElementById('winner-table');
-        if (!table) return;
-        var rows = table.querySelectorAll('tbody tr');
-        var totalRows = rows.length;
+        var tables = ['winner-awaiting-table', 'winner-picked-table', 'winner-no-winner-table'];
+        var totalRows = 0;
         var visibleRows = 0;
 
-        rows.forEach(function(row) {
-            if (!query) {
-                row.style.display = '';
-                visibleRows++;
-                return;
-            }
-            var cells = row.querySelectorAll('td');
-            var text = '';
-            for (var i = 0; i < cells.length; i++) text += ' ' + cells[i].textContent;
-            var match = text.toLowerCase().indexOf(query) !== -1;
-            row.style.display = match ? '' : 'none';
-            if (match) visibleRows++;
+        tables.forEach(function(tableId) {
+            var table = document.getElementById(tableId);
+            if (!table) return;
+            var rows = table.querySelectorAll('tbody tr');
+            rows.forEach(function(row) {
+                totalRows++;
+                if (!query) {
+                    row.style.display = '';
+                    visibleRows++;
+                    return;
+                }
+                var cells = row.querySelectorAll('td');
+                var text = '';
+                for (var i = 0; i < cells.length; i++) text += ' ' + cells[i].textContent;
+                var match = text.toLowerCase().indexOf(query) !== -1;
+                row.style.display = match ? '' : 'none';
+                if (match) visibleRows++;
+            });
         });
 
         updateSearchCount(query, visibleRows, totalRows);
