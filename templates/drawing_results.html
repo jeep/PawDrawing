@@ -20,9 +20,9 @@
         padding: 1.25rem 1.5rem;
         margin-bottom: 1.5rem;
         display: flex;
-        gap: 2rem;
+        gap: 0.75rem;
         align-items: center;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
     }
     .summary h2 { margin: 0; color: #2c3e50; font-size: 1.2rem; }
     .stat { font-size: 0.9rem; color: #555; }
@@ -787,8 +787,17 @@
         document.body.classList.toggle('redraw-mode');
         var btn = document.getElementById('redraw-toggle');
         btn.classList.toggle('active');
-        btn.textContent = document.body.classList.contains('redraw-mode') ? 'Exit Redraw Mode' : 'Enter Redraw Mode';
+        var active = document.body.classList.contains('redraw-mode');
+        btn.textContent = active ? 'Exit Redraw Mode' : 'Enter Redraw Mode';
+        if (active) { sessionStorage.setItem('redrawMode', '1'); } else { sessionStorage.removeItem('redrawMode'); }
     };
+
+    // Restore redraw mode after page reload
+    if (sessionStorage.getItem('redrawMode') === '1') {
+        document.body.classList.add('redraw-mode');
+        var btn = document.getElementById('redraw-toggle');
+        if (btn) { btn.classList.add('active'); btn.textContent = 'Exit Redraw Mode'; }
+    }
 
     window.switchView = function(view) {
         document.getElementById('tab-by-game').classList.toggle('active', view === 'by-game');
@@ -926,6 +935,7 @@
                 alert('Error: ' + (data.error || 'Unknown'));
                 return;
             }
+            sessionStorage.setItem('redrawMode', '1');
             window.location.reload();
         })
         .catch(function() {
