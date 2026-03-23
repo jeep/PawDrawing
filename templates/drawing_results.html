@@ -390,17 +390,18 @@
     body.redraw-mode .not-here-badge { display: inline-block; }
     body.redraw-mode .redraw-bar { display: flex; }
     .redraw-toggle {
-        background: none;
-        border: 1px solid #7f8c8d;
-        border-radius: 4px;
-        padding: 0.3rem 0.8rem;
-        font-size: 0.8rem;
+        background: #3498db;
+        color: white;
+        border: none;
+        padding: 0.65rem 1.5rem;
+        font-size: 1rem;
+        font-weight: 600;
+        border-radius: 6px;
         cursor: pointer;
-        color: #7f8c8d;
-        margin-left: auto;
     }
-    .redraw-toggle:hover { border-color: #2c3e50; color: #2c3e50; }
-    .redraw-toggle.active { background: #2c3e50; color: white; border-color: #2c3e50; }
+    .redraw-toggle:hover { background: #2980b9; }
+    .redraw-toggle.active { background: #e74c3c; }
+    .redraw-toggle.active:hover { background: #c0392b; }
 
     .redraw-bar {
         gap: 1rem;
