@@ -47,7 +47,7 @@ PawDrawing/
 │   └── test_data_processing.py # Data processing tests
 └── docs/
     ├── DEVELOPER.md        # This file
-    ├── ADMIN.md            # Administrator documentation
+    ├── USER_GUIDE.md       # User guide
     └── Requirements.md     # Project requirements document
 ```
 

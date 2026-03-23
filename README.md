@@ -62,7 +62,7 @@ See [Developer Guide — Deployment](docs/DEVELOPER.md#deployment) for details.
 
 ## Documentation
 
-- [Administrator Guide](docs/ADMIN.md) — installation, workflow, and troubleshooting
+- [User Guide](docs/USER_GUIDE.md) — workflow, features, and troubleshooting
 - [Developer Guide](docs/DEVELOPER.md) — architecture, module reference, and testing
 
 ## Project Structure
@@ -99,7 +99,7 @@ PawDrawing/
 │   ├── test_drawing.py         # Drawing algorithm tests
 │   └── test_data_processing.py # Data processing tests
 └── docs/
-    ├── ADMIN.md            # Administrator guide
+    ├── USER_GUIDE.md       # User guide
     ├── DEVELOPER.md        # Developer & architecture guide
     └── Requirements.md     # Project requirements document
 ```
