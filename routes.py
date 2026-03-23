@@ -278,9 +278,34 @@ def set_premium_games():
     return jsonify({"ok": True, "count": len(game_ids)})
 
 
+def _build_results_from_session():
+    """Build display-friendly results list from session drawing_state."""
+    drawing_state = session.get("drawing_state", [])
+    premium_games = session.get("premium_games", [])
+    winners = get_current_winners(drawing_state)
+
+    results = []
+    for item in drawing_state:
+        game = item["game"]
+        game_id = game["id"]
+        winner = winners.get(game_id)
+        results.append({
+            "game_name": game.get("name", "Unknown"),
+            "game_id": game_id,
+            "is_premium": game_id in premium_games,
+            "winner_name": winner.get("name", "Unknown") if winner else None,
+            "winner_badge": winner.get("badge_id", "") if winner else None,
+            "total_entries": len(item["shuffled"]),
+            "winner_index": item["winner_index"],
+        })
+
+    results.sort(key=lambda r: r["game_name"])
+    return results
+
+
 @main_bp.route("/drawing", methods=["POST"])
 def run_drawing_route():
-    """Execute the drawing algorithm and display results."""
+    """Execute the drawing algorithm and redirect to results."""
     if not session.get("tte_session_id"):
         flash("Please log in first.", "error")
         return redirect(url_for("main.login"))
@@ -318,33 +343,31 @@ def run_drawing_route():
 
     # Store drawing state in session for conflict resolution
     session["drawing_state"] = drawing_state
+    session["drawing_conflicts"] = conflicts
     session["auto_resolved"] = auto_resolved
     session["picked_up"] = []
     session["redistribution_declined"] = {}
     session["redistribution_winners"] = {}
     session["drawing_timestamp"] = datetime.now().strftime("%-I:%M %p")
 
-    winners = get_current_winners(drawing_state)
+    return redirect(url_for("main.drawing_results"))
 
-    # Build display-friendly results
-    results = []
-    for item in drawing_state:
-        game = item["game"]
-        game_id = game["id"]
-        winner = winners.get(game_id)
-        results.append({
-            "game_name": game.get("name", "Unknown"),
-            "game_id": game_id,
-            "is_premium": game_id in premium_games,
-            "winner_name": winner.get("name", "Unknown") if winner else None,
-            "winner_badge": winner.get("badge_id", "") if winner else None,
-            "total_entries": len(item["shuffled"]),
-            "winner_index": item["winner_index"],
-        })
 
-    results.sort(key=lambda r: r["game_name"])
+@main_bp.route("/drawing/results")
+def drawing_results():
+    """Display drawing results from session state."""
+    if not session.get("tte_session_id"):
+        flash("Please log in first.", "error")
+        return redirect(url_for("main.login"))
 
-    # Build a set of game IDs that are in conflict for highlighting
+    drawing_state = session.get("drawing_state")
+    if drawing_state is None:
+        flash("No drawing results to display.", "error")
+        return redirect(url_for("main.games"))
+
+    results = _build_results_from_session()
+    conflicts = session.get("drawing_conflicts", [])
+
     conflicted_game_ids = set()
     for conflict in conflicts:
         conflicted_game_ids.update(conflict["game_ids"])
@@ -353,10 +376,10 @@ def run_drawing_route():
         "drawing_results.html",
         results=results,
         conflicts=conflicts,
-        auto_resolved=auto_resolved,
+        auto_resolved=session.get("auto_resolved", []),
         conflicted_game_ids=conflicted_game_ids,
         convention_name=session.get("convention_name") or session.get("library_name", ""),
-        picked_up=set(),
+        picked_up=set(session.get("picked_up", [])),
         drawing_timestamp=session.get("drawing_timestamp", ""),
     )
 

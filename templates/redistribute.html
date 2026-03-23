@@ -155,7 +155,7 @@
 <div class="summary">
     <h2>Redistribution — {{ convention_name }}</h2>
     <span class="stat"><strong>{{ unclaimed_games|length }}</strong> unclaimed games</span>
-    <a href="javascript:history.back()" class="back-btn">Back to Results</a>
+    <a href="{{ url_for('main.drawing_results') }}" class="back-btn">Back to Results</a>
 </div>
 
 {% if not unclaimed_games %}

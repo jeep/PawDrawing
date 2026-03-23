@@ -83,7 +83,8 @@ All routes live on a single Blueprint (`main_bp`). Helper functions:
 | POST | `/library/select` | `library_confirm` | Fetch and confirm library (no convention) |
 | GET | `/games` | `games` | Load and display P2W games |
 | POST | `/games/premium` | `set_premium_games` | AJAX: save premium designations |
-| POST | `/drawing` | `run_drawing_route` | Execute drawing algorithm |
+| POST | `/drawing` | `run_drawing_route` | Execute drawing algorithm (redirects to results) |
+| GET | `/drawing/results` | `drawing_results` | Display drawing results from session |
 | POST | `/drawing/resolve` | `resolve_conflicts` | AJAX: apply conflict resolutions |
 | POST | `/drawing/pickup` | `toggle_pickup` | AJAX: toggle pickup status |
 | GET | `/drawing/redistribute` | `redistribute` | Redistribution page |
@@ -170,10 +171,10 @@ Games Page                     GET /games
   │                              └─ process_entries() + group_entries_by_game()
   │                              └─ Premium toggles: AJAX POST /games/premium
   ▼
-Run Drawing                    POST /drawing
+Run Drawing                    POST /drawing → 302 → GET /drawing/results
   │                              ├─ Re-fetches games + entries from TTE
   │                              └─ run_drawing() → drawing_state, conflicts, auto_resolved
-  │                              └─ Stores drawing_state in session
+  │                              └─ Stores drawing_state in session, redirects (PRG pattern)
   ▼
 Resolve Conflicts              AJAX POST /drawing/resolve
   │                              └─ apply_resolution() → detect_conflicts() (cascading)

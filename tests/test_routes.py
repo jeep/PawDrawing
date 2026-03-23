@@ -469,7 +469,7 @@ class TestLibraryConfirmRoute(unittest.TestCase):
             sess["library_id"] = "lib-1"
             sess["library_name"] = "My Library"
 
-        resp = self.client.post("/drawing")
+        resp = self.client.post("/drawing", follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Drawing Results", resp.data)
         self.assertIn(b"My Library", resp.data)
@@ -703,6 +703,39 @@ class TestDrawingRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/login", resp.headers["Location"])
 
+    def test_drawing_results_requires_auth(self):
+        resp = self.client.get("/drawing/results")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/login", resp.headers["Location"])
+
+    def test_drawing_results_requires_drawing_state(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+        resp = self.client.get("/drawing/results")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/games", resp.headers["Location"])
+
+    def test_drawing_post_redirects_to_results(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "Test Con"
+            sess["premium_games"] = []
+        with patch("routes.TTEClient") as MockClient:
+            mock_instance = MagicMock()
+            mock_instance.get_library_games.return_value = [
+                {"id": "G1", "name": "Catan"},
+            ]
+            mock_instance.get_convention_playtowins.return_value = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1",
+                 "name": "Alice"},
+            ]
+            MockClient.return_value = mock_instance
+            resp = self.client.post("/drawing")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/drawing/results", resp.headers["Location"])
+
     def test_drawing_requires_convention(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
@@ -730,7 +763,7 @@ class TestDrawingRoutes(unittest.TestCase):
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
 
-        resp = self.client.post("/drawing")
+        resp = self.client.post("/drawing", follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Drawing Results", resp.data)
         self.assertIn(b"Catan", resp.data)
@@ -756,7 +789,7 @@ class TestDrawingRoutes(unittest.TestCase):
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
 
-        resp = self.client.post("/drawing")
+        resp = self.client.post("/drawing", follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
         # B1 must win both since they're the only entrant — conflict
         self.assertIn(b"Multi-Win Conflicts", resp.data)
@@ -782,7 +815,7 @@ class TestDrawingRoutes(unittest.TestCase):
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
 
-        resp = self.client.post("/drawing")
+        resp = self.client.post("/drawing", follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Re-run Drawing", resp.data)
 
@@ -811,7 +844,7 @@ class TestDrawingRoutes(unittest.TestCase):
             sess["convention_name"] = "GameFest"
             sess["premium_games"] = ["G1", "G2"]
 
-        resp = self.client.post("/drawing")
+        resp = self.client.post("/drawing", follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
         # Separate sections for premium and standard conflicts
         self.assertIn(b"Premium Game Conflicts", resp.data)
@@ -935,7 +968,7 @@ class TestDrawingRoutes(unittest.TestCase):
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
 
-        resp = self.client.post("/drawing")
+        resp = self.client.post("/drawing", follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"By Game", resp.data)
         self.assertIn(b"By Winner", resp.data)
@@ -962,7 +995,7 @@ class TestDrawingRoutes(unittest.TestCase):
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
 
-        resp = self.client.post("/drawing")
+        resp = self.client.post("/drawing", follow_redirects=True)
         html = resp.data.decode()
         # By Game panel shows both games
         self.assertIn("Catan", html)
@@ -988,7 +1021,7 @@ class TestDrawingRoutes(unittest.TestCase):
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
 
-        resp = self.client.post("/drawing")
+        resp = self.client.post("/drawing", follow_redirects=True)
         html = resp.data.decode()
         # The winner table (By Winner view) should have Alice once
         # The By Winner table is inside panel-by-winner
@@ -1022,7 +1055,7 @@ class TestDrawingRoutes(unittest.TestCase):
             sess["convention_name"] = "GameFest"
             sess["premium_games"] = ["G1"]
 
-        resp = self.client.post("/drawing")
+        resp = self.client.post("/drawing", follow_redirects=True)
         html = resp.data.decode()
         # By Winner table should show Premium label for Catan
         winner_panel_start = html.index('id="panel-by-winner"')
@@ -1046,7 +1079,7 @@ class TestDrawingRoutes(unittest.TestCase):
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
 
-        resp = self.client.post("/drawing")
+        resp = self.client.post("/drawing", follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"picked up", resp.data)
         self.assertIn(b'id="pickup-count"', resp.data)
@@ -1069,7 +1102,7 @@ class TestDrawingRoutes(unittest.TestCase):
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
 
-        resp = self.client.post("/drawing")
+        resp = self.client.post("/drawing", follow_redirects=True)
         html = resp.data.decode()
         # Game with winner should have pickup button
         self.assertIn("Mark Picked Up", html)
@@ -1174,7 +1207,7 @@ class TestDrawingRoutes(unittest.TestCase):
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
 
-        resp = self.client.post("/drawing")
+        resp = self.client.post("/drawing", follow_redirects=True)
         self.assertIn(b"Start Redistribution", resp.data)
 
 
@@ -1488,7 +1521,7 @@ class TestPushToTTE(unittest.TestCase):
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
 
-        resp = self.client.post("/drawing")
+        resp = self.client.post("/drawing", follow_redirects=True)
         self.assertIn(b"Push to TTE", resp.data)
         self.assertIn(b'id="push-btn"', resp.data)
 
@@ -1640,7 +1673,7 @@ class TestCSVExport(unittest.TestCase):
                  "name": "Alice", "gamename": "Catan"},
             ]
             MockClient.return_value = mock_instance
-            resp = self.client.post("/drawing")
+            resp = self.client.post("/drawing", follow_redirects=True)
         self.assertIn(b"Export CSV", resp.data)
 
 
@@ -1941,7 +1974,7 @@ class TestRefreshData(unittest.TestCase):
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
 
-        resp = self.client.post("/drawing")
+        resp = self.client.post("/drawing", follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Data from", resp.data)
 
