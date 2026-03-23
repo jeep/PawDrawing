@@ -34,8 +34,7 @@ PawDrawing/
 │   ├── convention_confirm.html # Confirm selected convention
 │   ├── library_confirm.html    # Confirm selected library (no convention)
 │   ├── games.html          # Game list with premium toggles
-│   ├── drawing_results.html    # Results with conflicts, pickup, push, export
-│   └── redistribute.html  # Redistribution for unclaimed games
+│   └── drawing_results.html    # Results with conflicts, pickup, push, export
 ├── tests/
 │   ├── test_routes.py      # Route/view tests
 │   ├── test_tte_client.py  # API client tests
@@ -87,8 +86,9 @@ All routes live on a single Blueprint (`main_bp`). Helper functions:
 | GET | `/drawing/results` | `drawing_results` | Display drawing results from session |
 | POST | `/drawing/resolve` | `resolve_conflicts` | AJAX: apply conflict resolutions |
 | POST | `/drawing/pickup` | `toggle_pickup` | AJAX: toggle pickup status |
-| GET | `/drawing/redistribute` | `redistribute` | Redistribution page |
-| POST | `/drawing/redistribute/claim` | `redistribute_claim` | AJAX: claim/decline |
+| POST | `/drawing/award-next` | `award_next` | AJAX: advance to next winner |
+| POST | `/drawing/not-here` | `mark_not_here` | AJAX: mark person absent, advance their games |
+| POST | `/drawing/redraw-unclaimed` | `redraw_all_unclaimed` | AJAX: redraw all unclaimed games |
 | POST | `/drawing/push` | `push_to_tte` | AJAX: push wins to TTE API |
 | GET | `/drawing/export` | `export_csv` | Download results as CSV |
 
@@ -182,9 +182,12 @@ Resolve Conflicts              AJAX POST /drawing/resolve
 Track Pickups                  AJAX POST /drawing/pickup
   │                              └─ Toggles game_id in session["picked_up"]
   ▼
-Redistribute                   GET /drawing/redistribute
-  │                              └─ Shows unclaimed games with entrant lists
-  │                              └─ AJAX POST /drawing/redistribute/claim
+Award Next / Not Here          AJAX POST /drawing/award-next
+  │                              AJAX POST /drawing/not-here
+  │                              └─ Advances winner_index, skips not_here badges
+  ▼
+Redraw Unclaimed               AJAX POST /drawing/redraw-unclaimed
+  │                              └─ Reshuffles unclaimed games excluding not_here & original winners
   ▼
 Push to TTE                    AJAX POST /drawing/push
   │                              └─ TTEClient.update_playtowin(id, {win: 1})
@@ -210,8 +213,8 @@ All application state lives in the Flask session (cookie-based, signed with `SEC
 | `drawing_state` | `list[dict]` | Drawing | Full shuffled state with winner indices |
 | `auto_resolved` | `list[dict]` | Drawing | Auto-resolved premium conflicts |
 | `picked_up` | `list[str]` | Pickup toggle | Game IDs marked as picked up |
-| `redistribution_declined` | `dict[str, list[str]]` | Redistribution | `game_id → [declined badge_ids]` |
-| `redistribution_winners` | `dict[str, str]` | Redistribution | `game_id → new winner badge_id` |
+| `not_here` | `list[str]` | Not Here | Badge IDs marked as absent |
+| `not_here_warning_dismissed` | `bool` | Not Here | Whether the confirmation warning was dismissed |
 
 Session is cleared entirely on auth errors (401/403) and on logout.
 

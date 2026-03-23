@@ -10,6 +10,7 @@ from drawing import (
     apply_resolution,
     detect_conflicts,
     get_current_winners,
+    redraw_unclaimed,
     run_drawing,
 )
 from tte_client import TTEAPIError, TTEClient, TTETimeoutError
@@ -282,6 +283,7 @@ def _build_results_from_session():
     """Build display-friendly results list from session drawing_state."""
     drawing_state = session.get("drawing_state", [])
     premium_games = session.get("premium_games", [])
+    picked_up = set(session.get("picked_up", []))
     winners = get_current_winners(drawing_state)
 
     results = []
@@ -297,6 +299,9 @@ def _build_results_from_session():
             "winner_badge": winner.get("badge_id", "") if winner else None,
             "total_entries": len(item["shuffled"]),
             "winner_index": item["winner_index"],
+            "is_picked_up": game_id in picked_up,
+            "has_winner": winner is not None,
+            "has_entries": len(item["shuffled"]) > 0,
         })
 
     results.sort(key=lambda r: r["game_name"])
@@ -346,8 +351,8 @@ def run_drawing_route():
     session["drawing_conflicts"] = conflicts
     session["auto_resolved"] = auto_resolved
     session["picked_up"] = []
-    session["redistribution_declined"] = {}
-    session["redistribution_winners"] = {}
+    session["not_here"] = []
+    session["not_here_warning_dismissed"] = False
     session["drawing_timestamp"] = datetime.now().strftime("%-I:%M %p")
 
     return redirect(url_for("main.drawing_results"))
@@ -372,14 +377,24 @@ def drawing_results():
     for conflict in conflicts:
         conflicted_game_ids.update(conflict["game_ids"])
 
+    # Categorize results into three groups
+    awaiting = [r for r in results if r["has_winner"] and not r["is_picked_up"]]
+    picked_up_list = [r for r in results if r["has_winner"] and r["is_picked_up"]]
+    no_entries = [r for r in results if not r["has_entries"]]
+
     return render_template(
         "drawing_results.html",
         results=results,
+        awaiting=awaiting,
+        picked_up_list=picked_up_list,
+        no_entries=no_entries,
         conflicts=conflicts,
         auto_resolved=session.get("auto_resolved", []),
         conflicted_game_ids=conflicted_game_ids,
         convention_name=session.get("convention_name") or session.get("library_name", ""),
         picked_up=set(session.get("picked_up", [])),
+        not_here=session.get("not_here", []),
+        not_here_warning_dismissed=session.get("not_here_warning_dismissed", False),
         drawing_timestamp=session.get("drawing_timestamp", ""),
     )
 
@@ -496,64 +511,9 @@ def toggle_pickup():
     })
 
 
-@main_bp.route("/drawing/redistribute")
-def redistribute():
-    """Show redistribution page for unclaimed games."""
-    if not session.get("tte_session_id"):
-        flash("Please log in first.", "error")
-        return redirect(url_for("main.login"))
-
-    drawing_state = session.get("drawing_state")
-    if not drawing_state:
-        flash("No active drawing to redistribute.", "error")
-        return redirect(url_for("main.games"))
-
-    picked_up = set(session.get("picked_up", []))
-    winners = get_current_winners(drawing_state)
-    declined = session.get("redistribution_declined", {})
-
-    unclaimed_games = []
-    for item in drawing_state:
-        game = item["game"]
-        game_id = game["id"]
-        winner = winners.get(game_id)
-
-        # Only include games that have a winner but were not picked up
-        if winner and game_id not in picked_up:
-            # Build the full entrant list in shuffled order
-            game_declined = set(declined.get(game_id, []))
-            entrants = []
-            new_winner_badge = session.get("redistribution_winners", {}).get(game_id)
-            for i, entry in enumerate(item["shuffled"]):
-                badge_id = entry.get("badge_id", "")
-                entrants.append({
-                    "name": entry.get("name", "Unknown"),
-                    "badge_id": badge_id,
-                    "position": i + 1,
-                    "is_original_winner": i == item["winner_index"],
-                    "is_declined": badge_id in game_declined,
-                    "is_new_winner": badge_id == new_winner_badge,
-                })
-
-            unclaimed_games.append({
-                "game_name": game.get("name", "Unknown"),
-                "game_id": game_id,
-                "entrants": entrants,
-                "has_new_winner": new_winner_badge is not None,
-            })
-
-    unclaimed_games.sort(key=lambda g: g["game_name"])
-
-    return render_template(
-        "redistribute.html",
-        unclaimed_games=unclaimed_games,
-        convention_name=session.get("convention_name") or session.get("library_name", ""),
-    )
-
-
-@main_bp.route("/drawing/redistribute/claim", methods=["POST"])
-def redistribute_claim():
-    """Mark an entrant as claimed (new winner) or declined for a game."""
+@main_bp.route("/drawing/award-next", methods=["POST"])
+def award_next():
+    """Advance a game to the next entrant in the shuffled list."""
     if not session.get("tte_session_id"):
         return jsonify({"error": "Not authenticated"}), 401
 
@@ -562,38 +522,142 @@ def redistribute_claim():
         return jsonify({"error": "No active drawing"}), 400
 
     data = request.get_json(silent=True)
-    if not data or "game_id" not in data or "badge_id" not in data or "action" not in data:
+    if not data or "game_id" not in data:
         return jsonify({"error": "Invalid request"}), 400
 
     game_id = data["game_id"]
-    badge_id = data["badge_id"]
-    action = data["action"]
+    not_here = set(session.get("not_here", []))
 
-    if action not in ("claim", "decline"):
-        return jsonify({"error": "Invalid action"}), 400
+    found = advance_winner(drawing_state, game_id, not_here=not_here)
+    session["drawing_state"] = drawing_state
 
-    declined = session.get("redistribution_declined", {})
-    redistribution_winners = session.get("redistribution_winners", {})
-
-    if action == "decline":
-        if game_id not in declined:
-            declined[game_id] = []
-        if badge_id not in declined[game_id]:
-            declined[game_id].append(badge_id)
-        # If this person was the new winner, remove them
-        if redistribution_winners.get(game_id) == badge_id:
-            del redistribution_winners[game_id]
-    elif action == "claim":
-        redistribution_winners[game_id] = badge_id
-
-    session["redistribution_declined"] = declined
-    session["redistribution_winners"] = redistribution_winners
+    winners = get_current_winners(drawing_state)
+    winner = winners.get(game_id)
 
     return jsonify({
         "ok": True,
         "game_id": game_id,
+        "has_winner": found,
+        "winner_name": winner.get("name", "Unknown") if winner else None,
+        "winner_badge": winner.get("badge_id", "") if winner else None,
+    })
+
+
+@main_bp.route("/drawing/not-here", methods=["POST"])
+def mark_not_here():
+    """Mark a person as 'not here' — permanently absent for this drawing."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    drawing_state = session.get("drawing_state")
+    if not drawing_state:
+        return jsonify({"error": "No active drawing"}), 400
+
+    data = request.get_json(silent=True)
+    if not data or "badge_id" not in data:
+        return jsonify({"error": "Invalid request"}), 400
+
+    badge_id = data["badge_id"]
+    not_here = session.get("not_here", [])
+
+    if badge_id in not_here:
+        return jsonify({"error": "Already marked as not here"}), 400
+
+    not_here.append(badge_id)
+    session["not_here"] = not_here
+
+    # Dismiss warning if requested
+    if data.get("dismiss_warning"):
+        session["not_here_warning_dismissed"] = True
+
+    # Auto-advance all unpicked-up games won by this person
+    picked_up = set(session.get("picked_up", []))
+    not_here_set = set(not_here)
+    winners = get_current_winners(drawing_state)
+    advanced_games = []
+
+    for game_id, winner in winners.items():
+        if winner and winner.get("badge_id") == badge_id and game_id not in picked_up:
+            advance_winner(drawing_state, game_id, not_here=not_here_set)
+            new_winner = get_current_winners(drawing_state).get(game_id)
+            advanced_games.append({
+                "game_id": game_id,
+                "winner_name": new_winner.get("name", "Unknown") if new_winner else None,
+                "winner_badge": new_winner.get("badge_id", "") if new_winner else None,
+                "has_winner": new_winner is not None,
+            })
+
+    session["drawing_state"] = drawing_state
+
+    return jsonify({
+        "ok": True,
         "badge_id": badge_id,
-        "action": action,
+        "advanced_games": advanced_games,
+    })
+
+
+@main_bp.route("/drawing/redraw-unclaimed", methods=["POST"])
+def redraw_all_unclaimed():
+    """Redraw all unclaimed games with fresh shuffle."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    drawing_state = session.get("drawing_state")
+    if not drawing_state:
+        return jsonify({"error": "No active drawing"}), 400
+
+    data = request.get_json(silent=True) or {}
+    same_rules = data.get("same_rules", False)
+
+    picked_up = set(session.get("picked_up", []))
+    not_here_set = set(session.get("not_here", []))
+    premium_games = session.get("premium_games", [])
+
+    # Determine unclaimed game IDs (have a winner or had one, not picked up)
+    winners = get_current_winners(drawing_state)
+    unclaimed_ids = set()
+    original_winner_badges = set()
+    for item in drawing_state:
+        game_id = item["game"]["id"]
+        if game_id not in picked_up and item["shuffled"]:
+            unclaimed_ids.add(game_id)
+            # Collect original first-draw winners for exclusion
+            if 0 <= item["winner_index"] < len(item["shuffled"]):
+                badge = item["shuffled"][item["winner_index"]].get("badge_id")
+                if badge:
+                    original_winner_badges.add(badge)
+
+    if not unclaimed_ids:
+        return jsonify({"error": "No unclaimed games to redraw"}), 400
+
+    conflicts, auto_resolved = redraw_unclaimed(
+        drawing_state, unclaimed_ids, not_here_set, original_winner_badges,
+        same_rules=same_rules, premium_game_ids=premium_games,
+    )
+
+    session["drawing_state"] = drawing_state
+    if conflicts:
+        session["drawing_conflicts"] = conflicts
+    else:
+        session["drawing_conflicts"] = []
+    if auto_resolved:
+        session["auto_resolved"] = auto_resolved
+    else:
+        session["auto_resolved"] = []
+
+    # Build fresh results
+    results = _build_results_from_session()
+
+    conflicted_game_ids = []
+    for conflict in conflicts:
+        conflicted_game_ids.extend(conflict["game_ids"])
+
+    return jsonify({
+        "ok": True,
+        "results": results,
+        "conflicts": conflicts,
+        "auto_resolved": auto_resolved,
+        "conflicted_game_ids": conflicted_game_ids,
     })
 
 
@@ -612,33 +676,16 @@ def push_to_tte():
         return jsonify({"error": "No games marked as picked up"}), 400
 
     winners = get_current_winners(drawing_state)
-    redistribution_winners = session.get("redistribution_winners", {})
-
-    # Build a map of game_id -> shuffled entries for redistribution lookups
-    game_entries_map = {}
-    for item in drawing_state:
-        game_entries_map[item["game"]["id"]] = item["shuffled"]
 
     # Collect PlayToWin entry IDs for picked-up games
     entries_to_update = []
     for game_id in picked_up:
-        redist_badge = redistribution_winners.get(game_id)
-        if redist_badge:
-            # Redistribution winner: find entry by badge_id
-            for entry in game_entries_map.get(game_id, []):
-                if entry.get("badge_id") == redist_badge:
-                    entries_to_update.append({
-                        "playtowin_id": entry["id"],
-                        "game_id": game_id,
-                    })
-                    break
-        else:
-            winner = winners.get(game_id)
-            if winner:
-                entries_to_update.append({
-                    "playtowin_id": winner["id"],
-                    "game_id": game_id,
-                })
+        winner = winners.get(game_id)
+        if winner:
+            entries_to_update.append({
+                "playtowin_id": winner["id"],
+                "game_id": game_id,
+            })
 
     client = _get_client()
     successes = []
@@ -680,7 +727,6 @@ def export_csv():
     picked_up = set(session.get("picked_up", []))
     premium_games = set(session.get("premium_games", []))
     winners = get_current_winners(drawing_state)
-    redistribution_winners = session.get("redistribution_winners", {})
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -692,14 +738,6 @@ def export_csv():
         game_id = game["id"]
         winner = winners.get(game_id)
         is_premium = game_id in premium_games
-
-        # Check for redistribution winner
-        redist_badge = redistribution_winners.get(game_id)
-        if redist_badge:
-            for entry in item["shuffled"]:
-                if entry.get("badge_id") == redist_badge:
-                    winner = entry
-                    break
 
         rows.append({
             "game_name": game.get("name", "Unknown"),

@@ -1191,7 +1191,7 @@ class TestDrawingRoutes(unittest.TestCase):
             self.assertEqual(sess["picked_up"], [])
 
     @patch("routes.TTEClient")
-    def test_drawing_shows_redistribution_button(self, MockClient):
+    def test_drawing_shows_redraw_button(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
             {"id": "G1", "name": "Catan"},
@@ -1208,10 +1208,101 @@ class TestDrawingRoutes(unittest.TestCase):
             sess["convention_name"] = "GameFest"
 
         resp = self.client.post("/drawing", follow_redirects=True)
-        self.assertIn(b"Start Redistribution", resp.data)
+        self.assertIn(b"Redraw All Unclaimed", resp.data)
 
 
-class TestRedistributionRoutes(unittest.TestCase):
+class TestAwardNextRoute(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def _setup_drawing_state(self, picked_up=None, not_here=None):
+        drawing_state = [
+            {
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "G1", "id": "e2", "name": "Bob"},
+                    {"badge_id": "B3", "librarygame_id": "G1", "id": "e3", "name": "Carol"},
+                ],
+                "winner_index": 0,
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = drawing_state
+            sess["convention_name"] = "GameFest"
+            sess["picked_up"] = picked_up or []
+            sess["not_here"] = not_here or []
+
+    def test_award_next_requires_auth(self):
+        resp = self.client.post("/drawing/award-next",
+                                json={"game_id": "G1"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_award_next_requires_drawing_state(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+        resp = self.client.post("/drawing/award-next",
+                                json={"game_id": "G1"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_award_next_validates_input(self):
+        self._setup_drawing_state()
+        resp = self.client.post("/drawing/award-next",
+                                json={},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_award_next_advances_winner(self):
+        self._setup_drawing_state()
+        resp = self.client.post("/drawing/award-next",
+                                json={"game_id": "G1"},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["has_winner"])
+        self.assertEqual(data["winner_name"], "Bob")
+        self.assertEqual(data["winner_badge"], "B2")
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["drawing_state"][0]["winner_index"], 1)
+
+    def test_award_next_skips_not_here(self):
+        self._setup_drawing_state(not_here=["B2"])
+        resp = self.client.post("/drawing/award-next",
+                                json={"game_id": "G1"},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["has_winner"])
+        self.assertEqual(data["winner_name"], "Carol")
+        self.assertEqual(data["winner_badge"], "B3")
+
+    def test_award_next_exhausted(self):
+        # Only one entrant
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = [{
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [{"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"}],
+                "winner_index": 0,
+            }]
+            sess["not_here"] = []
+        resp = self.client.post("/drawing/award-next",
+                                json={"game_id": "G1"},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertFalse(data["has_winner"])
+
+
+class TestMarkNotHereRoute(unittest.TestCase):
 
     def setUp(self):
         self.app = create_app()
@@ -1220,7 +1311,111 @@ class TestRedistributionRoutes(unittest.TestCase):
         self.client = self.app.test_client()
 
     def _setup_drawing_state(self, picked_up=None):
-        """Helper to set up session with a drawing state."""
+        drawing_state = [
+            {
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "G1", "id": "e2", "name": "Bob"},
+                ],
+                "winner_index": 0,
+            },
+            {
+                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "shuffled": [
+                    {"badge_id": "B1", "librarygame_id": "G2", "id": "e3", "name": "Alice"},
+                    {"badge_id": "B3", "librarygame_id": "G2", "id": "e4", "name": "Carol"},
+                ],
+                "winner_index": 0,
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = drawing_state
+            sess["convention_name"] = "GameFest"
+            sess["picked_up"] = picked_up or []
+            sess["not_here"] = []
+            sess["not_here_warning_dismissed"] = False
+
+    def test_not_here_requires_auth(self):
+        resp = self.client.post("/drawing/not-here",
+                                json={"badge_id": "B1"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_not_here_requires_drawing_state(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+        resp = self.client.post("/drawing/not-here",
+                                json={"badge_id": "B1"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_not_here_validates_input(self):
+        self._setup_drawing_state()
+        resp = self.client.post("/drawing/not-here",
+                                json={},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_not_here_marks_badge_and_advances_games(self):
+        self._setup_drawing_state()
+        resp = self.client.post("/drawing/not-here",
+                                json={"badge_id": "B1"},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["badge_id"], "B1")
+        # B1 won both games, so both should be advanced
+        self.assertEqual(len(data["advanced_games"]), 2)
+
+        with self.client.session_transaction() as sess:
+            self.assertIn("B1", sess["not_here"])
+            # G1: B1 was winner, now B2
+            self.assertEqual(sess["drawing_state"][0]["winner_index"], 1)
+            # G2: B1 was winner, now B3
+            self.assertEqual(sess["drawing_state"][1]["winner_index"], 1)
+
+    def test_not_here_skips_picked_up_games(self):
+        self._setup_drawing_state(picked_up=["G1"])
+        resp = self.client.post("/drawing/not-here",
+                                json={"badge_id": "B1"},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        # G1 is picked up, only G2 should be advanced
+        self.assertEqual(len(data["advanced_games"]), 1)
+        self.assertEqual(data["advanced_games"][0]["game_id"], "G2")
+
+    def test_not_here_duplicate_returns_error(self):
+        self._setup_drawing_state()
+        self.client.post("/drawing/not-here",
+                         json={"badge_id": "B1"},
+                         content_type="application/json")
+        resp = self.client.post("/drawing/not-here",
+                                json={"badge_id": "B1"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_not_here_dismiss_warning(self):
+        self._setup_drawing_state()
+        resp = self.client.post("/drawing/not-here",
+                                json={"badge_id": "B1", "dismiss_warning": True},
+                                content_type="application/json")
+        self.assertTrue(resp.get_json()["ok"])
+        with self.client.session_transaction() as sess:
+            self.assertTrue(sess["not_here_warning_dismissed"])
+
+
+class TestRedrawUnclaimedRoute(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def _setup_drawing_state(self, picked_up=None):
         drawing_state = [
             {
                 "game": {"id": "G1", "name": "Catan"},
@@ -1244,135 +1439,52 @@ class TestRedistributionRoutes(unittest.TestCase):
             sess["drawing_state"] = drawing_state
             sess["convention_name"] = "GameFest"
             sess["picked_up"] = picked_up or []
-            sess["redistribution_declined"] = {}
-            sess["redistribution_winners"] = {}
+            sess["not_here"] = []
+            sess["premium_games"] = []
 
-    def test_redistribute_requires_auth(self):
-        resp = self.client.get("/drawing/redistribute")
-        self.assertEqual(resp.status_code, 302)
-
-    def test_redistribute_requires_drawing_state(self):
-        with self.client.session_transaction() as sess:
-            sess["tte_session_id"] = "session-123"
-        resp = self.client.get("/drawing/redistribute")
-        self.assertEqual(resp.status_code, 302)
-
-    def test_redistribute_shows_unclaimed_games(self):
-        self._setup_drawing_state(picked_up=["G2"])
-        resp = self.client.get("/drawing/redistribute")
-        self.assertEqual(resp.status_code, 200)
-        html = resp.data.decode()
-        # G1 is unclaimed, so it should appear
-        self.assertIn("Catan", html)
-        # G2 is picked up, so it should NOT appear
-        self.assertNotIn("Ticket to Ride", html)
-        # Shows unclaimed count
-        self.assertIn("1", html)
-
-    def test_redistribute_shows_entrant_list(self):
-        self._setup_drawing_state(picked_up=["G2"])
-        resp = self.client.get("/drawing/redistribute")
-        html = resp.data.decode()
-        # All 3 entrants should be listed for Catan
-        self.assertIn("Alice", html)
-        self.assertIn("Bob", html)
-        self.assertIn("Carol", html)
-        # Original winner tag
-        self.assertIn("Original Winner", html)
-
-    def test_redistribute_all_picked_up(self):
-        self._setup_drawing_state(picked_up=["G1", "G2"])
-        resp = self.client.get("/drawing/redistribute")
-        html = resp.data.decode()
-        self.assertIn("All games have been picked up", html)
-
-    def test_redistribute_claim_requires_auth(self):
-        resp = self.client.post("/drawing/redistribute/claim",
-                                json={"game_id": "G1", "badge_id": "B2", "action": "claim"},
+    def test_redraw_requires_auth(self):
+        resp = self.client.post("/drawing/redraw-unclaimed",
+                                json={},
                                 content_type="application/json")
         self.assertEqual(resp.status_code, 401)
 
-    def test_redistribute_claim_requires_drawing_state(self):
+    def test_redraw_requires_drawing_state(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-        resp = self.client.post("/drawing/redistribute/claim",
-                                json={"game_id": "G1", "badge_id": "B2", "action": "claim"},
+        resp = self.client.post("/drawing/redraw-unclaimed",
+                                json={},
                                 content_type="application/json")
         self.assertEqual(resp.status_code, 400)
 
-    def test_redistribute_claim_validates_input(self):
-        self._setup_drawing_state()
-        resp = self.client.post("/drawing/redistribute/claim",
-                                json={"game_id": "G1"},
+    def test_redraw_all_picked_up_returns_error(self):
+        self._setup_drawing_state(picked_up=["G1", "G2"])
+        resp = self.client.post("/drawing/redraw-unclaimed",
+                                json={},
                                 content_type="application/json")
         self.assertEqual(resp.status_code, 400)
+        self.assertIn("No unclaimed", resp.get_json()["error"])
 
-    def test_redistribute_claim_invalid_action(self):
-        self._setup_drawing_state()
-        resp = self.client.post("/drawing/redistribute/claim",
-                                json={"game_id": "G1", "badge_id": "B2", "action": "invalid"},
-                                content_type="application/json")
-        self.assertEqual(resp.status_code, 400)
-
-    def test_redistribute_claim_marks_winner(self):
-        self._setup_drawing_state()
-        resp = self.client.post("/drawing/redistribute/claim",
-                                json={"game_id": "G1", "badge_id": "B2", "action": "claim"},
+    def test_redraw_returns_results(self):
+        self._setup_drawing_state(picked_up=["G2"])
+        resp = self.client.post("/drawing/redraw-unclaimed",
+                                json={},
                                 content_type="application/json")
         data = resp.get_json()
         self.assertTrue(data["ok"])
-        self.assertEqual(data["action"], "claim")
+        self.assertIn("results", data)
+        self.assertIsInstance(data["conflicts"], list)
 
-        with self.client.session_transaction() as sess:
-            self.assertEqual(sess["redistribution_winners"]["G1"], "B2")
-
-    def test_redistribute_decline_stores_in_session(self):
-        self._setup_drawing_state()
-        resp = self.client.post("/drawing/redistribute/claim",
-                                json={"game_id": "G1", "badge_id": "B1", "action": "decline"},
-                                content_type="application/json")
-        data = resp.get_json()
-        self.assertTrue(data["ok"])
-
-        with self.client.session_transaction() as sess:
-            self.assertIn("B1", sess["redistribution_declined"]["G1"])
-
-    def test_redistribute_decline_removes_winner(self):
-        self._setup_drawing_state()
-        # First claim B2
-        self.client.post("/drawing/redistribute/claim",
-                         json={"game_id": "G1", "badge_id": "B2", "action": "claim"},
-                         content_type="application/json")
-        # Then decline B2
-        self.client.post("/drawing/redistribute/claim",
-                         json={"game_id": "G1", "badge_id": "B2", "action": "decline"},
-                         content_type="application/json")
-
-        with self.client.session_transaction() as sess:
-            self.assertNotIn("G1", sess["redistribution_winners"])
-
-    def test_redistribute_page_shows_declined(self):
+    def test_redraw_updates_session(self):
         self._setup_drawing_state(picked_up=["G2"])
-        # Decline B1
-        self.client.post("/drawing/redistribute/claim",
-                         json={"game_id": "G1", "badge_id": "B1", "action": "decline"},
+        self.client.post("/drawing/redraw-unclaimed",
+                         json={},
                          content_type="application/json")
-        resp = self.client.get("/drawing/redistribute")
-        html = resp.data.decode()
-        self.assertIn("Declined / Absent", html)
-
-    def test_redistribute_page_shows_new_winner(self):
-        self._setup_drawing_state(picked_up=["G2"])
-        # Claim B2 as new winner
-        self.client.post("/drawing/redistribute/claim",
-                         json={"game_id": "G1", "badge_id": "B2", "action": "claim"},
-                         content_type="application/json")
-        resp = self.client.get("/drawing/redistribute")
-        html = resp.data.decode()
-        self.assertIn("New Winner", html)
+        with self.client.session_transaction() as sess:
+            # drawing_state should be updated (shuffled list changed)
+            self.assertIsNotNone(sess["drawing_state"])
 
     @patch("routes.TTEClient")
-    def test_rerun_clears_redistribution(self, MockClient):
+    def test_rerun_clears_not_here(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
             {"id": "G1", "name": "Catan"},
@@ -1387,14 +1499,14 @@ class TestRedistributionRoutes(unittest.TestCase):
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
-            sess["redistribution_declined"] = {"G1": ["B1"]}
-            sess["redistribution_winners"] = {"G1": "B2"}
+            sess["not_here"] = ["B1"]
+            sess["not_here_warning_dismissed"] = True
 
         self.client.post("/drawing")
 
         with self.client.session_transaction() as sess:
-            self.assertEqual(sess["redistribution_declined"], {})
-            self.assertEqual(sess["redistribution_winners"], {})
+            self.assertEqual(sess["not_here"], [])
+            self.assertFalse(sess["not_here_warning_dismissed"])
 
 
 class TestPushToTTE(unittest.TestCase):
@@ -1405,7 +1517,7 @@ class TestPushToTTE(unittest.TestCase):
         self.app.config["TTE_API_KEY"] = "test-key"
         self.client = self.app.test_client()
 
-    def _setup_session(self, picked_up=None, redist_winners=None):
+    def _setup_session(self, picked_up=None):
         drawing_state = [
             {
                 "game": {"id": "G1", "name": "Catan"},
@@ -1427,7 +1539,6 @@ class TestPushToTTE(unittest.TestCase):
             sess["tte_session_id"] = "session-123"
             sess["drawing_state"] = drawing_state
             sess["picked_up"] = picked_up or []
-            sess["redistribution_winners"] = redist_winners or {}
 
     def test_push_requires_auth(self):
         resp = self.client.post("/drawing/push",
@@ -1471,12 +1582,26 @@ class TestPushToTTE(unittest.TestCase):
             self.assertEqual(call[0][1], {"win": 1})
 
     @patch("routes.TTEClient")
-    def test_push_uses_redistribution_winner(self, MockClient):
+    def test_push_uses_advanced_winner(self, MockClient):
         mock_instance = MagicMock()
         MockClient.return_value = mock_instance
 
-        # G1 was redistributed to B2 (entry e2)
-        self._setup_session(picked_up=["G1"], redist_winners={"G1": "B2"})
+        # G1 winner was advanced to index 1 (Bob), simulating award-next
+        drawing_state = [
+            {
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "G1", "id": "e2", "name": "Bob"},
+                ],
+                "winner_index": 1,
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = drawing_state
+            sess["picked_up"] = ["G1"]
+
         resp = self.client.post("/drawing/push",
                                 content_type="application/json")
         data = resp.get_json()
@@ -1534,7 +1659,7 @@ class TestCSVExport(unittest.TestCase):
         self.app.config["TTE_API_KEY"] = "test-key"
         self.client = self.app.test_client()
 
-    def _setup_session(self, picked_up=None, premium=None, redist_winners=None,
+    def _setup_session(self, picked_up=None, premium=None,
                        convention_name="PawCon 2026"):
         drawing_state = [
             {
@@ -1559,7 +1684,6 @@ class TestCSVExport(unittest.TestCase):
             sess["drawing_state"] = drawing_state
             sess["picked_up"] = picked_up or []
             sess["premium_games"] = premium or []
-            sess["redistribution_winners"] = redist_winners or {}
 
     def test_export_requires_auth(self):
         resp = self.client.get("/drawing/export")
@@ -1649,9 +1773,24 @@ class TestCSVExport(unittest.TestCase):
         # Ticket to Ride not picked up -> No
         self.assertTrue(lines[2].endswith(",No"))
 
-    def test_export_redistribution_winner(self):
-        # G1 redistribution winner is Bob (B2)
-        self._setup_session(redist_winners={"G1": "B2"})
+    def test_export_advanced_winner(self):
+        # G1 winner was advanced to index 1 (Bob)
+        drawing_state = [
+            {
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "G1", "id": "e2", "name": "Bob"},
+                ],
+                "winner_index": 1,
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["convention_name"] = "PawCon 2026"
+            sess["drawing_state"] = drawing_state
+            sess["picked_up"] = []
+            sess["premium_games"] = []
         resp = self.client.get("/drawing/export")
         lines = resp.data.decode().strip().split("\r\n")
         # Winner should be Bob instead of Alice

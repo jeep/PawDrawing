@@ -91,15 +91,23 @@ def resolve_premium_auto(conflicts, premium_game_ids):
     return resolved, remaining
 
 
-def advance_winner(drawing_state, game_id):
+def advance_winner(drawing_state, game_id, not_here=None):
     """Advance to the next person in the shuffled list for a game.
 
+    Skips anyone in the not_here set (badge_ids of absent people).
     Returns True if a new winner was found, False if the list is exhausted.
     """
+    if not_here is None:
+        not_here = set()
     for item in drawing_state:
         if item["game"]["id"] == game_id:
-            item["winner_index"] += 1
-            return item["winner_index"] < len(item["shuffled"])
+            while True:
+                item["winner_index"] += 1
+                if item["winner_index"] >= len(item["shuffled"]):
+                    return False
+                candidate = item["shuffled"][item["winner_index"]]
+                if candidate.get("badge_id") not in not_here:
+                    return True
     return False
 
 
@@ -207,3 +215,106 @@ def run_drawing(game_data, premium_game_ids, rng=None):
             return drawing_state, conflicts_needing_input, auto_resolved
 
     return drawing_state, [], auto_resolved
+
+
+def redraw_unclaimed(drawing_state, unclaimed_game_ids, not_here, original_winners,
+                     same_rules=False, premium_game_ids=None, rng=None):
+    """Redraw only the unclaimed games with a fresh shuffle.
+
+    Args:
+        drawing_state: the full drawing state list
+        unclaimed_game_ids: set of game_ids to redraw
+        not_here: set of badge_ids marked absent
+        original_winners: set of badge_ids who won in the first drawing
+        same_rules: if True, apply one-win conflict resolution among redraw winners
+        premium_game_ids: list of premium game IDs (used only with same_rules)
+        rng: optional random.Random instance for reproducibility
+
+    Returns:
+        conflicts: list of conflict dicts if same_rules produced unresolved conflicts
+        auto_resolved: list of auto-resolved premium assignments (same_rules only)
+    """
+    if rng is None:
+        rng = random.Random()
+
+    exclude = not_here | original_winners
+
+    for item in drawing_state:
+        game_id = item["game"]["id"]
+        if game_id not in unclaimed_game_ids:
+            continue
+
+        # Filter to eligible entrants and re-shuffle
+        eligible = [e for e in item["shuffled"] if e.get("badge_id") not in exclude]
+        rng.shuffle(eligible)
+        item["shuffled"] = eligible
+        item["winner_index"] = 0 if eligible else -1
+
+    if not same_rules:
+        return [], []
+
+    # Apply one-win conflict resolution among redraw winners
+    premium_set = set(premium_game_ids) if premium_game_ids else set()
+
+    # Only detect conflicts among the redrawn games
+    redraw_state = [item for item in drawing_state if item["game"]["id"] in unclaimed_game_ids]
+
+    auto_resolved = []
+    max_iterations = 100
+
+    for _ in range(max_iterations):
+        conflicts = detect_conflicts(redraw_state)
+        if not conflicts:
+            break
+
+        resolved, remaining = resolve_premium_auto(conflicts, premium_set)
+
+        if resolved:
+            winners = get_current_winners(redraw_state)
+            game_name_map = {
+                item["game"]["id"]: item["game"].get("name", "Unknown")
+                for item in redraw_state
+            }
+            for badge_id, kept_game_id in resolved.items():
+                their_games = conflicts[badge_id]
+                relinquished = [gid for gid in their_games if gid != kept_game_id]
+                winner_name = "Unknown"
+                w = winners.get(kept_game_id)
+                if w and w.get("name"):
+                    winner_name = w["name"]
+                auto_resolved.append({
+                    "badge_id": badge_id,
+                    "winner_name": winner_name,
+                    "kept_game_id": kept_game_id,
+                    "kept_game_name": game_name_map.get(kept_game_id, "Unknown"),
+                    "relinquished": relinquished,
+                    "relinquished_names": [game_name_map.get(gid, "Unknown") for gid in relinquished],
+                })
+            apply_resolution(redraw_state, resolved, premium_set)
+            continue
+
+        if remaining:
+            winners = get_current_winners(redraw_state)
+            game_name_map = {
+                item["game"]["id"]: item["game"].get("name", "Unknown")
+                for item in redraw_state
+            }
+            conflicts_out = []
+            for badge_id, game_ids in remaining.items():
+                premium_wins = [gid for gid in game_ids if gid in premium_set]
+                winner_name = "Unknown"
+                for gid in game_ids:
+                    w = winners.get(gid)
+                    if w and w.get("name"):
+                        winner_name = w["name"]
+                        break
+                conflicts_out.append({
+                    "badge_id": badge_id,
+                    "winner_name": winner_name,
+                    "game_ids": game_ids,
+                    "game_names": {gid: game_name_map.get(gid, "Unknown") for gid in game_ids},
+                    "is_premium_conflict": len(premium_wins) > 1,
+                })
+            return conflicts_out, auto_resolved
+
+    return [], auto_resolved

@@ -55,7 +55,6 @@
     .results-table tr:hover td { background: #f8f9fa; }
     .results-table tr.premium td { background: #fef9e7; }
     .results-table tr.premium:hover td { background: #fdf2d0; }
-    .results-table tr.no-winner td { color: #999; font-style: italic; }
     .results-table tr.in-conflict td {
         background: #fff3cd;
         border-left: 3px solid #ffc107;
@@ -258,9 +257,6 @@
     .view-panel { display: none; }
     .view-panel.active { display: block; }
 
-    .results-table tr.picked-up td { background: #d4edda; }
-    .results-table tr.picked-up:hover td { background: #c3e6cb; }
-    .results-table tr.picked-up.premium td { background: #d4edda; }
     .pickup-btn {
         background: none;
         border: 1px solid #aaa;
@@ -301,6 +297,124 @@
     .push-result.success { border-left: 4px solid #27ae60; }
     .push-result.partial { border-left: 4px solid #f39c12; }
     .push-result.error { border-left: 4px solid #e74c3c; }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin: 1.5rem 0 0.5rem 0;
+        flex-wrap: wrap;
+    }
+    .section-header:first-of-type { margin-top: 0; }
+    .section-header h3 { margin: 0; color: #2c3e50; font-size: 1.05rem; }
+    .section-count {
+        font-size: 0.85rem;
+        color: #888;
+        background: #f0f0f0;
+        padding: 0.15rem 0.6rem;
+        border-radius: 12px;
+    }
+
+    .award-next-btn {
+        background: #e67e22;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 0.25rem 0.6rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .award-next-btn:hover { background: #d35400; }
+    .award-next-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+    .not-here-btn {
+        background: none;
+        border: 1px solid #e74c3c;
+        border-radius: 4px;
+        padding: 0.25rem 0.6rem;
+        font-size: 0.75rem;
+        cursor: pointer;
+        color: #e74c3c;
+    }
+    .not-here-btn:hover { background: #fdecea; }
+    .not-here-btn:disabled { background: #eee; color: #aaa; border-color: #ccc; cursor: not-allowed; }
+    .not-here-badge {
+        display: inline-block;
+        background: #e74c3c;
+        color: white;
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 0.1rem 0.4rem;
+        border-radius: 3px;
+        margin-left: 0.3rem;
+        text-transform: uppercase;
+    }
+
+    .redraw-bar {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        margin: 0.5rem 0 0 0;
+        flex-wrap: wrap;
+    }
+    .redraw-btn {
+        background: #e67e22;
+        color: white;
+        border: none;
+        padding: 0.5rem 1.2rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+    .redraw-btn:hover { background: #d35400; }
+    .redraw-btn:disabled { background: #ccc; cursor: not-allowed; }
+    .redraw-mode {
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .picked-up-section .results-table tr td { background: #d4edda; }
+    .picked-up-section .results-table tr:hover td { background: #c3e6cb; }
+    .no-entries-section .results-table tr td { color: #999; font-style: italic; }
+
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box {
+        background: white;
+        border-radius: 8px;
+        padding: 1.5rem 2rem;
+        max-width: 460px;
+        width: 90%;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+    }
+    .modal-box h3 { margin: 0 0 0.75rem 0; color: #c0392b; }
+    .modal-box p { font-size: 0.95rem; margin: 0 0 1rem 0; color: #333; }
+    .modal-box label { font-size: 0.85rem; color: #555; display: flex; align-items: center; gap: 0.4rem; cursor: pointer; margin-bottom: 1rem; }
+    .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
+    .modal-actions button {
+        padding: 0.5rem 1.2rem;
+        border-radius: 6px;
+        border: none;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .modal-cancel { background: #eee; color: #333; }
+    .modal-cancel:hover { background: #ddd; }
+    .modal-confirm { background: #e74c3c; color: white; }
+    .modal-confirm:hover { background: #c0392b; }
 </style>
 {% endblock %}
 
@@ -315,7 +429,6 @@
     <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin-left:auto;" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running...';">
         <button type="submit" class="rerun-btn">Re-run Drawing</button>
     </form>
-    <a href="{{ url_for('main.redistribute') }}" class="rerun-btn" style="text-decoration:none;">Start Redistribution</a>
     <button class="push-btn" id="push-btn" onclick="pushToTTE()">Push to TTE</button>
     <a href="{{ url_for('main.export_csv') }}" class="rerun-btn" style="text-decoration:none;">Export CSV</a>
 </div>
@@ -407,7 +520,20 @@
 </div>
 
 <div class="view-panel active" id="panel-by-game">
-<table class="results-table" id="results-table">
+
+{# Awaiting Pickup #}
+<div class="section-header">
+    <h3>Awaiting Pickup</h3>
+    <span class="section-count" id="awaiting-count">{{ awaiting|length }}</span>
+</div>
+{% if awaiting %}
+<div class="redraw-bar" id="redraw-bar">
+    <button class="redraw-btn" id="redraw-btn" onclick="redrawUnclaimed()">Redraw All Unclaimed</button>
+    <label class="redraw-mode">
+        <input type="checkbox" id="redraw-same-rules"> Apply one-win rules
+    </label>
+</div>
+<table class="results-table" id="awaiting-table">
     <thead>
         <tr>
             <th>Game</th>
@@ -415,44 +541,106 @@
             <th>Badge</th>
             <th>Entries</th>
             <th>Draw Position</th>
-            <th>Status</th>
-            <th>Pickup</th>
+            <th>Actions</th>
         </tr>
     </thead>
     <tbody>
-        {% for r in results %}
-        <tr class="{{ 'premium' if r.is_premium else '' }}{{ ' no-winner' if not r.winner_name }}{{ ' in-conflict' if r.game_id in conflicted_game_ids }}{{ ' picked-up' if r.game_id in picked_up }}"
-            data-game-id="{{ r.game_id }}">
+        {% for r in awaiting %}
+        <tr class="{{ 'premium' if r.is_premium }}{{ ' in-conflict' if r.game_id in conflicted_game_ids }}"
+            data-game-id="{{ r.game_id }}" data-badge-id="{{ r.winner_badge }}">
             <td>
                 {{ r.game_name }}
                 {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
             </td>
-            <td>{{ r.winner_name or 'No entries' }}</td>
+            <td>{{ r.winner_name }}</td>
             <td>{{ r.winner_badge or '—' }}</td>
             <td>{{ r.total_entries }}</td>
-            <td>{{ (r.winner_index + 1) if r.winner_name else '—' }} / {{ r.total_entries }}</td>
+            <td>{{ r.winner_index + 1 }} / {{ r.total_entries }}</td>
             <td>
-                {% if r.game_id in conflicted_game_ids %}
-                    <span class="conflict-badge">Conflict</span>
-                {% elif r.winner_name %}
-                    ✓
-                {% else %}
-                    —
-                {% endif %}
-            </td>
-            <td>
-                {% if r.winner_name %}
-                <button class="pickup-btn{{ ' picked' if r.game_id in picked_up else '' }}"
-                        data-game-id="{{ r.game_id }}"
-                        onclick="togglePickup('{{ r.game_id }}')">{{ '✓ Picked Up' if r.game_id in picked_up else 'Mark Picked Up' }}</button>
-                {% else %}
-                    —
+                <button class="pickup-btn" data-game-id="{{ r.game_id }}" onclick="togglePickup('{{ r.game_id }}')">Mark Picked Up</button>
+                <button class="award-next-btn" data-game-id="{{ r.game_id }}" onclick="awardNext('{{ r.game_id }}')">Award Next</button>
+                {% if r.winner_badge and r.winner_badge not in not_here %}
+                <button class="not-here-btn" data-badge-id="{{ r.winner_badge }}" onclick="confirmNotHere('{{ r.winner_badge }}', '{{ r.winner_name|replace("'", "\\'") }}')">Not Here</button>
+                {% elif r.winner_badge and r.winner_badge in not_here %}
+                <span class="not-here-badge">Not Here</span>
                 {% endif %}
             </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+{% else %}
+<p style="color:#888;font-style:italic;margin:0.5rem 0;">All games have been picked up or have no entries.</p>
+{% endif %}
+
+{# Picked Up #}
+<div class="section-header">
+    <h3>Picked Up</h3>
+    <span class="section-count" id="picked-up-count-section">{{ picked_up_list|length }}</span>
+</div>
+<div class="picked-up-section">
+{% if picked_up_list %}
+<table class="results-table" id="picked-up-table">
+    <thead>
+        <tr>
+            <th>Game</th>
+            <th>Winner</th>
+            <th>Badge</th>
+            <th>Entries</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in picked_up_list %}
+        <tr class="{{ 'premium' if r.is_premium }}" data-game-id="{{ r.game_id }}">
+            <td>
+                {{ r.game_name }}
+                {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
+            </td>
+            <td>{{ r.winner_name }}</td>
+            <td>{{ r.winner_badge or '—' }}</td>
+            <td>{{ r.total_entries }}</td>
+            <td>
+                <button class="pickup-btn picked" data-game-id="{{ r.game_id }}" onclick="togglePickup('{{ r.game_id }}')">✓ Picked Up</button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p style="color:#888;font-style:italic;margin:0.5rem 0;">No games picked up yet.</p>
+{% endif %}
+</div>
+
+{# No Entries #}
+{% if no_entries %}
+<div class="section-header">
+    <h3>No Entries</h3>
+    <span class="section-count">{{ no_entries|length }}</span>
+</div>
+<div class="no-entries-section">
+<table class="results-table" id="no-entries-table">
+    <thead>
+        <tr>
+            <th>Game</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in no_entries %}
+        <tr>
+            <td>
+                {{ r.game_name }}
+                {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
+            </td>
+            <td>No entries</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+
 </div>
 
 <div class="view-panel" id="panel-by-winner">
@@ -462,23 +650,33 @@
             <th>Winner</th>
             <th>Badge</th>
             <th>Game Won</th>
+            <th>Status</th>
             <th>Pickup</th>
         </tr>
     </thead>
     <tbody>
         {% set winners_list = results | selectattr('winner_name') | sort(attribute='winner_name') | list %}
         {% for r in winners_list %}
-        <tr class="{{ 'premium' if r.is_premium else '' }}{{ ' in-conflict' if r.game_id in conflicted_game_ids }}{{ ' picked-up' if r.game_id in picked_up }}">
-            <td>{{ r.winner_name }}</td>
+        <tr class="{{ 'premium' if r.is_premium }}{{ ' in-conflict' if r.game_id in conflicted_game_ids }}">
+            <td>
+                {{ r.winner_name }}
+                {% if r.winner_badge in not_here %}<span class="not-here-badge">Not Here</span>{% endif %}
+            </td>
             <td>{{ r.winner_badge or '—' }}</td>
             <td>
                 {{ r.game_name }}
                 {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
             </td>
             <td>
-                <button class="pickup-btn{{ ' picked' if r.game_id in picked_up else '' }}"
+                {% if r.is_picked_up %}✓ Picked Up
+                {% elif r.game_id in conflicted_game_ids %}<span class="conflict-badge">Conflict</span>
+                {% else %}Awaiting
+                {% endif %}
+            </td>
+            <td>
+                <button class="pickup-btn{{ ' picked' if r.is_picked_up }}"
                         data-game-id="{{ r.game_id }}"
-                        onclick="togglePickup('{{ r.game_id }}')">{{ '✓ Picked Up' if r.game_id in picked_up else 'Mark Picked Up' }}</button>
+                        onclick="togglePickup('{{ r.game_id }}')">{{ '✓ Picked Up' if r.is_picked_up else 'Mark Picked Up' }}</button>
             </td>
         </tr>
         {% endfor %}
@@ -486,10 +684,29 @@
 </table>
 </div>
 
+<div class="modal-overlay" id="not-here-modal">
+    <div class="modal-box">
+        <h3>Mark as Not Here?</h3>
+        <p>This will permanently remove <strong id="modal-person-name"></strong> from all unclaimed games. Their winning games will advance to the next entrant.</p>
+        <p>If this person might still show up, use <strong>Award Next</strong> instead — that only skips them for one game.</p>
+        <label>
+            <input type="checkbox" id="modal-dismiss-checkbox"> Don't show this warning again for this drawing
+        </label>
+        <div class="modal-actions">
+            <button class="modal-cancel" onclick="closeNotHereModal()">Cancel</button>
+            <button class="modal-confirm" id="modal-confirm-btn" onclick="executeNotHere()">Mark Not Here</button>
+        </div>
+    </div>
+</div>
+
 <script>
 (function() {
-    const resolutions = {};
-    const totalConflicts = document.querySelectorAll('.conflict-item').length;
+    var resolutions = {};
+    var totalConflicts = document.querySelectorAll('.conflict-item').length;
+    var notHereSet = new Set({{ not_here | tojson }});
+    var warningDismissed = {{ 'true' if not_here_warning_dismissed else 'false' }};
+    var pendingNotHereBadge = null;
+    var pendingNotHereName = null;
 
     window.switchView = function(view) {
         document.getElementById('tab-by-game').classList.toggle('active', view === 'by-game');
@@ -513,16 +730,7 @@
                 btns.forEach(function(b) { b.disabled = false; b.textContent = 'Mark Picked Up'; });
                 return;
             }
-            // Update all pickup buttons for this game (in both tables)
-            document.querySelectorAll('.pickup-btn[data-game-id="' + gameId + '"]').forEach(function(btn) {
-                btn.disabled = false;
-                btn.classList.toggle('picked', data.is_picked_up);
-                btn.textContent = data.is_picked_up ? '✓ Picked Up' : 'Mark Picked Up';
-                // Toggle picked-up class on the parent row
-                var row = btn.closest('tr');
-                if (row) row.classList.toggle('picked-up', data.is_picked_up);
-            });
-            document.getElementById('pickup-count').textContent = data.picked_up_count;
+            window.location.reload();
         })
         .catch(function() {
             btns.forEach(function(b) {
@@ -534,31 +742,138 @@
         });
     };
 
+    window.awardNext = function(gameId) {
+        var btn = document.querySelector('.award-next-btn[data-game-id="' + gameId + '"]');
+        if (btn) { btn.disabled = true; btn.textContent = 'Advancing...'; }
+
+        fetch('{{ url_for("main.award_next") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({game_id: gameId})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.ok) {
+                if (btn) { btn.disabled = false; btn.textContent = 'Award Next'; }
+                if (data.error) alert(data.error);
+                return;
+            }
+            window.location.reload();
+        })
+        .catch(function() {
+            if (btn) { btn.disabled = false; btn.textContent = 'Error — Retry'; }
+        });
+    };
+
+    window.confirmNotHere = function(badgeId, personName) {
+        if (warningDismissed) {
+            doNotHere(badgeId, false);
+            return;
+        }
+        pendingNotHereBadge = badgeId;
+        pendingNotHereName = personName;
+        document.getElementById('modal-person-name').textContent = personName;
+        document.getElementById('modal-dismiss-checkbox').checked = false;
+        document.getElementById('not-here-modal').classList.add('active');
+    };
+
+    window.closeNotHereModal = function() {
+        document.getElementById('not-here-modal').classList.remove('active');
+        pendingNotHereBadge = null;
+        pendingNotHereName = null;
+    };
+
+    window.executeNotHere = function() {
+        var dismissWarning = document.getElementById('modal-dismiss-checkbox').checked;
+        if (dismissWarning) warningDismissed = true;
+        var badge = pendingNotHereBadge;
+        closeNotHereModal();
+        doNotHere(badge, dismissWarning);
+    };
+
+    function doNotHere(badgeId, dismissWarning) {
+        document.querySelectorAll('.not-here-btn[data-badge-id="' + badgeId + '"]').forEach(function(b) {
+            b.disabled = true;
+            b.textContent = 'Marking...';
+        });
+
+        fetch('{{ url_for("main.mark_not_here") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({badge_id: badgeId, dismiss_warning: dismissWarning})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.ok) {
+                document.querySelectorAll('.not-here-btn[data-badge-id="' + badgeId + '"]').forEach(function(b) {
+                    b.disabled = false;
+                    b.textContent = 'Not Here';
+                });
+                if (data.error) alert(data.error);
+                return;
+            }
+            notHereSet.add(badgeId);
+            window.location.reload();
+        })
+        .catch(function() {
+            document.querySelectorAll('.not-here-btn[data-badge-id="' + badgeId + '"]').forEach(function(b) {
+                b.disabled = false;
+                b.textContent = 'Not Here';
+            });
+        });
+    }
+
+    window.redrawUnclaimed = function() {
+        var sameRules = document.getElementById('redraw-same-rules').checked;
+        if (!confirm('This will redraw all unclaimed games with a fresh shuffle. Proceed?')) return;
+
+        var btn = document.getElementById('redraw-btn');
+        btn.disabled = true;
+        btn.textContent = 'Redrawing...';
+
+        fetch('{{ url_for("main.redraw_all_unclaimed") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({same_rules: sameRules})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.ok) {
+                btn.disabled = false;
+                btn.textContent = 'Redraw All Unclaimed';
+                alert('Error: ' + (data.error || 'Unknown'));
+                return;
+            }
+            window.location.reload();
+        })
+        .catch(function() {
+            btn.disabled = false;
+            btn.textContent = 'Redraw All Unclaimed';
+            alert('Network error — please try again.');
+        });
+    };
+
     window.selectResolution = function(badgeId, gameId) {
         resolutions[badgeId] = gameId;
-
-        // Highlight selected radio label
-        const item = document.querySelector('.conflict-item[data-badge-id="' + badgeId + '"]');
+        var item = document.querySelector('.conflict-item[data-badge-id="' + badgeId + '"]');
         if (item) {
             item.querySelectorAll('.conflict-choice label').forEach(function(lbl) {
                 lbl.classList.toggle('selected', lbl.querySelector('input').value === gameId);
             });
         }
-
-        // Enable resolve button when all conflicts have a selection
-        const resolvedCount = Object.keys(resolutions).length;
+        var resolvedCount = Object.keys(resolutions).length;
         document.getElementById('resolve-btn').disabled = (resolvedCount < totalConflicts);
     };
 
     window.submitResolutions = function() {
-        const btn = document.getElementById('resolve-btn');
-        const status = document.getElementById('resolve-status');
+        var btn = document.getElementById('resolve-btn');
+        var status = document.getElementById('resolve-status');
         btn.disabled = true;
         status.style.display = 'inline';
         status.textContent = 'Resolving...';
         status.style.color = '#856404';
 
-        const resList = Object.entries(resolutions).map(function(pair) {
+        var resList = Object.entries(resolutions).map(function(pair) {
             return { badge_id: pair[0], keep_game_id: pair[1] };
         });
 
@@ -575,24 +890,8 @@
                 btn.disabled = false;
                 return;
             }
-
-            // Clear resolutions for next round
             Object.keys(resolutions).forEach(function(k) { delete resolutions[k]; });
-
-            // Update the results table
-            updateResultsTable(data.results, data.conflicts);
-
-            if (data.conflicts && data.conflicts.length > 0) {
-                // Rebuild the conflict panel inline for cascading conflicts
-                rebuildConflictPanels(data.conflicts);
-                status.textContent = 'New cascading conflicts detected — please resolve.';
-                status.style.color = '#856404';
-            } else {
-                // All resolved!
-                var section = document.getElementById('conflict-section');
-                section.innerHTML =
-                    '<div class="all-resolved"><h3>All conflicts resolved! Every game has a unique winner.</h3></div>';
-            }
+            window.location.reload();
         })
         .catch(function() {
             status.textContent = 'Network error — please try again.';
@@ -600,134 +899,6 @@
             btn.disabled = false;
         });
     };
-
-    function updateResultsTable(results, conflicts) {
-        var conflictedIds = new Set();
-        if (conflicts) {
-            conflicts.forEach(function(c) {
-                c.game_ids.forEach(function(gid) { conflictedIds.add(gid); });
-            });
-        }
-
-        var tbody = document.querySelector('#results-table tbody');
-        tbody.innerHTML = '';
-        results.forEach(function(r) {
-            var tr = document.createElement('tr');
-            if (r.is_premium) tr.classList.add('premium');
-            if (!r.winner_name) tr.classList.add('no-winner');
-            if (conflictedIds.has(r.game_id)) tr.classList.add('in-conflict');
-            tr.dataset.gameId = r.game_id;
-
-            var statusCell = '';
-            if (conflictedIds.has(r.game_id)) {
-                statusCell = '<span class="conflict-badge">Conflict</span>';
-            } else if (r.winner_name) {
-                statusCell = '✓';
-            } else {
-                statusCell = '—';
-            }
-
-            var pickupCell = '—';
-            if (r.winner_name) {
-                pickupCell = '<button class="pickup-btn" data-game-id="' + escAttr(r.game_id) +
-                    '" onclick="togglePickup(\'' + escAttr(r.game_id) + '\')">Mark Picked Up</button>';
-            }
-
-            tr.innerHTML =
-                '<td>' + escHtml(r.game_name) +
-                    (r.is_premium ? ' <span class="premium-label">Premium</span>' : '') +
-                '</td>' +
-                '<td>' + escHtml(r.winner_name || 'No entries') + '</td>' +
-                '<td>' + escHtml(r.winner_badge || '—') + '</td>' +
-                '<td>' + r.total_entries + '</td>' +
-                '<td>' + (r.winner_name ? ((r.winner_index + 1) + ' / ' + r.total_entries) : '—') + '</td>' +
-                '<td>' + statusCell + '</td>' +
-                '<td>' + pickupCell + '</td>';
-            tbody.appendChild(tr);
-        });
-
-        updateWinnerTable(results, conflictedIds);
-    }
-
-    function updateWinnerTable(results, conflictedIds) {
-        var tbody = document.querySelector('#winner-table tbody');
-        tbody.innerHTML = '';
-        var winners = results.filter(function(r) { return r.winner_name; });
-        winners.sort(function(a, b) {
-            return a.winner_name.localeCompare(b.winner_name);
-        });
-        winners.forEach(function(r) {
-            var tr = document.createElement('tr');
-            if (r.is_premium) tr.classList.add('premium');
-            if (conflictedIds.has(r.game_id)) tr.classList.add('in-conflict');
-            tr.innerHTML =
-                '<td>' + escHtml(r.winner_name) + '</td>' +
-                '<td>' + escHtml(r.winner_badge || '—') + '</td>' +
-                '<td>' + escHtml(r.game_name) +
-                    (r.is_premium ? ' <span class="premium-label">Premium</span>' : '') +
-                '</td>' +
-                '<td><button class="pickup-btn" data-game-id="' + escAttr(r.game_id) +
-                    '" onclick="togglePickup(\'' + escAttr(r.game_id) + '\')">Mark Picked Up</button></td>';
-            tbody.appendChild(tr);
-        });
-    }
-
-    function rebuildConflictPanels(conflicts) {
-        var section = document.getElementById('conflict-section');
-        var html = '';
-
-        var premiumConflicts = conflicts.filter(function(c) { return c.is_premium_conflict; });
-        var standardConflicts = conflicts.filter(function(c) { return !c.is_premium_conflict; });
-
-        if (premiumConflicts.length > 0) {
-            html += '<div class="conflict-panel premium-panel" id="premium-conflict-panel">';
-            html += '<h3>Premium Game Conflicts</h3>';
-            html += '<p class="subtitle">These people won multiple premium games. Choose which premium game each person keeps.</p>';
-            premiumConflicts.forEach(function(c) {
-                html += buildConflictItem(c, true);
-            });
-            html += '</div>';
-        }
-
-        if (standardConflicts.length > 0) {
-            html += '<div class="conflict-panel" id="standard-conflict-panel">';
-            html += '<h3>Multi-Win Conflicts</h3>';
-            html += '<p class="subtitle">These people won multiple games. Choose which game each person keeps.</p>';
-            standardConflicts.forEach(function(c) {
-                html += buildConflictItem(c, false);
-            });
-            html += '</div>';
-        }
-
-        html += '<div class="action-bar">';
-        html += '<button class="resolve-btn" id="resolve-btn" onclick="submitResolutions()" disabled>Apply Resolutions</button>';
-        html += '<span class="resolve-status" id="resolve-status"></span>';
-        html += '</div>';
-
-        section.innerHTML = html;
-    }
-
-    function buildConflictItem(conflict, isPremium) {
-        var html = '<div class="conflict-item" data-badge-id="' + escAttr(conflict.badge_id) + '">';
-        html += '<div class="person-info">';
-        html += '<span class="person-name">' + escHtml(conflict.winner_name || 'Unknown') + '</span>';
-        html += '<span class="person-badge">Badge: ' + escHtml(conflict.badge_id) + '</span>';
-        if (isPremium) {
-            html += ' <span class="premium-label">Multiple Premium</span>';
-        }
-        html += '</div>';
-        html += '<div class="conflict-choice">';
-        conflict.game_ids.forEach(function(gid) {
-            var gname = conflict.game_names[gid] || 'Unknown';
-            html += '<label>';
-            html += '<input type="radio" name="conflict-' + escAttr(conflict.badge_id) + '" value="' + escAttr(gid) + '" onchange="selectResolution(\'' + escAttr(conflict.badge_id) + '\', \'' + escAttr(gid) + '\')">';
-            html += ' ' + escHtml(gname);
-            html += '</label>';
-        });
-        html += '</div>';
-        html += '</div>';
-        return html;
-    }
 
     function escHtml(str) {
         var div = document.createElement('div');
