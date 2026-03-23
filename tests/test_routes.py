@@ -245,6 +245,24 @@ class TestConventionConfirmRoute(unittest.TestCase):
             self.assertEqual(sess["library_id"], "lib-1")
 
     @patch("routes.TTEClient")
+    def test_confirm_shows_loading_overlay_and_warning(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_convention.return_value = {
+            "id": "conv-1",
+            "name": "GameFest 2026",
+            "library": {"id": "lib-1", "name": "GameFest Library"},
+        }
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.post("/convention/select", data={"convention_id": "conv-1"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"loading-overlay", resp.data)
+        self.assertIn(b"may take a minute or two", resp.data)
+
+    @patch("routes.TTEClient")
     def test_select_no_library_shows_error(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_convention.return_value = {
@@ -417,6 +435,23 @@ class TestLibraryConfirmRoute(unittest.TestCase):
             self.assertNotIn("convention_id", sess)
             self.assertNotIn("convention_name", sess)
             self.assertEqual(sess["library_id"], "lib-1")
+
+    @patch("routes.TTEClient")
+    def test_library_confirm_shows_loading_overlay_and_warning(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library.return_value = {
+            "id": "lib-1",
+            "name": "My Library",
+        }
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+
+        resp = self.client.post("/library/select", data={"library_id": "lib-1"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"loading-overlay", resp.data)
+        self.assertIn(b"may take a minute or two", resp.data)
 
     @patch("routes.TTEClient")
     def test_library_confirm_api_error(self, MockClient):
@@ -2049,6 +2084,7 @@ class TestRefreshData(unittest.TestCase):
         resp = self.client.get("/games")
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Refresh Data", resp.data)
+        self.assertIn(b"loading-overlay", resp.data)
 
     @patch("routes.TTEClient")
     def test_games_page_shows_loaded_timestamp(self, MockClient):

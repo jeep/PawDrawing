@@ -56,6 +56,12 @@
         color: white;
     }
     .btn-proceed:hover { background: #229954; }
+    .load-warning {
+        font-size: 0.85rem;
+        color: #888;
+        margin-top: 1rem;
+        text-align: center;
+    }
 </style>
 {% endblock %}
 
@@ -70,9 +76,10 @@
         <span class="detail-label">Library</span>
         <span class="detail-value">{{ library_name }}</span>
     </div>
+    <p class="load-warning">Loading game data may take a minute or two depending on the number of games and entries.</p>
     <div class="btn-row">
         <a href="{{ url_for('main.convention_select') }}" class="btn-back">Change</a>
-        <a href="{{ url_for('main.games') }}" class="btn-proceed" id="btn-proceed" onclick="this.textContent='Loading...';this.style.pointerEvents='none';">Proceed</a>
+        <a href="{{ url_for('main.games') }}" class="btn-proceed" id="btn-proceed" onclick="document.getElementById('loading-overlay').classList.add('active');this.style.pointerEvents='none';">Proceed</a>
     </div>
 </div>
 {% endblock %}

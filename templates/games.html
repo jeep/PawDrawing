@@ -273,7 +273,7 @@
     {% endif %}
     <span class="stat" style="font-size:0.8rem;color:#888;">Loaded {{ data_loaded_at }}</span>
     <span class="save-status" id="save-status">Saved</span>
-    <a href="{{ url_for('main.games') }}" class="refresh-btn" id="refresh-btn" onclick="this.textContent='Refreshing...';this.style.pointerEvents='none';this.style.opacity='0.6';">Refresh Data</a>
+    <a href="{{ url_for('main.games') }}" class="refresh-btn" id="refresh-btn" onclick="document.getElementById('loading-overlay').classList.add('active');this.style.pointerEvents='none';this.style.opacity='0.6';">Refresh Data</a>
 </div>
 
 <div class="eject-panel" id="eject-panel">
