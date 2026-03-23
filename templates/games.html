@@ -260,6 +260,37 @@
     .search-bar input:focus { border-color: #3498db; box-shadow: 0 0 0 2px rgba(52,152,219,0.15); }
     .search-count { font-size: 0.85rem; color: #888; white-space: nowrap; }
     .search-count strong { color: #2c3e50; }
+    .action-row {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+    .action-row .btn-drawing {
+        background: #27ae60;
+        color: white;
+        border: none;
+        padding: 0.6rem 1.5rem;
+        font-size: 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        text-decoration: none;
+    }
+    .action-row .btn-drawing:hover { background: #229954; }
+    .action-row .btn-players {
+        background: #3498db;
+        color: white;
+        border: none;
+        padding: 0.6rem 1.5rem;
+        font-size: 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        text-decoration: none;
+    }
+    .action-row .btn-players:hover { background: #2980b9; }
 </style>
 {% endblock %}
 
@@ -277,9 +308,11 @@
 </div>
 
 <div class="eject-panel" id="eject-panel">
-    <h3>Player Management</h3>
-    <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
-        <a href="{{ url_for('main.players') }}" style="background:#3498db;color:white;border:none;padding:0.4rem 1rem;font-size:0.85rem;border-radius:5px;cursor:pointer;font-weight:600;text-decoration:none;">Manage Players</a>
+    <div class="action-row">
+        <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin:0;" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running Drawing...';">
+            <button type="submit" class="btn-drawing">Run Drawing</button>
+        </form>
+        <a href="{{ url_for('main.players') }}" class="btn-players">Manage Players</a>
         {% if ejected_entries %}
         <span style="font-size:0.85rem;color:#888;">{{ ejected_entries|length }} player(s) removed from drawing</span>
         {% endif %}
@@ -346,15 +379,6 @@
 {% else %}
 <p>No Play-to-Win games found for this convention.</p>
 {% endif %}
-
-<div style="margin-top: 1.5rem; text-align: center;">
-    <form method="POST" action="{{ url_for('main.run_drawing_route') }}" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running Drawing...';">
-        <button type="submit" style="background:#27ae60;color:white;border:none;padding:0.75rem 2rem;
-            font-size:1.1rem;border-radius:6px;cursor:pointer;font-weight:600;">
-            Run Drawing
-        </button>
-    </form>
-</div>
 
 <script>
 (function() {
