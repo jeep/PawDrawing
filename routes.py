@@ -554,7 +554,7 @@ def drawing_results():
     # Categorize results into three groups
     awaiting = [r for r in results if r["has_winner"] and not r["is_picked_up"]]
     picked_up_list = [r for r in results if r["has_winner"] and r["is_picked_up"]]
-    no_entries = [r for r in results if not r["has_entries"]]
+    no_entries = [r for r in results if not r["has_entries"] or (r["has_entries"] and not r["has_winner"] and not r["is_picked_up"])]
 
     return render_template(
         "drawing_results.html",
@@ -703,10 +703,18 @@ def award_next():
     winners = get_current_winners(drawing_state)
     winner = winners.get(game_id)
 
+    # Look up game name for the response
+    game_name = None
+    for item in drawing_state:
+        if item["game"]["id"] == game_id:
+            game_name = item["game"].get("name", "Unknown")
+            break
+
     return jsonify({
         "ok": True,
         "game_id": game_id,
         "has_winner": found,
+        "game_name": game_name,
         "winner_name": winner.get("name", "Unknown") if winner else None,
         "winner_badge": winner.get("badge_id", "") if winner else None,
     })

@@ -710,7 +710,7 @@
                 {{ r.game_name }}
                 {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
             </td>
-            <td>No entries</td>
+            <td>{% if r.has_entries %}To the box!{% else %}No entries{% endif %}</td>
         </tr>
         {% endfor %}
     </tbody>
@@ -848,6 +848,9 @@
                 if (btn) { btn.disabled = false; btn.textContent = 'Award to Next'; }
                 if (data.error) alert(data.error);
                 return;
+            }
+            if (!data.has_winner) {
+                alert('No more players for ' + (data.game_name || 'this game') + '. To the box!');
             }
             window.location.reload();
         })
