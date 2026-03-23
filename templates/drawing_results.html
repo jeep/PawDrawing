@@ -789,6 +789,11 @@
             </td>
             <td>
                 <button class="pickup-btn" data-game-id="{{ r.game_id }}" onclick="togglePickup('{{ r.game_id }}')">Mark Picked Up</button>
+                {% if r.winner_badge and r.winner_badge not in not_here %}
+                <button class="not-here-btn" data-badge-id="{{ r.winner_badge }}" onclick="confirmNotHere('{{ r.winner_badge }}', '{{ r.winner_name|replace("'", "\\'") }}')">Not Here</button>
+                {% elif r.winner_badge and r.winner_badge in not_here %}
+                <span class="not-here-badge">Not Here</span>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}
