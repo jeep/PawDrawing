@@ -7,9 +7,9 @@ Handles de-duplication, validation, and grouping of PlayToWin entries.
 def process_entries(entries):
     """Process raw PlayToWin entries: filter, normalize identifiers, and de-duplicate.
 
-    If an entry has no badge_id, falls back to user_id as the identifier
-    (common in library-only mode where there are no convention badges).
-    Entries with neither badge_id nor user_id are excluded.
+    Uses badge_id as the primary identifier. Falls back to user_id, then name
+    for entries without a badge (common in library-only mode).
+    Entries with no usable identifier are excluded.
 
     De-duplication keeps one entry per (badge_id, librarygame_id) pair.
     When duplicates exist, the first occurrence is kept.
@@ -20,7 +20,7 @@ def process_entries(entries):
     result = []
 
     for entry in entries:
-        badge_id = entry.get("badge_id") or entry.get("user_id")
+        badge_id = entry.get("badge_id") or entry.get("user_id") or entry.get("name")
         if not badge_id:
             continue
 
