@@ -1700,7 +1700,7 @@ class TestCSVExport(unittest.TestCase):
         self._setup_session()
         resp = self.client.get("/drawing/export")
         lines = resp.data.decode().strip().split("\r\n")
-        self.assertEqual(lines[0], "Game,Winner")
+        self.assertEqual(lines[0], "Game,Winner's Name,Winner's Badge")
 
     def test_export_csv_data_rows(self):
         self._setup_session()
@@ -1716,18 +1716,18 @@ class TestCSVExport(unittest.TestCase):
         self._setup_session()
         resp = self.client.get("/drawing/export")
         lines = resp.data.decode().strip().split("\r\n")
-        # Catan: winner is Alice (index 0)
-        self.assertEqual(lines[1], "Catan,Alice")
-        # Ticket to Ride: winner is Carol
-        self.assertEqual(lines[2], "Ticket to Ride,Carol")
+        # Catan: winner is Alice (index 0), badge B1
+        self.assertEqual(lines[1], "Catan,Alice,B1")
+        # Ticket to Ride: winner is Carol, badge B3
+        self.assertEqual(lines[2], "Ticket to Ride,Carol,B3")
 
-    def test_export_only_game_and_winner(self):
+    def test_export_has_three_columns(self):
         self._setup_session()
         resp = self.client.get("/drawing/export")
         lines = resp.data.decode().strip().split("\r\n")
-        # Each data row should have exactly 2 columns
+        # Each data row should have exactly 3 columns
         for line in lines[1:]:
-            self.assertEqual(len(line.split(",")), 2)
+            self.assertEqual(len(line.split(",")), 3)
 
     def test_export_no_winner_shows_empty(self):
         drawing_state = [
@@ -1745,7 +1745,7 @@ class TestCSVExport(unittest.TestCase):
             sess["premium_games"] = []
         resp = self.client.get("/drawing/export")
         lines = resp.data.decode().strip().split("\r\n")
-        self.assertEqual(lines[1], "Catan,")
+        self.assertEqual(lines[1], "Catan,,")
 
     def test_export_advanced_winner(self):
         # G1 winner was advanced to index 1 (Bob)
@@ -1768,7 +1768,7 @@ class TestCSVExport(unittest.TestCase):
         resp = self.client.get("/drawing/export")
         lines = resp.data.decode().strip().split("\r\n")
         # Winner should be Bob instead of Alice
-        self.assertEqual(lines[1], "Catan,Bob")
+        self.assertEqual(lines[1], "Catan,Bob,B2")
 
     def test_export_button_on_results_page(self):
         with self.client.session_transaction() as sess:

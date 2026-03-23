@@ -897,7 +897,7 @@ def export_csv():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Game", "Winner"])
+    writer.writerow(["Game", "Winner's Name", "Winner's Badge"])
 
     rows = []
     for item in drawing_state:
@@ -908,6 +908,7 @@ def export_csv():
         rows.append({
             "game_name": game.get("name", "Unknown"),
             "winner_name": winner.get("name", "Unknown") if winner else "",
+            "winner_badge": winner.get("badge_id", "") if winner else "",
         })
 
     rows.sort(key=lambda r: r["game_name"])
@@ -916,6 +917,7 @@ def export_csv():
         writer.writerow([
             row["game_name"],
             row["winner_name"],
+            row["winner_badge"],
         ])
 
     convention_name = session.get("convention_name", "Drawing")
