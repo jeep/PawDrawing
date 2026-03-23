@@ -3,7 +3,7 @@
 {% block title %}PawDrawing — Player Management{% endblock %}
 
 {% block nav %}
-<a href="{{ url_for('main.games') }}">Back to Games</a>
+<a href="{{ url_for('main.games') }}" onclick="document.getElementById('loading-overlay').classList.add('active');">Back to Games</a>
 <form method="POST" action="{{ url_for('main.logout') }}" style="display:inline">
     <button type="submit" style="background:none;border:none;color:#ecf0f1;cursor:pointer;font-size:0.9rem;">
         Logout ({{ session.get('tte_username', '') }})
@@ -189,6 +189,7 @@
 <div class="summary">
     <h2>Player Management — {{ convention_name }}</h2>
     <span class="stat"><strong>{{ total_players }}</strong> players</span>
+    <span class="stat"><strong>{{ total_entries }}</strong> entries</span>
     <span class="stat"><strong>{{ total_games }}</strong> games</span>
     {% set removed_count = removed_all|length + removed_per_game|length %}
     {% if removed_count > 0 %}

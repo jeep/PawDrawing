@@ -225,30 +225,35 @@ def games():
         flash("Please select a convention first.", "error")
         return redirect(url_for("main.convention_select"))
 
-    client = _get_client()
+    refresh = request.args.get("refresh") == "1"
+    all_games = session.get("cached_games")
+    entries = session.get("cached_entries")
 
-    try:
-        all_games = client.get_library_games(library_id, play_to_win_only=True)
-    except TTEAPIError as exc:
-        return _handle_api_error(exc, url_for("main.convention_select"), "load games")
+    if refresh or all_games is None or entries is None:
+        client = _get_client()
 
-    try:
-        if convention_id:
-            raw_entries = client.get_convention_playtowins(convention_id)
-        else:
-            raw_entries = []
-            for game in all_games:
-                game_id = game.get("id")
-                if game_id:
-                    raw_entries.extend(client.get_library_game_playtowins(game_id))
-    except TTEAPIError as exc:
-        return _handle_api_error(exc, url_for("main.convention_select"), "load entries")
+        try:
+            all_games = client.get_library_games(library_id, play_to_win_only=True)
+        except TTEAPIError as exc:
+            return _handle_api_error(exc, url_for("main.convention_select"), "load games")
 
-    entries = process_entries(raw_entries)
+        try:
+            if convention_id:
+                raw_entries = client.get_convention_playtowins(convention_id)
+            else:
+                raw_entries = []
+                for game in all_games:
+                    game_id = game.get("id")
+                    if game_id:
+                        raw_entries.extend(client.get_library_game_playtowins(game_id))
+        except TTEAPIError as exc:
+            return _handle_api_error(exc, url_for("main.convention_select"), "load entries")
 
-    # Cache games and entries in session for reuse by player management page
-    session["cached_games"] = all_games
-    session["cached_entries"] = entries
+        entries = process_entries(raw_entries)
+
+        # Cache games and entries in session for reuse
+        session["cached_games"] = all_games
+        session["cached_entries"] = entries
 
     ejected_entries = session.get("ejected_entries", [])
     filtered = apply_ejections(entries, ejected_entries)
@@ -342,6 +347,7 @@ def players():
         "players.html",
         player_list=player_list,
         total_players=len(player_list),
+        total_entries=len(entries),
         total_games=len(all_games),
         convention_name=session.get("convention_name") or session.get("library_name", ""),
         removed_all=removed_all,

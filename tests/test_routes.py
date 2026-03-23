@@ -2049,11 +2049,14 @@ class TestRefreshData(unittest.TestCase):
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
 
-        # First load
+        # First load — fetches from API
         self.client.get("/games")
-        # Second load (refresh)
+        self.assertEqual(mock_instance.get_library_games.call_count, 1)
+        # Second load without refresh — uses cache
         self.client.get("/games")
-        # API called twice — fresh data each time
+        self.assertEqual(mock_instance.get_library_games.call_count, 1)
+        # Third load with refresh=1 — fetches fresh data
+        self.client.get("/games?refresh=1")
         self.assertEqual(mock_instance.get_library_games.call_count, 2)
 
     def test_drawing_results_shows_timestamp(self):
