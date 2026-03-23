@@ -168,6 +168,21 @@
         margin-right: 0.5rem;
         accent-color: #27ae60;
     }
+    .conflict-random-btn {
+        padding: 0.5rem 0.9rem;
+        border: 2px dashed #999;
+        background: #f8f9fa;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        color: #555;
+        transition: all 0.15s;
+    }
+    .conflict-random-btn:hover {
+        border-color: #2c3e50;
+        background: #e9ecef;
+        color: #2c3e50;
+    }
     .conflict-choice label.selected {
         background: #e8f5e9;
         border-color: #27ae60;
@@ -512,6 +527,7 @@
                 {% if game_id in (conflicted_game_ids or []) %}<span class="premium-label">Premium</span>{% endif %}
             </label>
             {% endfor %}
+            <button type="button" class="conflict-random-btn" onclick="resolveConflictRandom('{{ conflict.badge_id }}', {{ conflict.game_ids | tojson }})">&#x1f3b2; Random</button>
         </div>
     </div>
     {% endfor %}
@@ -537,6 +553,7 @@
                 {{ conflict.game_names[game_id] }}
             </label>
             {% endfor %}
+            <button type="button" class="conflict-random-btn" onclick="resolveConflictRandom('{{ conflict.badge_id }}', {{ conflict.game_ids | tojson }})">&#x1f3b2; Random</button>
         </div>
     </div>
     {% endfor %}
@@ -736,7 +753,6 @@
 
 <script>
 (function() {
-    var resolutions = {};
     var notHereSet = new Set({{ not_here | tojson }});
     var warningDismissed = {{ 'true' if not_here_warning_dismissed else 'false' }};
     var pendingNotHereBadge = null;
@@ -887,51 +903,40 @@
         });
     };
 
-    window.selectResolution = function(badgeId, gameId) {
-        resolutions[badgeId] = gameId;
+    window.resolveConflict = function(badgeId, gameId) {
         var item = document.querySelector('.conflict-item[data-badge-id="' + badgeId + '"]');
         if (item) {
-            item.querySelectorAll('.conflict-choice label').forEach(function(lbl) {
-                lbl.classList.toggle('selected', lbl.querySelector('input').value === gameId);
-            });
+            item.classList.add('resolving');
         }
-        var resolvedCount = Object.keys(resolutions).length;
-        document.getElementById('resolve-btn').disabled = (resolvedCount < totalConflicts);
-    };
-
-    window.submitResolutions = function() {
-        var btn = document.getElementById('resolve-btn');
-        var status = document.getElementById('resolve-status');
-        btn.disabled = true;
-        status.style.display = 'inline';
-        status.textContent = 'Resolving...';
-        status.style.color = '#856404';
-
-        var resList = Object.entries(resolutions).map(function(pair) {
-            return { badge_id: pair[0], keep_game_id: pair[1] };
-        });
 
         fetch('{{ url_for("main.resolve_conflicts") }}', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({resolutions: resList})
+            body: JSON.stringify({resolutions: [{badge_id: badgeId, keep_game_id: gameId}]})
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (!data.ok) {
-                status.textContent = 'Error: ' + (data.error || 'Unknown');
-                status.style.color = '#b71c1c';
-                btn.disabled = false;
+                if (item) item.classList.remove('resolving');
+                alert('Error: ' + (data.error || 'Unknown'));
                 return;
             }
-            Object.keys(resolutions).forEach(function(k) { delete resolutions[k]; });
-            window.location.reload();
+            if (item) {
+                item.classList.add('resolved');
+                setTimeout(function() { window.location.reload(); }, 400);
+            } else {
+                window.location.reload();
+            }
         })
         .catch(function() {
-            status.textContent = 'Network error — please try again.';
-            status.style.color = '#b71c1c';
-            btn.disabled = false;
+            if (item) item.classList.remove('resolving');
+            alert('Network error — please try again.');
         });
+    };
+
+    window.resolveConflictRandom = function(badgeId, gameIds) {
+        var randomId = gameIds[Math.floor(Math.random() * gameIds.length)];
+        resolveConflict(badgeId, randomId);
     };
 
     // ── Search / Filter ──────────────────────────────────────────────
