@@ -936,7 +936,7 @@
 
     window.resolveConflictRandom = function(badgeId, gameIds) {
         var randomId = gameIds[Math.floor(Math.random() * gameIds.length)];
-        resolveConflict(badgeId, randomId);
+        window.resolveConflict(badgeId, randomId);
     };
 
     // ── Search / Filter ──────────────────────────────────────────────

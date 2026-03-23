@@ -603,17 +603,24 @@ def resolve_conflicts():
 
     session["drawing_state"] = drawing_state
 
-    results = _build_results_from_session()
+    # Remove resolved badges from stored conflicts, add any new cascading ones
+    remaining_conflicts = [
+        c for c in session.get("drawing_conflicts", [])
+        if c["badge_id"] not in keep_map
+    ]
 
     # Build conflict info for any new cascading conflicts
-    conflicts_out = []
+    conflicts_out = list(remaining_conflicts)
     if new_conflicts:
+        existing_badge_ids = {c["badge_id"] for c in conflicts_out}
         winners = get_current_winners(drawing_state)
         game_name_map = {
             item["game"]["id"]: item["game"].get("name", "Unknown")
             for item in drawing_state
         }
         for badge_id, game_ids in new_conflicts.items():
+            if badge_id in existing_badge_ids:
+                continue
             premium_wins = [gid for gid in game_ids if gid in premium_games]
             winner_name = "Unknown"
             for gid in game_ids:
@@ -628,6 +635,10 @@ def resolve_conflicts():
                 "game_names": {gid: game_name_map.get(gid, "Unknown") for gid in game_ids},
                 "is_premium_conflict": len(premium_wins) > 1,
             })
+
+    session["drawing_conflicts"] = conflicts_out
+
+    results = _build_results_from_session()
 
     return jsonify({
         "ok": True,
