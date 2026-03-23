@@ -116,6 +116,18 @@
         border-radius: 6px;
         padding: 1rem;
         margin-bottom: 0.75rem;
+        transition: opacity 0.3s, max-height 0.4s;
+        overflow: hidden;
+    }
+    .conflict-item.resolving {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+    .conflict-item.resolved {
+        max-height: 0;
+        padding: 0 1rem;
+        margin-bottom: 0;
+        border-color: transparent;
     }
     .conflict-item:last-child { margin-bottom: 0; }
     .conflict-item .person-info {
@@ -495,7 +507,7 @@
             <label>
                 <input type="radio" name="conflict-{{ conflict.badge_id }}"
                        value="{{ game_id }}"
-                       onchange="selectResolution('{{ conflict.badge_id }}', '{{ game_id }}')">
+                       onchange="resolveConflict('{{ conflict.badge_id }}', '{{ game_id }}')">
                 {{ conflict.game_names[game_id] }}
                 {% if game_id in (conflicted_game_ids or []) %}<span class="premium-label">Premium</span>{% endif %}
             </label>
@@ -521,22 +533,13 @@
             <label>
                 <input type="radio" name="conflict-{{ conflict.badge_id }}"
                        value="{{ game_id }}"
-                       onchange="selectResolution('{{ conflict.badge_id }}', '{{ game_id }}')">
+                       onchange="resolveConflict('{{ conflict.badge_id }}', '{{ game_id }}')">
                 {{ conflict.game_names[game_id] }}
             </label>
             {% endfor %}
         </div>
     </div>
     {% endfor %}
-</div>
-{% endif %}
-
-{% if conflicts %}
-<div class="action-bar">
-    <button class="resolve-btn" id="resolve-btn" onclick="submitResolutions()" disabled>
-        Apply Resolutions
-    </button>
-    <span class="resolve-status" id="resolve-status"></span>
 </div>
 {% endif %}
 </div>
@@ -590,7 +593,7 @@
             <td>{{ r.winner_index + 1 }} / {{ r.total_entries }}</td>
             <td>
                 <button class="pickup-btn" data-game-id="{{ r.game_id }}" onclick="togglePickup('{{ r.game_id }}')">Mark Picked Up</button>
-                <button class="award-next-btn" data-game-id="{{ r.game_id }}" onclick="awardNext('{{ r.game_id }}')">Award Next</button>
+                <button class="award-next-btn" data-game-id="{{ r.game_id }}" onclick="awardNext('{{ r.game_id }}')">Award to Next</button>
                 {% if r.winner_badge and r.winner_badge not in not_here %}
                 <button class="not-here-btn" data-badge-id="{{ r.winner_badge }}" onclick="confirmNotHere('{{ r.winner_badge }}', '{{ r.winner_name|replace("'", "\\'") }}')">Not Here</button>
                 {% elif r.winner_badge and r.winner_badge in not_here %}
@@ -720,7 +723,7 @@
     <div class="modal-box">
         <h3>Mark as Not Here?</h3>
         <p>This will permanently remove <strong id="modal-person-name"></strong> from all unclaimed games. Their winning games will advance to the next entrant.</p>
-        <p>If this person might still show up, use <strong>Award Next</strong> instead — that only skips them for one game.</p>
+        <p>If this person might still show up, use <strong>Award to Next</strong> instead — that only skips them for one game.</p>
         <label>
             <input type="checkbox" id="modal-dismiss-checkbox"> Don't show this warning again for this drawing
         </label>
@@ -734,7 +737,6 @@
 <script>
 (function() {
     var resolutions = {};
-    var totalConflicts = document.querySelectorAll('.conflict-item').length;
     var notHereSet = new Set({{ not_here | tojson }});
     var warningDismissed = {{ 'true' if not_here_warning_dismissed else 'false' }};
     var pendingNotHereBadge = null;
@@ -786,7 +788,7 @@
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (!data.ok) {
-                if (btn) { btn.disabled = false; btn.textContent = 'Award Next'; }
+                if (btn) { btn.disabled = false; btn.textContent = 'Award to Next'; }
                 if (data.error) alert(data.error);
                 return;
             }

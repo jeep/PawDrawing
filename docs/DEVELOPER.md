@@ -205,7 +205,7 @@ Resolve Conflicts              AJAX POST /drawing/resolve
 Track Pickups                  AJAX POST /drawing/pickup
   │                              └─ Toggles game_id in session["picked_up"]
   ▼
-Award Next / Not Here          AJAX POST /drawing/award-next
+Award to Next / Not Here       AJAX POST /drawing/award-next
   │                              AJAX POST /drawing/not-here
   │                              └─ Advances winner_index, skips not_here badges
   ▼
