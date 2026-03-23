@@ -28,21 +28,22 @@ PawDrawing/
 ├── .githooks/
 │   └── commit-msg          # Conventional Commits hook
 ├── templates/
-│   ├── base.html           # Base layout with flash messages
-│   ├── login.html          # Login form
-│   ├── convention_select.html  # Convention search & ID entry
+│   ├── base.html               # Base layout with flash messages
+│   ├── login.html              # Login form
+│   ├── convention_select.html  # Convention search & library browse
 │   ├── convention_confirm.html # Confirm selected convention
 │   ├── library_confirm.html    # Confirm selected library (no convention)
-│   ├── games.html          # Game list with premium toggles
+│   ├── games.html              # Game list with premium toggles & ejections
 │   └── drawing_results.html    # Results with conflicts, pickup, push, export
 ├── tests/
-│   ├── test_routes.py      # Route/view tests
-│   ├── test_tte_client.py  # API client tests
-│   ├── test_drawing.py     # Drawing algorithm tests
+│   ├── test_routes.py          # Route/view tests
+│   ├── test_tte_client.py      # API client tests
+│   ├── test_drawing.py         # Drawing algorithm tests
 │   └── test_data_processing.py # Data processing tests
 └── docs/
     ├── DEVELOPER.md        # This file
-    └── ADMIN.md            # Administrator documentation
+    ├── ADMIN.md            # Administrator documentation
+    └── Requirements.md     # Project requirements document
 ```
 
 ## Module Reference
@@ -67,6 +68,7 @@ All routes live on a single Blueprint (`main_bp`). Helper functions:
 
 - `_get_client()` — creates a `TTEClient` and attaches the session ID from Flask session.
 - `_handle_api_error(exc, fallback_url, action)` — handles `TTEAPIError` uniformly: clears session on 401/403, flashes a descriptive message, and redirects.
+- `_build_results_from_session()` — builds a display-friendly results list from `drawing_state` in session.
 
 **Routes:**
 
@@ -121,9 +123,13 @@ REST client for the tabletop.events API.
 | `get_user_libraries(user_id)` | GET `/user/{id}/libraries` | Yes |
 | `search_conventions(query)` | GET `/convention` | Yes |
 | `get_convention(id, include_library)` | GET `/convention/{id}` | No |
+| `get_library(library_id)` | GET `/library/{id}` | No |
 | `get_library_games(id, play_to_win_only)` | GET `/library/{id}/games` | Yes |
 | `get_library_playtowins(id)` | GET `/library/{id}/playtowins` | Yes |
+| `get_library_game(game_id)` | GET `/librarygame/{id}` | No |
+| `get_library_game_playtowins(game_id)` | GET `/librarygame/{id}/playtowins` | Yes |
 | `get_convention_playtowins(id)` | GET `/convention/{id}/playtowins` | Yes |
+| `get_playtowin(playtowin_id)` | GET `/playtowin/{id}` | No |
 | `update_playtowin(id, data)` | PUT `/playtowin/{id}` | No |
 
 ### `drawing.py`
@@ -136,13 +142,16 @@ Core drawing algorithm. Pure functions operating on data structures (no I/O).
 - `get_current_winners(drawing_state)` — extracts `game_id → winner entry` from state.
 - `detect_conflicts(drawing_state)` — finds badge IDs that won multiple games.
 - `resolve_premium_auto(conflicts, premium_ids)` — auto-resolves when a person won exactly one premium game (they keep the premium game).
-- `advance_winner(drawing_state, game_id)` — moves to the next person in the shuffled list.
+- `advance_winner(drawing_state, game_id, not_here)` — moves to the next person in the shuffled list, skipping badge IDs in the `not_here` set.
 - `apply_resolution(drawing_state, keep_map, premium_ids)` — applies admin choices, advancing winners on relinquished games.
+- `_resolve_conflicts_loop(state, premium_set)` — runs the conflict detection / premium auto-resolution loop. Returns unresolved conflicts and auto-resolved assignments.
 - `run_drawing(game_data, premium_ids, rng)` — orchestrates the full algorithm (see Drawing Algorithm below).
+- `redraw_unclaimed(drawing_state, unclaimed_game_ids, not_here, original_winners, same_rules, premium_game_ids, rng)` — re-shuffles unclaimed games excluding absent and original-draw winners.
 
 ### `data_processing.py`
 
-- `process_entries(entries)` — filters out entries without a `badge_id` and de-duplicates by `(badge_id, librarygame_id)`.
+- `process_entries(entries)` — filters entries without a usable identifier and de-duplicates by `(badge_id, librarygame_id)`. Falls back to `user_id` then `name` when `badge_id` is absent.
+- `apply_ejections(entries, ejected_entries)` — removes ejected entries. Supports per-game ejection or wildcard (`"*"`) for all games.
 - `group_entries_by_game(entries, games)` — groups entries by game, attaches game metadata. Games with zero entries are included.
 
 ## Data Flow
@@ -170,10 +179,14 @@ Library Confirm                POST /library/select  (alternative path)
   ▼
 Games Page                     GET /games
   │                              ├─ TTEClient.get_library_games()
-  │                              └─ TTEClient.get_convention_playtowins()
+  │                              ├─ Convention mode:
+  │                              │    └─ TTEClient.get_convention_playtowins()
+  │                              ├─ Library-only mode:
+  │                              │    └─ TTEClient.get_library_game_playtowins() per game
   │                              └─ process_entries() + apply_ejections() + group_entries_by_game()
   │                              └─ Premium toggles: AJAX POST /games/premium
-  │                              └─ Eject player: AJAX POST /games/eject, /games/uneject
+  │                              └─ Eject player: AJAX POST /games/eject
+  │                              └─ Undo ejection: AJAX POST /games/uneject
   │                              └─ View entrants: AJAX GET /games/entrants/<game_id>
   ▼
 Run Drawing                    POST /drawing → 302 → GET /drawing/results
@@ -238,9 +251,11 @@ Ejections (`ejected_entries`) are cleared when the convention or library source 
 
 4. **Manual resolution:** If a person won zero or 2+ premium games, admin must choose which game they keep. The UI presents radio buttons for each conflicting game.
 
-5. **Cascading:** After each resolution round, conflicts are re-detected. The loop runs up to 100 iterations (safety bound).
+5. **Cascading:** After each resolution round, conflicts are re-detected. The loop (`_resolve_conflicts_loop`) runs up to 100 iterations (safety bound).
 
 6. **Exhaustion:** If `winner_index` exceeds the shuffled list length, the game has no eligible winner.
+
+7. **Redraw unclaimed:** After pickup, unclaimed games can be redrawn. `redraw_unclaimed` re-shuffles entries for unclaimed games, excluding absent badge IDs and original-draw winners.
 
 ## TTE API Client Details
 
@@ -268,10 +283,10 @@ python -m pytest tests/ -v
 
 | File | Tests | Covers |
 |------|-------|--------|
-| `test_routes.py` | ~155 | All routes, auth guards, AJAX endpoints, error handling |
-| `test_tte_client.py` | ~22 | Rate limiting, auth, error handling, pagination, endpoints |
-| `test_drawing.py` | varies | Shuffle, conflicts, resolution, cascading |
-| `test_data_processing.py` | varies | Entry processing, grouping |
+| `test_routes.py` | 146 | All routes, auth guards, AJAX endpoints, error handling |
+| `test_drawing.py` | 40 | Shuffle, conflicts, resolution, cascading, redraw |
+| `test_tte_client.py` | 22 | Rate limiting, auth, error handling, pagination, endpoints |
+| `test_data_processing.py` | 21 | Entry processing, ejection filtering, grouping |
 
 ### Mocking patterns
 

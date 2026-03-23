@@ -2,9 +2,9 @@
 
 ## Requirements Document
 
-**Version:** 2.0
-**Date:** 2026-03-21
-**Status:** Final — all clarifying questions resolved
+**Version:** 3.0
+**Date:** 2026-03-22
+**Status:** Final — reflects implemented system
 
 ---
 
@@ -96,11 +96,12 @@ PawDrawing is a web application for managing Play-and-Win drawings at tabletop g
 - **FR-SEL-02:** The system shall retrieve the library associated with the selected convention (the convention's `library` related object).
 - **FR-SEL-03:** The system shall retrieve all LibraryGames marked with `is_play_to_win=1` from the convention's library.
 - **FR-SEL-04:** The system shall optionally allow filtering PlayToWin entries by `convention_id`. If a convention ID is provided, only entries matching that convention are included; otherwise, all entries for the library are included.
+- **FR-SEL-05:** The system shall support a "Library Only" mode where the administrator selects a library directly (browsing their own libraries or pasting a library ID) without a convention.
 
 ### 4.3 Drawing Data Retrieval
 
 - **FR-DATA-01:** The system shall retrieve all PlayToWin entries for the selected convention/library.
-- **FR-DATA-02:** PlayToWin entries without a `badge_id` shall be excluded from the drawing.
+- **FR-DATA-02:** PlayToWin entries without a usable identifier shall be excluded from the drawing. The system falls back from `badge_id` to `user_id` to `name`; entries with none of these are excluded.
 - **FR-DATA-03:** The system shall de-duplicate entries on load: only one entry per `badge_id` per `librarygame_id` shall be kept, regardless of how many times the person played.
 - **FR-DATA-04:** The system shall group de-duplicated entries by `librarygame_id` to determine which unique players entered the drawing for each game.
 - **FR-DATA-05:** The "number of entries" displayed for each game shall be the count of unique entrants (unique `badge_id` values).
@@ -121,7 +122,14 @@ PawDrawing is a web application for managing Play-and-Win drawings at tabletop g
 - **FR-DRAW-10:** The drawing algorithm shall continue iterating until there are no remaining conflicts (each game has a unique winner).
 - **FR-DRAW-11:** The drawing may be re-run by the administrator if there is an issue. Re-running generates a new random shuffle.
 
-### 4.5 Results Display
+### 4.5 Ejection
+
+- **FR-EJECT-01:** The administrator shall be able to eject a player from a specific game or from all games before running the drawing.
+- **FR-EJECT-02:** Ejected players shall be excluded from the drawing.
+- **FR-EJECT-03:** Ejections can be undone before the drawing is run.
+- **FR-EJECT-04:** Ejections shall be cleared when the convention or library source changes.
+
+### 4.6 Results Display
 
 - **FR-DISP-01:** The system shall display results in two views:
   - **By Game:** For each game, show the game name, number of unique entries, and the winner's name.
@@ -132,17 +140,17 @@ PawDrawing is a web application for managing Play-and-Win drawings at tabletop g
 - **FR-DISP-05:** Results are displayed in the browser during the active session.
 - **FR-DISP-06:** The system shall provide a "Save" / "Export" button to download results as a CSV file.
 
-### 4.6 Pickup & Redistribution
+### 4.7 Pickup & Redraw
 
 - **FR-PICK-01:** After the drawing is complete, the administrator shall be able to mark each won game as "picked up" when the winner collects the game.
 - **FR-PICK-02:** Pickup status shall be tracked locally within the PawDrawing session.
-- **FR-PICK-03:** After the pickup deadline has passed, the administrator shall be able to initiate a **redistribution** of all unclaimed (not picked up) games in a single batch session.
-- **FR-PICK-04:** For each unclaimed game, the system shall display the original shuffled entrant list for that game, starting from the top.
-- **FR-PICK-05:** During redistribution, the one-win-per-person rule does **not** apply. A person who already won and picked up another game may also claim an unclaimed game.
-- **FR-PICK-06:** The admin shall work down the shuffled list in order. The first person in attendance who claims the game becomes the new winner. If no one claims it, the game remains unclaimed.
+- **FR-PICK-03:** The administrator shall be able to mark a winner as "Not Here" (absent). This advances all their unpicked-up games to the next eligible person and prevents them from being selected again.
+- **FR-PICK-04:** After the pickup deadline has passed, the administrator shall be able to initiate a **redraw** of all unclaimed (not picked up) games in a single batch.
+- **FR-PICK-05:** The redraw re-shuffles entries for each unclaimed game, excluding anyone marked as "Not Here" and anyone who won in the original drawing.
+- **FR-PICK-06:** During the redraw, the one-win-per-person rule does **not** apply. A person who already won and picked up another game may also win an unclaimed game.
 - **FR-PICK-07:** The system shall provide a "Push to TTE" action that writes the `win` flag back to TTE (via `PUT /api/playtowin/{id}`) for all picked-up games. This is intended as a cleanup step after the drawing and pickup process is complete.
 
-### 4.7 Error Handling
+### 4.8 Error Handling
 
 - **FR-ERR-01:** The system shall display user-friendly error messages when API requests fail.
 - **FR-ERR-02:** The system shall handle invalid or unexpected API responses gracefully (e.g., missing fields, empty result sets).
@@ -176,35 +184,36 @@ PawDrawing is a web application for managing Play-and-Win drawings at tabletop g
 ### 7.1 Drawing Phase
 
 1. Administrator opens the application and enters TTE credentials (username/password) on the login screen.
-2. Administrator searches for a convention by name or pastes a convention ID. Optionally provides a `convention_id` filter for PlayToWin entries.
-3. System loads all play-to-win games and entries from TTE, de-duplicates (one entry per badge_id per game), and excludes entries without a badge_id.
-4. Administrator optionally marks games as "premium" in the UI.
-5. Administrator initiates the drawing.
-6. System performs randomized shuffle for each game and identifies initial winners.
-7. If conflicts exist (one person winning multiple games):
+2. Administrator searches for a convention by name or pastes a convention ID. Alternatively, selects a library directly in "Library Only" mode.
+3. System loads all play-to-win games and entries from TTE, de-duplicates (one entry per badge_id per game), and excludes entries without a usable identifier.
+4. Administrator optionally ejects players from specific games or all games.
+5. Administrator optionally marks games as "premium" in the UI.
+6. Administrator initiates the drawing.
+7. System performs randomized shuffle for each game and identifies initial winners.
+8. If conflicts exist (one person winning multiple games):
    a. Premium games are auto-assigned first.
    b. If a person won multiple premium games, the admin chooses which one they keep.
    c. Administrator resolves remaining non-premium conflicts by choosing which game each multi-winner keeps.
    d. Unclaimed games cascade to next player in shuffled order.
    e. Process repeats until all conflicts resolved.
-8. Final results displayed by game and by winner.
+9. Final results displayed by game and by winner.
 
 ### 7.2 Pickup Phase
 
-9. As winners collect their games at the convention, the administrator marks each game as "picked up" in the app.
+10. As winners collect their games at the convention, the administrator marks each game as "picked up" in the app.
+11. If a winner is absent, the administrator marks them as "Not Here." Their unpicked-up games advance to the next eligible person.
 
-### 7.3 Redistribution Phase
+### 7.3 Redraw Phase
 
-10. After the pickup deadline passes, the administrator initiates redistribution of all unclaimed games.
-11. For each unclaimed game, the system shows the original shuffled list of entrants.
-12. The admin works down the list in order; the first person present who claims the game becomes the new winner.
-13. The one-win-per-person rule does not apply during redistribution.
+12. After the pickup deadline passes, the administrator initiates a redraw of all unclaimed games.
+13. The system re-shuffles entries for unclaimed games, excluding absent people and original-draw winners.
+14. The one-win-per-person rule does not apply during the redraw.
 
 ### 7.4 Finalization
 
-14. Administrator optionally exports results as CSV.
-15. Administrator clicks "Push to TTE" to write the `win` flag for all picked-up games back to TTE.
-16. Session ends.
+15. Administrator optionally exports results as CSV.
+16. Administrator clicks "Push to TTE" to write the `win` flag for all picked-up games back to TTE.
+17. Session ends.
 
 ---
 
@@ -218,10 +227,11 @@ PawDrawing is a web application for managing Play-and-Win drawings at tabletop g
            SETUP:         |--> GET /api/convention?query=... (search conventions)
                           |    or GET /api/convention/{id} (direct lookup)
                           |--> GET /api/convention/{id}?_include_related_objects=library
+                          |    or GET /api/library/{id} (library-only mode)
                           |--> GET /api/library/{id}/games?is_play_to_win=1 (get P2W games)
                           |       (paginated, all pages)
                           |--> GET /api/convention/{id}/playtowins (get entries)
-                          |    or GET /api/library/{id}/playtowins
+                          |    or GET /api/librarygame/{id}/playtowins (library-only mode, per game)
                           |       (paginated, all pages)
                           |
            DRAWING:       |--> [Drawing Algorithm runs server-side]
@@ -229,7 +239,7 @@ PawDrawing is a web application for managing Play-and-Win drawings at tabletop g
                           |
            PICKUP:        |--> [Local tracking of picked-up games]
                           |
-           REDISTRIBUTE:  |--> [Admin walks shuffled lists for unclaimed games]
+           REDRAW:        |--> [Re-shuffle unclaimed games, excluding absent & original winners]
                           |
            PUSH TO TTE:   |--> PUT /api/playtowin/{id} (set win=1 for picked-up entries)
                           |       (for each picked-up game, respecting rate limits)
@@ -243,7 +253,7 @@ PawDrawing is a web application for managing Play-and-Win drawings at tabletop g
 
 1. The TTE API will remain stable and accessible during use of this application.
 2. The administrator has a TTE account with sufficient privileges to read PlayToWin data for the target convention/library.
-3. Entrant identity is matched by `badge_id` for detecting multi-game winners. Entries without a `badge_id` are excluded.
+3. Entrant identity is matched by `badge_id` (with fallback to `user_id` then `name`) for detecting multi-game winners. Entries with no usable identifier are excluded.
 4. Each person gets one drawing entry per game regardless of how many times they played (de-duplicated by `badge_id` + `librarygame_id`).
 5. The drawing and pickup phases may span the duration of a convention but are managed within a single browser session (or with CSV export to preserve state).
-6. During redistribution, the one-win-per-person rule does not apply.
+6. During the redraw of unclaimed games, the one-win-per-person rule does not apply.

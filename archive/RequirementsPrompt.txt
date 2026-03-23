@@ -1,0 +1,23 @@
+Create a website to manage a play and win drawing.
+
+See 'Application API Key.txt' for the API key to use the tabletop.events API.
+
+The API documentation is available at https://tabletop.events/developer/Introduction.html.
+The website should allow users to:
+Get drawing results for a play and win event.
+The results will:
+1) For each game, show the number of entries and the winner.
+2) For each winner, show the game they won.
+
+The website should be built using a web framework of your choice (e.g., Flask, Django, Express.js).
+The website should have a simple and user-friendly interface to display the drawing results. It should also handle any potential errors gracefully, such as API request failures or invalid responses.
+The rules for the drawing are:
+1) The players for each game are randomly ordered.
+2) The winner is the first player in the randomly ordered list of players for each game.
+3) If one person is the winner of multiple games, the administrator will choose which game they will win.
+4) For the games the person did not win, the next player in the randomly ordered list will be the winner, and so on until all games have a winner.
+5) This can cause a new person to have won multiple games, so this process will repeat until there is a clear winner for each game.
+6) To expedite this process, the administrator can choose to select "premium" games. These will automatically be selected. If multiple premium games are won by a single person the administrator will choose which game they will win, and the next player in the randomly ordered list will be the winner for the other premium games. This process will repeat until there is a clear winner for each game. 
+
+The back end for the game and play information will be handled by the tabletop.events API, so you will need to make API calls to retrieve the necessary data for the drawing results. You will also need to implement the logic for determining the winners based on the rules provided.
+

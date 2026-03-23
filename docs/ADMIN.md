@@ -82,15 +82,23 @@ The source selection page has two tabs:
 
 ### 3. Review games
 
-The games page shows all Play-to-Win games in the convention's library, along with the number of entries (people who played) for each game.
+The games page shows all Play-to-Win games in the selected source (convention library or standalone library), along with the number of entries (people who played) for each game.
 
-### 4. Designate premium games
+### 4. Eject players (optional)
+
+If a player needs to be excluded from the drawing (e.g., rule violation), click the **View Entrants** button for a game, then click **Eject** next to the player. You can eject a player from a single game or from all games.
+
+Ejected players are excluded when the drawing is run. Ejections can be undone at any time before running the drawing.
+
+Ejections are cleared when you change the convention or library source.
+
+### 5. Designate premium games
 
 Toggle the "Premium" checkbox on any games that are premium prizes. Premium games get special treatment during conflict resolution — if a person wins one premium game and one or more non-premium games, they automatically keep the premium game.
 
 Premium designations are auto-saved as you toggle them.
 
-### 5. Run the drawing
+### 6. Run the drawing
 
 Click **Run Drawing**. The app:
 
@@ -100,25 +108,31 @@ Click **Run Drawing**. The app:
 4. Detects conflicts (one person winning multiple games).
 5. Auto-resolves premium conflicts where possible.
 
-### 6. Resolve conflicts
+### 7. Resolve conflicts
 
 If any conflicts remain after auto-resolution, you'll see conflict panels at the top of the results page. For each conflicting person, select which game they should keep. Click **Resolve** to apply.
 
 Resolution may cascade — new conflicts can appear when an alternate winner is selected. Repeat until all conflicts are resolved.
 
-### 7. Track pickups
+### 8. Track pickups
 
 As winners come to claim their prizes, click **Mark Picked Up** next to each game. The button turns green. Click again to undo if needed. The pickup counter in the summary bar updates in real time.
 
-### 8. Redistribute unclaimed games
+If a winner is absent, you can click **Not Here** to mark them. This advances all their unpicked-up games to the next person in the shuffled list, and prevents them from being selected again in any future advances.
 
-After the claiming period, click **Start Redistribution** to handle unclaimed games. For each unclaimed game, you'll see the full entrant list in drawing order.
+### 9. Redraw unclaimed games
 
-Work through each person:
-- **Claim**: The person is present and wants the game → they become the new winner.
-- **Not Present**: The person is absent or declines → move to the next person.
+After the claiming period, click **Redraw Unclaimed** to run a fresh drawing for all games that have not been picked up. The redraw:
 
-### 9. Push results to TTE
+- Re-shuffles entries for each unclaimed game.
+- Excludes anyone marked as "Not Here."
+- Excludes anyone who won in the original drawing (regardless of whether they picked up).
+
+The one-win-per-person rule does **not** apply during the redraw — a person who already picked up another game may win an unclaimed game.
+
+New winners appear in the results. Mark them as picked up as they claim their prizes.
+
+### 10. Push results to TTE
 
 Click **Push to TTE** to write the win flags back to tabletop.events. Only picked-up games are pushed. The app shows a confirmation dialog with the count, then pushes each winner individually.
 
@@ -127,7 +141,7 @@ Results:
 - **Partial success**: Some failed — review the error list and retry.
 - **Network error**: Check connectivity and try again.
 
-### 10. Export CSV
+### 11. Export CSV
 
 Click **Export CSV** to download a spreadsheet of the results. The CSV includes:
 
@@ -217,14 +231,14 @@ All application state lives in the browser's session cookie. There is no server-
 Clicking **Re-run Drawing** discards the current drawing state and starts fresh. This:
 - Re-fetches all games and entries from TTE.
 - Performs a new random shuffle.
-- Resets pickup tracking, redistribution state, and conflict resolution.
+- Resets pickup tracking, redraw state, and conflict resolution.
 
 **Warning:** Re-running is irreversible. If you've already done significant pickup tracking or redistribution, you'll lose that progress.
 
 ### What happens on page refresh
 
 - **Login, convention select, games pages:** Safe to refresh. These re-render from session data or re-fetch from TTE.
-- **Drawing results page:** The results are stored in session. Refreshing the browser will **not** re-display the results page (it requires a POST). To see results again after a refresh, you would need to re-run the drawing.
+- **Drawing results page:** Safe to refresh. The results are stored in session and rendered via a GET request.
 - **Redistribution page:** Safe to refresh. Current redistribution state (claims, declines) is preserved in the session.
 
 ### Data safety
