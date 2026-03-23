@@ -582,7 +582,7 @@
                     {{ conflict.game_names[game_id] }}
                     {% if game_id in (conflicted_game_ids or []) %}<span class="premium-label">Premium</span>{% endif %}
                     <button type="button" class="conflict-dismiss-btn" title="Dismiss this game"
-                            onclick="event.preventDefault(); dismissConflictGame('{{ conflict.badge_id }}', '{{ game_id }}')">&#x2715;</button>
+                            onclick="event.preventDefault(); dismissConflictGame('{{ conflict.badge_id }}', '{{ game_id }}', this)">&#x2715;</button>
                 </span>
             </label>
             {% endfor %}
@@ -612,7 +612,7 @@
                            onchange="resolveConflict('{{ conflict.badge_id }}', '{{ game_id }}')">
                     {{ conflict.game_names[game_id] }}
                     <button type="button" class="conflict-dismiss-btn" title="Dismiss this game"
-                            onclick="event.preventDefault(); dismissConflictGame('{{ conflict.badge_id }}', '{{ game_id }}')">&#x2715;</button>
+                            onclick="event.preventDefault(); dismissConflictGame('{{ conflict.badge_id }}', '{{ game_id }}', this)">&#x2715;</button>
                 </span>
             </label>
             {% endfor %}
@@ -1077,7 +1077,10 @@
         window.resolveConflict(badgeId, randomId);
     };
 
-    window.dismissConflictGame = function(badgeId, gameId) {
+    window.dismissConflictGame = function(badgeId, gameId, btn) {
+        var gameName = btn ? btn.closest('label').textContent.trim().replace(/\s*✕$/, '') : 'this game';
+        if (!confirm('Dismiss "' + gameName + '"? This will award it to the next person in the list.')) return;
+
         var item = document.querySelector('.conflict-item[data-badge-id="' + badgeId + '"');
         if (item) {
             item.classList.add('resolving');
