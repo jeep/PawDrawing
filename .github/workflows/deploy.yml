@@ -32,20 +32,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: Create deployment package
-        run: |
-          pip install -r requirements.txt --target=.python_packages/lib/site-packages
-          zip -r deploy.zip . -x '.git/*' 'venv/*' '.venv/*' '__pycache__/*' 'tests/*' '.env' '*.pyc' '.python_packages/*'
-          zip -r deploy.zip .python_packages
+        run: zip -r deploy.zip . -x '.git/*' 'venv/*' '.venv/*' '__pycache__/*' 'tests/*' '.env' '*.pyc'
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        run: az webapp deploy --resource-group PawDrawing-rg --name ${{ vars.AZURE_WEBAPP_NAME }} --src-path deploy.zip --type zip
           package: deploy.zip
