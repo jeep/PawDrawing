@@ -2268,14 +2268,18 @@ class TestGetEntrantsRoute(unittest.TestCase):
         resp = self.client.get("/games/entrants/G1")
         self.assertEqual(resp.status_code, 401)
 
-    def test_entrants_returns_filtered_list(self):
+    @patch("routes.TTEClient")
+    def test_entrants_returns_filtered_list(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_game_playtowins.return_value = [
+            {"badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            {"badge_id": "B2", "librarygame_id": "G1", "name": "Bob"},
+        ]
+        MockClient.return_value = mock_instance
+
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["_cached_entries"] = [
-                {"badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-                {"badge_id": "B2", "librarygame_id": "G1", "name": "Bob"},
-                {"badge_id": "B3", "librarygame_id": "G2", "name": "Carol"},
-            ]
+            sess["library_id"] = "lib-1"
             sess["ejected_entries"] = [["B1", "*"]]
 
         resp = self.client.get("/games/entrants/G1")
@@ -2288,12 +2292,17 @@ class TestGetEntrantsRoute(unittest.TestCase):
         b2 = next(e for e in data["entrants"] if e["badge_id"] == "B2")
         self.assertFalse(b2["ejected"])
 
-    def test_entrants_per_game_ejection(self):
+    @patch("routes.TTEClient")
+    def test_entrants_per_game_ejection(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_game_playtowins.return_value = [
+            {"badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+        ]
+        MockClient.return_value = mock_instance
+
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["_cached_entries"] = [
-                {"badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-            ]
+            sess["library_id"] = "lib-1"
             sess["ejected_entries"] = [["B1", "G1"]]
 
         resp = self.client.get("/games/entrants/G1")

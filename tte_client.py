@@ -76,7 +76,7 @@ class TTEClient:
         except requests.RequestException as exc:
             raise TTEAPIError(f"Network error: {exc}") from exc
 
-        if resp.status_code == 401 or resp.status_code == 403:
+        if resp.status_code in (401, 403):
             self.session_id = None
             raise TTEAPIError("Session expired or unauthorized. Please log in again.", resp.status_code)
 

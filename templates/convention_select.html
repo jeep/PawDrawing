@@ -149,7 +149,7 @@
 
         <div class="divider">or</div>
 
-        <form method="POST" action="{{ url_for('main.convention_confirm') }}" id="select-form">
+        <form method="POST" action="{{ url_for('main.convention_select_route') }}" id="select-form">
             <div class="form-row">
                 <label class="section-label" for="convention_id">Paste Convention ID</label>
                 <input type="text" id="convention_id" name="convention_id"
@@ -169,7 +169,7 @@
 
         <div class="divider">or</div>
 
-        <form method="POST" action="{{ url_for('main.library_confirm') }}" id="library-form">
+        <form method="POST" action="{{ url_for('main.library_select_route') }}" id="library-form">
             <div class="form-row">
                 <label class="section-label" for="library_id">Paste Library ID</label>
                 <input type="text" id="library_id" name="library_id"

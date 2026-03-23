@@ -24,15 +24,15 @@ def process_entries(entries):
         if not badge_id:
             continue
 
-        # Normalize: ensure badge_id is set for downstream use
-        entry["badge_id"] = badge_id
-
         game_id = entry.get("librarygame_id")
         key = (badge_id, game_id)
         if key in seen:
             continue
 
         seen.add(key)
+        # Copy to avoid mutating caller's dict, then normalize badge_id
+        entry = dict(entry)
+        entry["badge_id"] = badge_id
         result.append(entry)
 
     return result

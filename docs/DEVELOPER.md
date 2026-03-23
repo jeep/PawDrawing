@@ -77,9 +77,9 @@ All routes live on a single Blueprint (`main_bp`). Helper functions:
 | POST | `/logout` | `logout` | Destroy session |
 | GET | `/convention` | `convention_select` | Convention search page |
 | GET | `/convention/search` | `convention_search` | AJAX: search conventions |
-| POST | `/convention/select` | `convention_confirm` | Fetch and confirm convention |
+| POST | `/convention/select` | `convention_select_route` | Fetch and confirm convention |
 | GET | `/library/browse` | `library_browse` | AJAX: list user's libraries |
-| POST | `/library/select` | `library_confirm` | Fetch and confirm library (no convention) |
+| POST | `/library/select` | `library_select_route` | Fetch and confirm library (no convention) |
 | GET | `/games` | `games` | Load and display P2W games |
 | POST | `/games/premium` | `set_premium_games` | AJAX: save premium designations |
 | POST | `/games/eject` | `eject_player` | AJAX: eject player from drawing |
@@ -221,7 +221,6 @@ All application state lives in the Flask session (cookie-based, signed with `SEC
 | `not_here` | `list[str]` | Not Here | Badge IDs marked as absent |
 | `not_here_warning_dismissed` | `bool` | Not Here | Whether the confirmation warning was dismissed |
 | `ejected_entries` | `list[list]` | Eject player | Pairs of `[badge_id, game_id]` (`"*"` = all games) |
-| `_cached_entries` | `list[dict]` | Games page | Full processed entries for entrant lookup |
 
 Session is cleared entirely on auth errors (401/403) and on logout.
 Ejections (`ejected_entries`) are cleared when the convention or library source changes.

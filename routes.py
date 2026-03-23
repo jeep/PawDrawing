@@ -118,7 +118,7 @@ def library_browse():
 
 
 @main_bp.route("/library/select", methods=["POST"])
-def library_confirm():
+def library_select_route():
     """Fetch library details and store in session (no convention)."""
     if not session.get("tte_session_id"):
         flash("Please log in first.", "error")
@@ -173,7 +173,7 @@ def convention_search():
 
 
 @main_bp.route("/convention/select", methods=["POST"])
-def convention_confirm():
+def convention_select_route():
     """Fetch convention details and store selection in session."""
     if not session.get("tte_session_id"):
         flash("Please log in first.", "error")
@@ -261,9 +261,6 @@ def games():
     for badge_id, game_id in ejected_entries:
         if game_id != "*":
             ejected_per_game.setdefault(game_id, set()).add(badge_id)
-
-    # Store full (unfiltered) entries in session for entrant lookup
-    session["_cached_entries"] = entries
 
     premium_games = session.get("premium_games", [])
 
@@ -361,7 +358,20 @@ def get_entrants(game_id):
     if not session.get("tte_session_id"):
         return jsonify({"error": "Not authenticated"}), 401
 
-    entries = session.get("_cached_entries", [])
+    library_id = session.get("library_id")
+    if not library_id:
+        return jsonify({"error": "No library selected"}), 400
+
+    client = _get_client()
+    try:
+        raw_entries = client.get_library_game_playtowins(game_id)
+    except TTEAPIError as exc:
+        if getattr(exc, 'status_code', None) in (401, 403):
+            session.clear()
+            return jsonify({"error": "Session expired — please log in again."}), 401
+        return jsonify({"error": str(exc)}), 502
+
+    entries = process_entries(raw_entries)
     ejected_entries = session.get("ejected_entries", [])
 
     # Build ejection lookup for this game
@@ -448,8 +458,8 @@ def run_drawing_route():
 
     entries = process_entries(raw_entries)
     ejected_entries = session.get("ejected_entries", [])
-    entries = apply_ejections(entries, ejected_entries)
-    game_data = group_entries_by_game(entries, all_games)
+    filtered = apply_ejections(entries, ejected_entries)
+    game_data = group_entries_by_game(filtered, all_games)
     premium_games = session.get("premium_games", [])
 
     drawing_state, conflicts, auto_resolved = run_drawing(game_data, premium_games)
@@ -537,28 +547,12 @@ def resolve_conflicts():
 
     session["drawing_state"] = drawing_state
 
-    winners = get_current_winners(drawing_state)
-
-    results = []
-    for item in drawing_state:
-        game = item["game"]
-        game_id = game["id"]
-        winner = winners.get(game_id)
-        results.append({
-            "game_name": game.get("name", "Unknown"),
-            "game_id": game_id,
-            "is_premium": game_id in premium_games,
-            "winner_name": winner.get("name", "Unknown") if winner else None,
-            "winner_badge": winner.get("badge_id", "") if winner else None,
-            "total_entries": len(item["shuffled"]),
-            "winner_index": item["winner_index"],
-        })
-
-    results.sort(key=lambda r: r["game_name"])
+    results = _build_results_from_session()
 
     # Build conflict info for any new cascading conflicts
     conflicts_out = []
     if new_conflicts:
+        winners = get_current_winners(drawing_state)
         game_name_map = {
             item["game"]["id"]: item["game"].get("name", "Unknown")
             for item in drawing_state
@@ -729,9 +723,9 @@ def redraw_all_unclaimed():
         game_id = item["game"]["id"]
         if game_id not in picked_up and item["shuffled"]:
             unclaimed_ids.add(game_id)
-            # Collect original first-draw winners for exclusion
-            if 0 <= item["winner_index"] < len(item["shuffled"]):
-                badge = item["shuffled"][item["winner_index"]].get("badge_id")
+            # Collect original first-draw winners (index 0) for exclusion
+            if item["shuffled"]:
+                badge = item["shuffled"][0].get("badge_id")
                 if badge:
                     original_winner_badges.add(badge)
 
@@ -789,7 +783,7 @@ def push_to_tte():
     entries_to_update = []
     for game_id in picked_up:
         winner = winners.get(game_id)
-        if winner:
+        if winner and winner.get("id"):
             entries_to_update.append({
                 "playtowin_id": winner["id"],
                 "game_id": game_id,
