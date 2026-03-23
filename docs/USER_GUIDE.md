@@ -96,7 +96,7 @@ Click **Redraw All Unclaimed** to run a fresh drawing for all games that have no
 
 - Re-shuffles entries for each unclaimed game.
 - Excludes anyone marked as "Not Here."
-- Excludes anyone who won in the original drawing (regardless of whether they picked up).
+- Places original drawing winners last in the shuffle order — they can only win if no other eligible entrants remain for that game.
 
 The one-win-per-person rule does **not** apply during the redraw by default. Check the **"Apply one-win rules"** checkbox before redrawing to enforce the one-win limit.
 
