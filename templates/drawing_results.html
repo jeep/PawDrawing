@@ -415,6 +415,33 @@
     .modal-cancel:hover { background: #ddd; }
     .modal-confirm { background: #e74c3c; color: white; }
     .modal-confirm:hover { background: #c0392b; }
+
+    .search-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.6rem 1rem;
+        background: white;
+        border: 1px solid #dee2e6;
+        border-top: none;
+        border-radius: 0 0 8px 8px;
+        margin-bottom: 1rem;
+    }
+    .search-bar input {
+        flex: 1;
+        padding: 0.45rem 0.75rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 0.95rem;
+        outline: none;
+    }
+    .search-bar input:focus { border-color: #3498db; box-shadow: 0 0 0 2px rgba(52,152,219,0.15); }
+    .search-count {
+        font-size: 0.85rem;
+        color: #888;
+        white-space: nowrap;
+    }
+    .search-count strong { color: #2c3e50; }
 </style>
 {% endblock %}
 
@@ -517,6 +544,11 @@
 <div class="view-tabs">
     <button class="view-tab active" id="tab-by-game" onclick="switchView('by-game')">By Game</button>
     <button class="view-tab" id="tab-by-winner" onclick="switchView('by-winner')">By Winner</button>
+</div>
+
+<div class="search-bar" id="search-bar">
+    <input type="text" id="search-input" placeholder="Filter by game name, winner name, or badge ID…" autocomplete="off">
+    <span class="search-count" id="search-count"></span>
 </div>
 
 <div class="view-panel active" id="panel-by-game">
@@ -898,6 +930,90 @@
             status.style.color = '#b71c1c';
             btn.disabled = false;
         });
+    };
+
+    // ── Search / Filter ──────────────────────────────────────────────
+    var searchInput = document.getElementById('search-input');
+    var searchCount = document.getElementById('search-count');
+
+    function filterResults() {
+        var query = searchInput.value.trim().toLowerCase();
+        var byGameActive = document.getElementById('panel-by-game').classList.contains('active');
+
+        if (byGameActive) {
+            filterByGameView(query);
+        } else {
+            filterByWinnerView(query);
+        }
+    }
+
+    function filterByGameView(query) {
+        var tables = ['awaiting-table', 'picked-up-table', 'no-entries-table'];
+        var totalRows = 0;
+        var visibleRows = 0;
+
+        tables.forEach(function(tableId) {
+            var table = document.getElementById(tableId);
+            if (!table) return;
+            var rows = table.querySelectorAll('tbody tr');
+            rows.forEach(function(row) {
+                totalRows++;
+                if (!query) {
+                    row.style.display = '';
+                    visibleRows++;
+                    return;
+                }
+                var cells = row.querySelectorAll('td');
+                var text = '';
+                for (var i = 0; i < cells.length; i++) text += ' ' + cells[i].textContent;
+                var match = text.toLowerCase().indexOf(query) !== -1;
+                row.style.display = match ? '' : 'none';
+                if (match) visibleRows++;
+            });
+        });
+
+        updateSearchCount(query, visibleRows, totalRows);
+    }
+
+    function filterByWinnerView(query) {
+        var table = document.getElementById('winner-table');
+        if (!table) return;
+        var rows = table.querySelectorAll('tbody tr');
+        var totalRows = rows.length;
+        var visibleRows = 0;
+
+        rows.forEach(function(row) {
+            if (!query) {
+                row.style.display = '';
+                visibleRows++;
+                return;
+            }
+            var cells = row.querySelectorAll('td');
+            var text = '';
+            for (var i = 0; i < cells.length; i++) text += ' ' + cells[i].textContent;
+            var match = text.toLowerCase().indexOf(query) !== -1;
+            row.style.display = match ? '' : 'none';
+            if (match) visibleRows++;
+        });
+
+        updateSearchCount(query, visibleRows, totalRows);
+    }
+
+    function updateSearchCount(query, visible, total) {
+        if (!query) {
+            searchCount.textContent = '';
+        } else {
+            searchCount.innerHTML = '<strong>' + visible + '</strong> of <strong>' + total + '</strong> shown';
+        }
+    }
+
+    searchInput.addEventListener('input', filterResults);
+
+    // Re-filter when switching tabs
+    var origSwitchView = window.switchView;
+    window.switchView = function(view) {
+        origSwitchView(view);
+        filterResults();
     };
 
     function escHtml(str) {

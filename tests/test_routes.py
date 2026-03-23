@@ -1210,6 +1210,28 @@ class TestDrawingRoutes(unittest.TestCase):
         resp = self.client.post("/drawing", follow_redirects=True)
         self.assertIn(b"Redraw All Unclaimed", resp.data)
 
+    @patch("routes.TTEClient")
+    def test_drawing_results_has_search_filter(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.post("/drawing", follow_redirects=True)
+        self.assertIn(b'id="search-input"', resp.data)
+        self.assertIn(b'id="search-count"', resp.data)
+        self.assertIn(b"Filter by game name", resp.data)
+
 
 class TestAwardNextRoute(unittest.TestCase):
 
