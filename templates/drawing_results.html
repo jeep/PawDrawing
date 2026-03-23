@@ -453,7 +453,7 @@
     {% if drawing_timestamp %}
     <span class="stat" style="font-size:0.8rem;color:#888;">Data from {{ drawing_timestamp }}</span>
     {% endif %}
-    <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin-left:auto;" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running...';">
+    <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin-left:auto;" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running...';document.getElementById('loading-message').textContent='Running drawing\u2026';document.getElementById('loading-note').textContent='This may take a minute or two depending on the number of games and entries.';document.getElementById('loading-overlay').classList.add('active');">
         <button type="submit" class="rerun-btn">Re-run Drawing</button>
     </form>
     <button class="push-btn" id="push-btn" onclick="pushToTTE()">Push to TTE</button>

@@ -304,7 +304,7 @@
 
 <div class="eject-panel" id="eject-panel">
     <div class="action-row">
-        <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin:0;" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running Drawing...';">
+        <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin:0;" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running Drawing...';document.getElementById('loading-message').textContent='Running drawing\u2026';document.getElementById('loading-note').textContent='This may take a minute or two depending on the number of games and entries.';document.getElementById('loading-overlay').classList.add('active');">
             <button type="submit" class="btn-drawing">Run Drawing</button>
         </form>
         <a href="{{ url_for('main.players') }}" class="btn-players">Manage Players</a>
