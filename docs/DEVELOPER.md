@@ -82,6 +82,9 @@ All routes live on a single Blueprint (`main_bp`). Helper functions:
 | POST | `/library/select` | `library_confirm` | Fetch and confirm library (no convention) |
 | GET | `/games` | `games` | Load and display P2W games |
 | POST | `/games/premium` | `set_premium_games` | AJAX: save premium designations |
+| POST | `/games/eject` | `eject_player` | AJAX: eject player from drawing |
+| POST | `/games/uneject` | `uneject_player` | AJAX: undo an ejection |
+| GET | `/games/entrants/<game_id>` | `get_entrants` | AJAX: list entrants for a game |
 | POST | `/drawing` | `run_drawing_route` | Execute drawing algorithm (redirects to results) |
 | GET | `/drawing/results` | `drawing_results` | Display drawing results from session |
 | POST | `/drawing/resolve` | `resolve_conflicts` | AJAX: apply conflict resolutions |
@@ -168,12 +171,14 @@ Library Confirm                POST /library/select  (alternative path)
 Games Page                     GET /games
   │                              ├─ TTEClient.get_library_games()
   │                              └─ TTEClient.get_convention_playtowins()
-  │                              └─ process_entries() + group_entries_by_game()
+  │                              └─ process_entries() + apply_ejections() + group_entries_by_game()
   │                              └─ Premium toggles: AJAX POST /games/premium
+  │                              └─ Eject player: AJAX POST /games/eject, /games/uneject
+  │                              └─ View entrants: AJAX GET /games/entrants/<game_id>
   ▼
 Run Drawing                    POST /drawing → 302 → GET /drawing/results
   │                              ├─ Re-fetches games + entries from TTE
-  │                              └─ run_drawing() → drawing_state, conflicts, auto_resolved
+  │                              └─ apply_ejections() → run_drawing() → drawing_state, conflicts, auto_resolved
   │                              └─ Stores drawing_state in session, redirects (PRG pattern)
   ▼
 Resolve Conflicts              AJAX POST /drawing/resolve
@@ -215,8 +220,11 @@ All application state lives in the Flask session (cookie-based, signed with `SEC
 | `picked_up` | `list[str]` | Pickup toggle | Game IDs marked as picked up |
 | `not_here` | `list[str]` | Not Here | Badge IDs marked as absent |
 | `not_here_warning_dismissed` | `bool` | Not Here | Whether the confirmation warning was dismissed |
+| `ejected_entries` | `list[list]` | Eject player | Pairs of `[badge_id, game_id]` (`"*"` = all games) |
+| `_cached_entries` | `list[dict]` | Games page | Full processed entries for entrant lookup |
 
 Session is cleared entirely on auth errors (401/403) and on logout.
+Ejections (`ejected_entries`) are cleared when the convention or library source changes.
 
 ## Drawing Algorithm
 

@@ -2163,5 +2163,191 @@ class TestRefreshData(unittest.TestCase):
             self.assertTrue(len(sess["drawing_timestamp"]) > 0)
 
 
+class TestEjectPlayerRoute(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def _auth(self, **extra):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["tte_username"] = "admin"
+            for k, v in extra.items():
+                sess[k] = v
+
+    def test_eject_requires_auth(self):
+        resp = self.client.post("/games/eject", json={"badge_id": "B1"})
+        self.assertEqual(resp.status_code, 401)
+
+    def test_eject_requires_badge_id(self):
+        self._auth()
+        resp = self.client.post("/games/eject", json={})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_eject_adds_to_session(self):
+        self._auth()
+        resp = self.client.post("/games/eject", json={"badge_id": "B1"})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["ejected_entries"], [["B1", "*"]])
+
+    def test_eject_specific_game(self):
+        self._auth()
+        resp = self.client.post("/games/eject", json={"badge_id": "B1", "game_id": "G1"})
+        self.assertEqual(resp.status_code, 200)
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["ejected_entries"], [["B1", "G1"]])
+
+    def test_eject_duplicate_returns_409(self):
+        self._auth(ejected_entries=[["B1", "*"]])
+        resp = self.client.post("/games/eject", json={"badge_id": "B1"})
+        self.assertEqual(resp.status_code, 409)
+
+    def test_eject_all_removes_per_game(self):
+        self._auth(ejected_entries=[["B1", "G1"], ["B1", "G2"]])
+        resp = self.client.post("/games/eject", json={"badge_id": "B1"})
+        self.assertEqual(resp.status_code, 200)
+        with self.client.session_transaction() as sess:
+            # Per-game ejections replaced with wildcard
+            self.assertEqual(sess["ejected_entries"], [["B1", "*"]])
+
+
+class TestUnejectPlayerRoute(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def _auth(self, **extra):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["tte_username"] = "admin"
+            for k, v in extra.items():
+                sess[k] = v
+
+    def test_uneject_requires_auth(self):
+        resp = self.client.post("/games/uneject", json={"badge_id": "B1"})
+        self.assertEqual(resp.status_code, 401)
+
+    def test_uneject_removes_from_session(self):
+        self._auth(ejected_entries=[["B1", "*"]])
+        resp = self.client.post("/games/uneject", json={"badge_id": "B1"})
+        self.assertEqual(resp.status_code, 200)
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["ejected_entries"], [])
+
+    def test_uneject_not_found(self):
+        self._auth(ejected_entries=[])
+        resp = self.client.post("/games/uneject", json={"badge_id": "B1"})
+        self.assertEqual(resp.status_code, 404)
+
+    def test_uneject_specific_game(self):
+        self._auth(ejected_entries=[["B1", "G1"], ["B1", "G2"]])
+        resp = self.client.post("/games/uneject", json={"badge_id": "B1", "game_id": "G1"})
+        self.assertEqual(resp.status_code, 200)
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["ejected_entries"], [["B1", "G2"]])
+
+
+class TestGetEntrantsRoute(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def test_entrants_requires_auth(self):
+        resp = self.client.get("/games/entrants/G1")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_entrants_returns_filtered_list(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["_cached_entries"] = [
+                {"badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"badge_id": "B2", "librarygame_id": "G1", "name": "Bob"},
+                {"badge_id": "B3", "librarygame_id": "G2", "name": "Carol"},
+            ]
+            sess["ejected_entries"] = [["B1", "*"]]
+
+        resp = self.client.get("/games/entrants/G1")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(len(data["entrants"]), 2)
+        # B1 should be marked ejected
+        b1 = next(e for e in data["entrants"] if e["badge_id"] == "B1")
+        self.assertTrue(b1["ejected"])
+        b2 = next(e for e in data["entrants"] if e["badge_id"] == "B2")
+        self.assertFalse(b2["ejected"])
+
+    def test_entrants_per_game_ejection(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["_cached_entries"] = [
+                {"badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            ]
+            sess["ejected_entries"] = [["B1", "G1"]]
+
+        resp = self.client.get("/games/entrants/G1")
+        data = resp.get_json()
+        self.assertTrue(data["entrants"][0]["ejected"])
+
+
+class TestEjectionClearedOnSourceChange(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    @patch("routes.TTEClient")
+    def test_convention_confirm_clears_ejections(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_convention.return_value = {
+            "id": "conv-1",
+            "name": "GameFest",
+            "library": {"id": "lib-1", "name": "Main Library"},
+        }
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["tte_username"] = "admin"
+            sess["ejected_entries"] = [["B1", "*"]]
+
+        self.client.post("/convention/select", data={"convention_id": "conv-1"})
+
+        with self.client.session_transaction() as sess:
+            self.assertNotIn("ejected_entries", sess)
+
+    @patch("routes.TTEClient")
+    def test_library_confirm_clears_ejections(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library.return_value = {
+            "id": "lib-1",
+            "name": "Main Library",
+        }
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["tte_username"] = "admin"
+            sess["ejected_entries"] = [["B1", "*"]]
+
+        self.client.post("/library/select", data={"library_id": "lib-1"})
+
+        with self.client.session_transaction() as sess:
+            self.assertNotIn("ejected_entries", sess)
+
+
 if __name__ == "__main__":
     unittest.main()

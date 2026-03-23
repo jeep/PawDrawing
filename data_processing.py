@@ -1,6 +1,6 @@
 """Data processing for Play-to-Win games and entries.
 
-Handles de-duplication, validation, and grouping of PlayToWin entries.
+Handles de-duplication, validation, ejection filtering, and grouping of PlayToWin entries.
 """
 
 
@@ -35,6 +35,33 @@ def process_entries(entries):
         seen.add(key)
         result.append(entry)
 
+    return result
+
+
+def apply_ejections(entries, ejected_entries):
+    """Remove ejected entries from the entry list.
+
+    ejected_entries is a list of [badge_id, game_id] pairs.
+    A game_id of "*" means the player is ejected from all games.
+
+    Returns the filtered list (entries not matching any ejection).
+    """
+    if not ejected_entries:
+        return entries
+
+    # Build lookup: badge_id → set of ejected game_ids (or "*" for all)
+    ejected = {}
+    for badge_id, game_id in ejected_entries:
+        ejected.setdefault(badge_id, set()).add(game_id)
+
+    result = []
+    for entry in entries:
+        badge_id = entry.get("badge_id")
+        game_id = entry.get("librarygame_id")
+        ejected_games = ejected.get(badge_id)
+        if ejected_games and ("*" in ejected_games or game_id in ejected_games):
+            continue
+        result.append(entry)
     return result
 
 

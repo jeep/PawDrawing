@@ -2,7 +2,7 @@
 
 import unittest
 
-from data_processing import group_entries_by_game, process_entries
+from data_processing import apply_ejections, group_entries_by_game, process_entries
 
 
 class TestProcessEntries(unittest.TestCase):
@@ -96,6 +96,55 @@ class TestProcessEntries(unittest.TestCase):
         ]
         result = process_entries(entries)
         self.assertEqual(len(result), 1)
+
+
+class TestApplyEjections(unittest.TestCase):
+
+    def test_eject_from_all_games(self):
+        entries = [
+            {"badge_id": "B1", "librarygame_id": "G1"},
+            {"badge_id": "B1", "librarygame_id": "G2"},
+            {"badge_id": "B2", "librarygame_id": "G1"},
+        ]
+        result = apply_ejections(entries, [["B1", "*"]])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["badge_id"], "B2")
+
+    def test_eject_from_specific_game(self):
+        entries = [
+            {"badge_id": "B1", "librarygame_id": "G1"},
+            {"badge_id": "B1", "librarygame_id": "G2"},
+        ]
+        result = apply_ejections(entries, [["B1", "G1"]])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["librarygame_id"], "G2")
+
+    def test_no_ejections(self):
+        entries = [{"badge_id": "B1", "librarygame_id": "G1"}]
+        result = apply_ejections(entries, [])
+        self.assertEqual(len(result), 1)
+
+    def test_empty_entries(self):
+        self.assertEqual(apply_ejections([], [["B1", "*"]]), [])
+
+    def test_multiple_ejections(self):
+        entries = [
+            {"badge_id": "B1", "librarygame_id": "G1"},
+            {"badge_id": "B2", "librarygame_id": "G1"},
+            {"badge_id": "B3", "librarygame_id": "G1"},
+        ]
+        result = apply_ejections(entries, [["B1", "*"], ["B2", "G1"]])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["badge_id"], "B3")
+
+    def test_wildcard_overrides_specific(self):
+        entries = [
+            {"badge_id": "B1", "librarygame_id": "G1"},
+            {"badge_id": "B1", "librarygame_id": "G2"},
+        ]
+        # Both a wildcard and specific — wildcard covers all
+        result = apply_ejections(entries, [["B1", "G1"], ["B1", "*"]])
+        self.assertEqual(len(result), 0)
 
 
 class TestGroupEntriesByGame(unittest.TestCase):

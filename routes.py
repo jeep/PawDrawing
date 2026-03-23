@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for, Response
 
-from data_processing import group_entries_by_game, process_entries
+from data_processing import apply_ejections, group_entries_by_game, process_entries
 from drawing import (
     advance_winner,
     apply_resolution,
@@ -141,6 +141,7 @@ def library_confirm():
     session.pop("convention_name", None)
     session["library_id"] = library_id
     session["library_name"] = library_name
+    session.pop("ejected_entries", None)
 
     return render_template(
         "library_confirm.html",
@@ -202,6 +203,7 @@ def convention_confirm():
     session["convention_name"] = convention_name
     session["library_id"] = library_id
     session["library_name"] = library_name
+    session.pop("ejected_entries", None)
 
     return render_template(
         "convention_confirm.html",
@@ -243,8 +245,25 @@ def games():
         return _handle_api_error(exc, url_for("main.convention_select"), "load entries")
 
     entries = process_entries(raw_entries)
-    game_data = group_entries_by_game(entries, all_games)
+    ejected_entries = session.get("ejected_entries", [])
+    filtered = apply_ejections(entries, ejected_entries)
+    game_data = group_entries_by_game(filtered, all_games)
     game_data.sort(key=lambda g: g["game"].get("name", ""))
+
+    # Build ejected badge_ids set for display
+    ejected_badges = set()
+    for badge_id, game_id in ejected_entries:
+        if game_id == "*":
+            ejected_badges.add(badge_id)
+
+    # Build per-game ejected set
+    ejected_per_game = {}
+    for badge_id, game_id in ejected_entries:
+        if game_id != "*":
+            ejected_per_game.setdefault(game_id, set()).add(badge_id)
+
+    # Store full (unfiltered) entries in session for entrant lookup
+    session["_cached_entries"] = entries
 
     premium_games = session.get("premium_games", [])
 
@@ -254,9 +273,12 @@ def games():
         "games.html",
         game_data=game_data,
         total_games=len(all_games),
-        total_entries=len(entries),
+        total_entries=len(filtered),
         convention_name=session.get("convention_name") or session.get("library_name", ""),
         premium_games=premium_games,
+        ejected_entries=ejected_entries,
+        ejected_badges=ejected_badges,
+        ejected_per_game=ejected_per_game,
         data_loaded_at=data_loaded_at,
     )
 
@@ -277,6 +299,90 @@ def set_premium_games():
 
     session["premium_games"] = game_ids
     return jsonify({"ok": True, "count": len(game_ids)})
+
+
+@main_bp.route("/games/eject", methods=["POST"])
+def eject_player():
+    """AJAX endpoint: eject a player from the drawing."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    data = request.get_json(silent=True)
+    if not data or "badge_id" not in data:
+        return jsonify({"error": "badge_id is required"}), 400
+
+    badge_id = str(data["badge_id"]).strip()
+    game_id = str(data.get("game_id", "*")).strip()
+    if not badge_id:
+        return jsonify({"error": "badge_id is required"}), 400
+
+    ejected = session.get("ejected_entries", [])
+
+    # Check for duplicates
+    for b, g in ejected:
+        if b == badge_id and g == game_id:
+            return jsonify({"error": "Already ejected"}), 409
+
+    # If ejecting from all games, remove any per-game ejections for this badge
+    if game_id == "*":
+        ejected = [[b, g] for b, g in ejected if b != badge_id]
+
+    ejected.append([badge_id, game_id])
+    session["ejected_entries"] = ejected
+    return jsonify({"ok": True, "count": len(ejected)})
+
+
+@main_bp.route("/games/uneject", methods=["POST"])
+def uneject_player():
+    """AJAX endpoint: undo an ejection."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    data = request.get_json(silent=True)
+    if not data or "badge_id" not in data:
+        return jsonify({"error": "badge_id is required"}), 400
+
+    badge_id = str(data["badge_id"]).strip()
+    game_id = str(data.get("game_id", "*")).strip()
+
+    ejected = session.get("ejected_entries", [])
+    updated = [[b, g] for b, g in ejected if not (b == badge_id and g == game_id)]
+
+    if len(updated) == len(ejected):
+        return jsonify({"error": "Ejection not found"}), 404
+
+    session["ejected_entries"] = updated
+    return jsonify({"ok": True, "count": len(updated)})
+
+
+@main_bp.route("/games/entrants/<game_id>")
+def get_entrants(game_id):
+    """AJAX endpoint: return entrants for a specific game."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    entries = session.get("_cached_entries", [])
+    ejected_entries = session.get("ejected_entries", [])
+
+    # Build ejection lookup for this game
+    ejected_set = set()
+    for badge_id, gid in ejected_entries:
+        if gid == "*" or gid == game_id:
+            ejected_set.add(badge_id)
+
+    entrants = []
+    for entry in entries:
+        if entry.get("librarygame_id") != game_id:
+            continue
+        badge_id = entry.get("badge_id", "")
+        entrants.append({
+            "badge_id": badge_id,
+            "name": entry.get("name", badge_id),
+            "ejected": badge_id in ejected_set,
+        })
+
+    entrants.sort(key=lambda e: e["name"])
+    return jsonify({"ok": True, "entrants": entrants})
 
 
 def _build_results_from_session():
@@ -341,6 +447,8 @@ def run_drawing_route():
         return _handle_api_error(exc, url_for("main.games"), "load entries")
 
     entries = process_entries(raw_entries)
+    ejected_entries = session.get("ejected_entries", [])
+    entries = apply_ejections(entries, ejected_entries)
     game_data = group_entries_by_game(entries, all_games)
     premium_games = session.get("premium_games", [])
 

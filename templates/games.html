@@ -136,6 +136,115 @@
         display: inline-block;
     }
     .refresh-btn:hover { background: #2980b9; }
+
+    /* Ejection panel */
+    .eject-panel {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        padding: 1rem 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .eject-panel h3 {
+        margin: 0 0 0.75rem;
+        font-size: 1rem;
+        color: #2c3e50;
+    }
+    .eject-form {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .eject-form input {
+        padding: 0.4rem 0.75rem;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        font-size: 0.9rem;
+        width: 200px;
+    }
+    .eject-form button {
+        background: #e74c3c;
+        color: white;
+        border: none;
+        padding: 0.4rem 1rem;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+    .eject-form button:hover { background: #c0392b; }
+    .eject-list {
+        margin-top: 0.75rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+    .eject-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: #fdecea;
+        color: #c0392b;
+        padding: 0.25rem 0.6rem;
+        border-radius: 4px;
+        font-size: 0.82rem;
+        font-weight: 500;
+    }
+    .eject-chip .undo-btn {
+        background: none;
+        border: none;
+        color: #c0392b;
+        cursor: pointer;
+        font-size: 1rem;
+        padding: 0;
+        line-height: 1;
+    }
+    .eject-chip .undo-btn:hover { color: #922b21; }
+    .eject-count {
+        background: #e74c3c;
+        color: white;
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.1rem 0.45rem;
+        border-radius: 10px;
+        margin-left: 0.3rem;
+    }
+
+    /* Expandable entrant rows */
+    .expand-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 0.85rem;
+        color: #3498db;
+        padding: 0;
+        margin-right: 0.4rem;
+    }
+    .expand-btn:hover { color: #2980b9; }
+    .entrant-row td {
+        padding: 0.3rem 1rem 0.3rem 2.5rem;
+        background: #f8f9fa;
+        border-bottom: 1px solid #eee;
+        font-size: 0.85rem;
+    }
+    .entrant-row.ejected td {
+        background: #fdecea;
+        color: #999;
+        text-decoration: line-through;
+    }
+    .entrant-eject-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 0.82rem;
+        padding: 0.1rem 0.4rem;
+        border-radius: 3px;
+    }
+    .entrant-eject-btn.eject { color: #e74c3c; }
+    .entrant-eject-btn.eject:hover { background: #fdecea; }
+    .entrant-eject-btn.uneject { color: #27ae60; }
+    .entrant-eject-btn.uneject:hover { background: #eafaf1; }
 </style>
 {% endblock %}
 
@@ -144,9 +253,28 @@
     <h2>{{ convention_name }}</h2>
     <span class="stat"><strong>{{ total_games }}</strong> games</span>
     <span class="stat"><strong>{{ total_entries }}</strong> unique entries</span>
+    {% if ejected_entries %}
+    <span class="stat"><strong>{{ ejected_entries|length }}</strong> ejected<span class="eject-count">!</span></span>
+    {% endif %}
     <span class="stat" style="font-size:0.8rem;color:#888;">Loaded {{ data_loaded_at }}</span>
     <span class="save-status" id="save-status">Saved</span>
     <a href="{{ url_for('main.games') }}" class="refresh-btn" id="refresh-btn" onclick="this.textContent='Refreshing...';this.style.pointerEvents='none';this.style.opacity='0.6';">Refresh Data</a>
+</div>
+
+<div class="eject-panel" id="eject-panel">
+    <h3>Eject Player from Drawing</h3>
+    <div class="eject-form">
+        <input type="text" id="eject-badge-input" placeholder="Badge ID" autocomplete="off">
+        <button type="button" id="eject-all-btn">Eject from All Games</button>
+    </div>
+    <div class="eject-list" id="eject-list">
+        {% for badge_id, game_id in ejected_entries %}
+        <span class="eject-chip" data-badge="{{ badge_id }}" data-game="{{ game_id }}">
+            {{ badge_id }}{% if game_id != '*' %} (1 game){% else %} (all){% endif %}
+            <button class="undo-btn" title="Undo">&times;</button>
+        </span>
+        {% endfor %}
+    </div>
 </div>
 
 {% if game_data %}
@@ -163,6 +291,9 @@
         <tr class="{{ 'premium' if item.game.get('id') in premium_games else '' }}"
             data-game-id="{{ item.game.get('id', '') }}">
             <td>
+                {% if item.entrant_count > 0 %}
+                <button class="expand-btn" data-game-id="{{ item.game.get('id', '') }}" title="Show entrants">&#9654;</button>
+                {% endif %}
                 {{ item.game.get('name', 'Unknown') }}
                 {% if item.game.get('id') in premium_games %}
                     <span class="premium-label">Premium</span>
@@ -204,10 +335,157 @@
 (function() {
     const statusEl = document.getElementById('save-status');
 
+    /* ── Ejection: global eject ── */
+    const ejectInput = document.getElementById('eject-badge-input');
+    const ejectBtn = document.getElementById('eject-all-btn');
+    const ejectList = document.getElementById('eject-list');
+
+    ejectBtn.addEventListener('click', function() {
+        const badgeId = ejectInput.value.trim();
+        if (!badgeId) return;
+        doEject(badgeId, '*');
+        ejectInput.value = '';
+    });
+
+    ejectInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); ejectBtn.click(); }
+    });
+
+    /* Undo buttons on existing chips */
+    ejectList.addEventListener('click', function(e) {
+        const btn = e.target.closest('.undo-btn');
+        if (!btn) return;
+        const chip = btn.closest('.eject-chip');
+        doUneject(chip.dataset.badge, chip.dataset.game, chip);
+    });
+
+    function doEject(badgeId, gameId) {
+        fetch('{{ url_for("main.eject_player") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({badge_id: badgeId, game_id: gameId})
+        })
+        .then(r => { if (!r.ok && r.status !== 409) throw new Error(); return r.json(); })
+        .then(function(data) {
+            if (data.error) return;
+            const chip = document.createElement('span');
+            chip.className = 'eject-chip';
+            chip.dataset.badge = badgeId;
+            chip.dataset.game = gameId;
+            chip.innerHTML = badgeId + (gameId === '*' ? ' (all)' : ' (1 game)') +
+                ' <button class="undo-btn" title="Undo">&times;</button>';
+            ejectList.appendChild(chip);
+            // Mark entrant rows if expanded
+            updateEntrantRowState(badgeId, gameId, true);
+        })
+        .catch(function() {});
+    }
+
+    function doUneject(badgeId, gameId, chip) {
+        fetch('{{ url_for("main.uneject_player") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({badge_id: badgeId, game_id: gameId})
+        })
+        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+        .then(function() {
+            chip.remove();
+            updateEntrantRowState(badgeId, gameId, false);
+        })
+        .catch(function() {});
+    }
+
+    function updateEntrantRowState(badgeId, gameId, ejected) {
+        document.querySelectorAll('.entrant-row').forEach(function(row) {
+            if (row.dataset.badge !== badgeId) return;
+            if (gameId !== '*' && row.dataset.game !== gameId) return;
+            row.classList.toggle('ejected', ejected);
+            const btn = row.querySelector('.entrant-eject-btn');
+            if (btn) {
+                btn.className = 'entrant-eject-btn ' + (ejected ? 'uneject' : 'eject');
+                btn.textContent = ejected ? 'Undo' : 'Eject';
+                btn.dataset.action = ejected ? 'uneject' : 'eject';
+            }
+        });
+    }
+
+    /* ── Expand/collapse entrants ── */
+    document.querySelectorAll('.expand-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const gameId = btn.dataset.gameId;
+            const row = btn.closest('tr');
+            const isExpanded = btn.dataset.expanded === '1';
+
+            if (isExpanded) {
+                // Collapse: remove entrant rows
+                let next = row.nextElementSibling;
+                while (next && next.classList.contains('entrant-row')) {
+                    const toRemove = next;
+                    next = next.nextElementSibling;
+                    toRemove.remove();
+                }
+                btn.innerHTML = '&#9654;';
+                btn.dataset.expanded = '0';
+                return;
+            }
+
+            // Expand: fetch entrants
+            btn.innerHTML = '&#9660;';
+            btn.dataset.expanded = '1';
+            fetch('{{ url_for("main.get_entrants", game_id="__GID__") }}'.replace('__GID__', gameId))
+            .then(r => r.json())
+            .then(function(data) {
+                if (!data.ok) return;
+                let insertAfter = row;
+                data.entrants.forEach(function(ent) {
+                    const tr = document.createElement('tr');
+                    tr.className = 'entrant-row' + (ent.ejected ? ' ejected' : '');
+                    tr.dataset.badge = ent.badge_id;
+                    tr.dataset.game = gameId;
+                    const action = ent.ejected ? 'uneject' : 'eject';
+                    const btnClass = ent.ejected ? 'uneject' : 'eject';
+                    const btnText = ent.ejected ? 'Undo' : 'Eject';
+                    tr.innerHTML = '<td colspan="2">' + escapeHtml(ent.name) +
+                        ' <span style="color:#999;font-size:0.8rem">(#' + escapeHtml(ent.badge_id) + ')</span></td>' +
+                        '<td style="text-align:center"><button class="entrant-eject-btn ' + btnClass + '" ' +
+                        'data-badge="' + escapeHtml(ent.badge_id) + '" data-game="' + escapeHtml(gameId) + '" ' +
+                        'data-action="' + action + '">' + btnText + '</button></td>';
+                    insertAfter.after(tr);
+                    insertAfter = tr;
+                });
+            })
+            .catch(function() {});
+        });
+    });
+
+    /* Entrant-level eject/uneject via delegation */
+    document.querySelector('.game-table').addEventListener('click', function(e) {
+        const btn = e.target.closest('.entrant-eject-btn');
+        if (!btn) return;
+        const badgeId = btn.dataset.badge;
+        const gameId = btn.dataset.game;
+        if (btn.dataset.action === 'eject') {
+            doEject(badgeId, gameId);
+        } else {
+            // Find the matching chip to remove
+            const chip = ejectList.querySelector('.eject-chip[data-badge="' + badgeId + '"][data-game="' + gameId + '"]') ||
+                         ejectList.querySelector('.eject-chip[data-badge="' + badgeId + '"][data-game="*"]');
+            if (chip) doUneject(badgeId, chip.dataset.game, chip);
+        }
+    });
+
+    function escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+
     document.querySelectorAll('.premium-toggle').forEach(function(toggle) {
         toggle.addEventListener('change', savePremiumGames);
     });
 
+    /* ── Premium toggle ── */
     function savePremiumGames() {
         const checked = document.querySelectorAll('.premium-toggle:checked');
         const gameIds = Array.from(checked).map(cb => cb.dataset.gameId);
