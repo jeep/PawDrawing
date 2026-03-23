@@ -501,31 +501,18 @@ def run_drawing_route():
         return redirect(url_for("main.login"))
 
     library_id = session.get("library_id")
-    convention_id = session.get("convention_id")
     if not library_id:
         flash("Please select a convention first.", "error")
         return redirect(url_for("main.convention_select"))
 
-    client = _get_client()
+    # Use cached data from the games page to avoid redundant API calls
+    all_games = session.get("cached_games")
+    entries = session.get("cached_entries")
 
-    try:
-        all_games = client.get_library_games(library_id, play_to_win_only=True)
-    except TTEAPIError as exc:
-        return _handle_api_error(exc, url_for("main.games"), "load games")
+    if all_games is None or entries is None:
+        flash("Please load the games page first.", "info")
+        return redirect(url_for("main.games"))
 
-    try:
-        if convention_id:
-            raw_entries = client.get_convention_playtowins(convention_id)
-        else:
-            raw_entries = []
-            for game in all_games:
-                game_id = game.get("id")
-                if game_id:
-                    raw_entries.extend(client.get_library_game_playtowins(game_id))
-    except TTEAPIError as exc:
-        return _handle_api_error(exc, url_for("main.games"), "load entries")
-
-    entries = process_entries(raw_entries)
     ejected_entries = session.get("ejected_entries", [])
     filtered = apply_ejections(entries, ejected_entries)
     game_data = group_entries_by_game(filtered, all_games)

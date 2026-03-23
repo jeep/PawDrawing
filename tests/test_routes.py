@@ -488,21 +488,15 @@ class TestLibraryConfirmRoute(unittest.TestCase):
         self.assertIn(b"My Library", resp.data)
         mock_instance.get_library_game_playtowins.assert_called_once_with("G1")
 
-    @patch("routes.TTEClient")
-    def test_drawing_works_in_library_only_mode(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-        ]
-        mock_instance.get_library_game_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_drawing_works_in_library_only_mode(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["library_name"] = "My Library"
+            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
@@ -757,17 +751,12 @@ class TestDrawingRoutes(unittest.TestCase):
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "Test Con"
             sess["premium_games"] = []
-        with patch("routes.TTEClient") as MockClient:
-            mock_instance = MagicMock()
-            mock_instance.get_library_games.return_value = [
-                {"id": "G1", "name": "Catan"},
-            ]
-            mock_instance.get_convention_playtowins.return_value = [
+            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_entries"] = [
                 {"id": "e1", "badge_id": "B1", "librarygame_id": "G1",
                  "name": "Alice"},
             ]
-            MockClient.return_value = mock_instance
-            resp = self.client.post("/drawing")
+        resp = self.client.post("/drawing")
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/drawing/results", resp.headers["Location"])
 
@@ -779,24 +768,20 @@ class TestDrawingRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/convention", resp.headers["Location"])
 
-    @patch("routes.TTEClient")
-    def test_drawing_runs_and_shows_results(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-            {"id": "G2", "name": "Ticket to Ride"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-            {"id": "e2", "badge_id": "B2", "librarygame_id": "G2", "name": "Bob"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_drawing_runs_and_shows_results(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [
+                {"id": "G1", "name": "Catan"},
+                {"id": "G2", "name": "Ticket to Ride"},
+            ]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e2", "badge_id": "B2", "librarygame_id": "G2", "name": "Bob"},
+            ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
@@ -804,25 +789,21 @@ class TestDrawingRoutes(unittest.TestCase):
         self.assertIn(b"Catan", resp.data)
         self.assertIn(b"Ticket to Ride", resp.data)
 
-    @patch("routes.TTEClient")
-    def test_drawing_with_conflict_shows_panel(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-            {"id": "G2", "name": "Ticket to Ride"},
-        ]
-        # B1 entered both games -> potential conflict
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-            {"id": "e2", "badge_id": "B1", "librarygame_id": "G2", "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_drawing_with_conflict_shows_panel(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [
+                {"id": "G1", "name": "Catan"},
+                {"id": "G2", "name": "Ticket to Ride"},
+            ]
+            # B1 entered both games -> potential conflict
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e2", "badge_id": "B1", "librarygame_id": "G2", "name": "Alice"},
+            ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
@@ -833,51 +814,41 @@ class TestDrawingRoutes(unittest.TestCase):
         # Verify conflict badge on the results table
         self.assertIn(b'class="conflict-badge"', resp.data)
 
-    @patch("routes.TTEClient")
-    def test_drawing_conflict_shows_rerun_button(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_drawing_conflict_shows_rerun_button(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Re-run Drawing", resp.data)
 
-    @patch("routes.TTEClient")
-    def test_drawing_separates_premium_conflicts(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-            {"id": "G2", "name": "Ticket to Ride"},
-            {"id": "G3", "name": "Wingspan"},
-            {"id": "G4", "name": "Azul"},
-        ]
-        # B1 wins G1+G2 (both premium), B2 wins G3+G4 (not premium)
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-            {"id": "e2", "badge_id": "B1", "librarygame_id": "G2", "name": "Alice"},
-            {"id": "e3", "badge_id": "B2", "librarygame_id": "G3", "name": "Bob"},
-            {"id": "e4", "badge_id": "B2", "librarygame_id": "G4", "name": "Bob"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_drawing_separates_premium_conflicts(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
             sess["premium_games"] = ["G1", "G2"]
+            sess["cached_games"] = [
+                {"id": "G1", "name": "Catan"},
+                {"id": "G2", "name": "Ticket to Ride"},
+                {"id": "G3", "name": "Wingspan"},
+                {"id": "G4", "name": "Azul"},
+            ]
+            # B1 wins G1+G2 (both premium), B2 wins G3+G4 (not premium)
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e2", "badge_id": "B1", "librarygame_id": "G2", "name": "Alice"},
+                {"id": "e3", "badge_id": "B2", "librarygame_id": "G3", "name": "Bob"},
+                {"id": "e4", "badge_id": "B2", "librarygame_id": "G4", "name": "Bob"},
+            ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
@@ -986,22 +957,16 @@ class TestDrawingRoutes(unittest.TestCase):
         self.assertEqual(data["conflicts"][0]["badge_id"], "B2")
         self.assertEqual(data["conflicts"][0]["winner_name"], "Bob")
 
-    @patch("routes.TTEClient")
-    def test_drawing_has_view_tabs(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_drawing_has_view_tabs(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
@@ -1012,23 +977,19 @@ class TestDrawingRoutes(unittest.TestCase):
         self.assertIn(b'id="panel-by-game"', resp.data)
         self.assertIn(b'id="panel-by-winner"', resp.data)
 
-    @patch("routes.TTEClient")
-    def test_by_game_view_shows_all_games(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-            {"id": "G2", "name": "Ticket to Ride"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_by_game_view_shows_all_games(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [
+                {"id": "G1", "name": "Catan"},
+                {"id": "G2", "name": "Ticket to Ride"},
+            ]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
         html = resp.data.decode()
@@ -1038,23 +999,19 @@ class TestDrawingRoutes(unittest.TestCase):
         # Game with no entries shows "No entries"
         self.assertIn("No entries", html)
 
-    @patch("routes.TTEClient")
-    def test_by_winner_view_shows_winners_only(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-            {"id": "G2", "name": "Ticket to Ride"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_by_winner_view_shows_winners_only(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [
+                {"id": "G1", "name": "Catan"},
+                {"id": "G2", "name": "Ticket to Ride"},
+            ]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
         html = resp.data.decode()
@@ -1070,25 +1027,21 @@ class TestDrawingRoutes(unittest.TestCase):
         winner_table = winner_panel[winner_table_start:winner_table_end]
         self.assertNotIn("Ticket to Ride", winner_table)
 
-    @patch("routes.TTEClient")
-    def test_by_winner_view_highlights_premium(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-            {"id": "G2", "name": "Ticket to Ride"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-            {"id": "e2", "badge_id": "B2", "librarygame_id": "G2", "name": "Bob"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_by_winner_view_highlights_premium(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
             sess["premium_games"] = ["G1"]
+            sess["cached_games"] = [
+                {"id": "G1", "name": "Catan"},
+                {"id": "G2", "name": "Ticket to Ride"},
+            ]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e2", "badge_id": "B2", "librarygame_id": "G2", "name": "Bob"},
+            ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
         html = resp.data.decode()
@@ -1097,45 +1050,35 @@ class TestDrawingRoutes(unittest.TestCase):
         winner_panel = html[winner_panel_start:]
         self.assertIn("Premium", winner_panel)
 
-    @patch("routes.TTEClient")
-    def test_drawing_shows_pickup_summary(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_drawing_shows_pickup_summary(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"picked up", resp.data)
         self.assertIn(b'id="pickup-count"', resp.data)
 
-    @patch("routes.TTEClient")
-    def test_drawing_shows_pickup_buttons(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-            {"id": "G2", "name": "Ticket to Ride"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_drawing_shows_pickup_buttons(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [
+                {"id": "G1", "name": "Catan"},
+                {"id": "G2", "name": "Ticket to Ride"},
+            ]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
         html = resp.data.decode()
@@ -1202,65 +1145,47 @@ class TestDrawingRoutes(unittest.TestCase):
         with self.client.session_transaction() as sess:
             self.assertNotIn("G1", sess["picked_up"])
 
-    @patch("routes.TTEClient")
-    def test_rerun_drawing_clears_pickup(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_rerun_drawing_clears_pickup(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
             sess["picked_up"] = ["G1"]
+            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            ]
 
         self.client.post("/drawing")
 
         with self.client.session_transaction() as sess:
             self.assertEqual(sess["picked_up"], [])
 
-    @patch("routes.TTEClient")
-    def test_drawing_shows_redraw_button(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_drawing_shows_redraw_button(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
         self.assertIn(b"Redraw All Unclaimed", resp.data)
 
-    @patch("routes.TTEClient")
-    def test_drawing_results_has_search_filter(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_drawing_results_has_search_filter(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
         self.assertIn(b'id="search-input"', resp.data)
@@ -1540,17 +1465,7 @@ class TestRedrawUnclaimedRoute(unittest.TestCase):
             # drawing_state should be updated (shuffled list changed)
             self.assertIsNotNone(sess["drawing_state"])
 
-    @patch("routes.TTEClient")
-    def test_rerun_clears_not_here(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_rerun_clears_not_here(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
@@ -1558,6 +1473,10 @@ class TestRedrawUnclaimedRoute(unittest.TestCase):
             sess["convention_name"] = "GameFest"
             sess["not_here"] = ["B1"]
             sess["not_here_warning_dismissed"] = True
+            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            ]
 
         self.client.post("/drawing")
 
@@ -1686,22 +1605,16 @@ class TestPushToTTE(unittest.TestCase):
         self.assertEqual(len(data["failures"]), 1)
         self.assertIn("Server error", data["failures"][0]["error"])
 
-    @patch("routes.TTEClient")
-    def test_push_button_in_results(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_push_button_in_results(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
         self.assertIn(b"Push to TTE", resp.data)
@@ -1862,14 +1775,12 @@ class TestCSVExport(unittest.TestCase):
             sess["library_id"] = "lib-1"
             sess["library_name"] = "P2W Library"
             sess["premium_games"] = []
-        with patch("routes.TTEClient") as MockClient:
-            mock_instance = MagicMock()
-            mock_instance.get_playtowin_entries.return_value = [
+            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_entries"] = [
                 {"librarygame_id": "G1", "badge_id": "B1", "id": "e1",
                  "name": "Alice", "gamename": "Catan"},
             ]
-            MockClient.return_value = mock_instance
-            resp = self.client.post("/drawing", follow_redirects=True)
+        resp = self.client.post("/drawing", follow_redirects=True)
         self.assertIn(b"Export CSV", resp.data)
 
 
@@ -1922,19 +1833,12 @@ class TestErrorHandlingRoutes(unittest.TestCase):
         with self.client.session_transaction() as sess:
             self.assertNotIn("tte_session_id", sess)
 
-    @patch("routes.TTEClient")
-    def test_drawing_auth_error_clears_session(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.side_effect = TTEAPIError("Expired", 401)
-        MockClient.return_value = mock_instance
+    def test_drawing_no_cache_redirects_to_games(self):
         self._setup_session()
 
         resp = self.client.post("/drawing")
         self.assertEqual(resp.status_code, 302)
-        self.assertIn("/login", resp.headers["Location"])
-
-        with self.client.session_transaction() as sess:
-            self.assertNotIn("tte_session_id", sess)
+        self.assertIn("/games", resp.headers["Location"])
 
     @patch("routes.TTEClient")
     def test_search_auth_error_returns_401(self, MockClient):
@@ -1985,15 +1889,11 @@ class TestErrorHandlingRoutes(unittest.TestCase):
         self.assertIn(b"timed out", resp.data)
         self.assertIn(b"try again", resp.data.lower())
 
-    @patch("routes.TTEClient")
-    def test_drawing_timeout_shows_friendly_message(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.side_effect = TTETimeoutError()
-        MockClient.return_value = mock_instance
+    def test_drawing_no_cache_shows_flash(self):
         self._setup_session()
 
         resp = self.client.post("/drawing", follow_redirects=True)
-        self.assertIn(b"timed out", resp.data)
+        self.assertIn(b"Please load the games page first", resp.data)
 
     @patch("routes.TTEClient")
     def test_convention_timeout_shows_friendly_message(self, MockClient):
@@ -2044,16 +1944,15 @@ class TestErrorHandlingRoutes(unittest.TestCase):
         resp = self.client.get("/games", follow_redirects=True)
         self.assertIn(b"Could not load entries", resp.data)
 
-    @patch("routes.TTEClient")
-    def test_drawing_entry_loading_error_shows_action(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = []
-        mock_instance.get_convention_playtowins.side_effect = TTEAPIError("Not found", 404)
-        MockClient.return_value = mock_instance
+    def test_drawing_partial_cache_redirects_to_games(self):
         self._setup_session()
+        with self.client.session_transaction() as sess:
+            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            # cached_entries intentionally missing
 
-        resp = self.client.post("/drawing", follow_redirects=True)
-        self.assertIn(b"Could not load entries", resp.data)
+        resp = self.client.post("/drawing")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/games", resp.headers["Location"])
 
 
 class TestRefreshData(unittest.TestCase):
@@ -2154,43 +2053,31 @@ class TestRefreshData(unittest.TestCase):
         # API called twice — fresh data each time
         self.assertEqual(mock_instance.get_library_games.call_count, 2)
 
-    @patch("routes.TTEClient")
-    def test_drawing_results_shows_timestamp(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_drawing_results_shows_timestamp(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Data from", resp.data)
 
-    @patch("routes.TTEClient")
-    def test_drawing_stores_timestamp_in_session(self, MockClient):
-        mock_instance = MagicMock()
-        mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-        ]
-        mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-        ]
-        MockClient.return_value = mock_instance
-
+    def test_drawing_stores_timestamp_in_session(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["library_id"] = "lib-1"
             sess["convention_id"] = "conv-1"
             sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            ]
 
         self.client.post("/drawing")
 
