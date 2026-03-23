@@ -510,10 +510,10 @@ class TestRedrawUnclaimed:
         )
         assert conflicts == []
         assert auto == []
-        # B1 was excluded (original winner), so shuffled should only have B2 and B3
-        assert len(state[0]["shuffled"]) == 2
-        badges = {e["badge_id"] for e in state[0]["shuffled"]}
-        assert badges == {"B2", "B3"}
+        # B1 (original winner) should be last; B2 and B3 should come first
+        assert len(state[0]["shuffled"]) == 3
+        assert state[0]["shuffled"][-1]["badge_id"] == "B1"
+        assert state[0]["shuffled"][0]["badge_id"] != "B1"
         assert state[0]["winner_index"] == 0
 
     def test_excludes_not_here(self):
@@ -531,9 +531,10 @@ class TestRedrawUnclaimed:
         conflicts, _ = redraw_unclaimed(
             state, {"G1"}, {"B2"}, {"B1"}, rng=random.Random(1),
         )
-        # B1 excluded (original winner), B2 excluded (not here) → only B3
-        assert len(state[0]["shuffled"]) == 1
+        # B2 excluded (not here), B1 (original winner) placed last → B3 first, B1 last
+        assert len(state[0]["shuffled"]) == 2
         assert state[0]["shuffled"][0]["badge_id"] == "B3"
+        assert state[0]["shuffled"][-1]["badge_id"] == "B1"
 
     def test_does_not_touch_picked_up_games(self):
         state = [
@@ -562,10 +563,11 @@ class TestRedrawUnclaimed:
                 "winner_index": 0,
             },
         ]
-        # B1 is both original winner and only entrant → no eligible
+        # B1 is original winner and only entrant → placed last (still the only one)
         redraw_unclaimed(state, {"G1"}, set(), {"B1"}, rng=random.Random(1))
-        assert state[0]["shuffled"] == []
-        assert state[0]["winner_index"] == -1
+        assert len(state[0]["shuffled"]) == 1
+        assert state[0]["shuffled"][0]["badge_id"] == "B1"
+        assert state[0]["winner_index"] == 0
 
     def test_same_rules_detects_conflicts(self):
         state = [

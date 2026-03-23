@@ -245,16 +245,21 @@ def redraw_unclaimed(drawing_state, unclaimed_game_ids, not_here, original_winne
     if rng is None:
         rng = random.Random()
 
-    exclude = not_here | original_winners
-
     for item in drawing_state:
         game_id = item["game"]["id"]
         if game_id not in unclaimed_game_ids:
             continue
 
-        # Filter to eligible entrants and re-shuffle
-        eligible = [e for e in item["shuffled"] if e.get("badge_id") not in exclude]
-        rng.shuffle(eligible)
+        # Split entrants: others first, original winners last
+        others = [e for e in item["shuffled"]
+                  if e.get("badge_id") not in not_here
+                  and e.get("badge_id") not in original_winners]
+        orig = [e for e in item["shuffled"]
+                if e.get("badge_id") in original_winners
+                and e.get("badge_id") not in not_here]
+        rng.shuffle(others)
+        rng.shuffle(orig)
+        eligible = others + orig
         item["shuffled"] = eligible
         item["winner_index"] = 0 if eligible else -1
 
