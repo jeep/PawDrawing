@@ -2162,6 +2162,77 @@ class TestRefreshData(unittest.TestCase):
             self.assertIn("drawing_timestamp", sess)
             self.assertTrue(len(sess["drawing_timestamp"]) > 0)
 
+    @patch("routes.TTEClient")
+    def test_games_page_has_sortable_headers(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.get("/games")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b'data-sort="name"', resp.data)
+        self.assertIn(b'data-sort="entries"', resp.data)
+        self.assertIn(b'data-sort="premium"', resp.data)
+        self.assertIn(b'sortable', resp.data)
+
+    @patch("routes.TTEClient")
+    def test_games_page_has_search(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.get("/games")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b'game-search-input', resp.data)
+        self.assertIn(b'Search games', resp.data)
+
+    @patch("routes.TTEClient")
+    def test_games_page_has_sort_data_attributes(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library_games.return_value = [
+            {"id": "G1", "name": "Catan"},
+            {"id": "G2", "name": "Wingspan"},
+        ]
+        mock_instance.get_convention_playtowins.return_value = [
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1"},
+            {"id": "e2", "badge_id": "B2", "librarygame_id": "G2"},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "lib-1"
+            sess["convention_id"] = "conv-1"
+            sess["convention_name"] = "GameFest"
+
+        resp = self.client.get("/games")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b'data-game-name="catan"', resp.data)
+        self.assertIn(b'data-entrant-count="1"', resp.data)
+        self.assertIn(b'data-is-premium=', resp.data)
+
 
 class TestEjectPlayerRoute(unittest.TestCase):
 

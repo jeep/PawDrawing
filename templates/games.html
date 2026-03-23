@@ -221,6 +221,45 @@
     .entrant-eject-btn.eject:hover { background: #fdecea; }
     .entrant-eject-btn.uneject { color: #27ae60; }
     .entrant-eject-btn.uneject:hover { background: #eafaf1; }
+
+    /* Sortable headers */
+    .game-table th.sortable {
+        cursor: pointer;
+        user-select: none;
+        position: relative;
+        padding-right: 1.5rem;
+    }
+    .game-table th.sortable:hover { background: #34495e; }
+    .sort-arrow {
+        font-size: 0.65rem;
+        margin-left: 0.3rem;
+        opacity: 0.4;
+    }
+    .game-table th.sort-asc .sort-arrow,
+    .game-table th.sort-desc .sort-arrow { opacity: 1; }
+
+    /* Search bar */
+    .search-bar {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        padding: 0.75rem 1.5rem;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    .search-bar input {
+        flex: 1;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        font-size: 0.95rem;
+        outline: none;
+    }
+    .search-bar input:focus { border-color: #3498db; box-shadow: 0 0 0 2px rgba(52,152,219,0.15); }
+    .search-count { font-size: 0.85rem; color: #888; white-space: nowrap; }
+    .search-count strong { color: #2c3e50; }
 </style>
 {% endblock %}
 
@@ -255,19 +294,27 @@
     </div>
 </div>
 
+<div class="search-bar">
+    <input type="text" id="game-search-input" placeholder="Search games…" autocomplete="off">
+    <span class="search-count" id="game-search-count"></span>
+</div>
+
 {% if game_data %}
-<table class="game-table">
+<table class="game-table" id="game-table">
     <thead>
         <tr>
-            <th>Game</th>
-            <th>Entries</th>
-            <th class="th-premium">Premium</th>
+            <th class="sortable sort-asc" data-sort="name">Game <span class="sort-arrow">▲</span></th>
+            <th class="sortable" data-sort="entries">Entries <span class="sort-arrow">▲</span></th>
+            <th class="sortable th-premium" data-sort="premium">Premium <span class="sort-arrow">▲</span></th>
         </tr>
     </thead>
     <tbody>
         {% for item in game_data %}
         <tr class="{{ 'premium' if item.game.get('id') in premium_games else '' }}"
-            data-game-id="{{ item.game.get('id', '') }}">
+            data-game-id="{{ item.game.get('id', '') }}"
+            data-game-name="{{ item.game.get('name', 'Unknown')|lower }}"
+            data-entrant-count="{{ item.entrant_count }}"
+            data-is-premium="{{ '1' if item.game.get('id') in premium_games else '0' }}">
             <td>
                 {% if item.entrant_count > 0 %}
                 <button class="expand-btn" data-game-id="{{ item.game.get('id', '') }}" title="Show entrants">&#9654;</button>
@@ -445,6 +492,107 @@
         return d.innerHTML;
     }
 
+    /* ── Sort & Search ── */
+    const gameTable = document.getElementById('game-table');
+    const tbody = gameTable ? gameTable.querySelector('tbody') : null;
+    const searchInput = document.getElementById('game-search-input');
+    const searchCount = document.getElementById('game-search-count');
+
+    function getGameRows() {
+        return tbody ? Array.from(tbody.querySelectorAll('tr:not(.entrant-row)')) : [];
+    }
+
+    /* Sorting */
+    let currentSort = 'name';
+    let currentDir = 'asc';
+
+    function sortRows(key, dir) {
+        const rows = getGameRows();
+        rows.sort(function(a, b) {
+            let va, vb;
+            if (key === 'name') {
+                va = a.dataset.gameName || '';
+                vb = b.dataset.gameName || '';
+                return dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+            } else if (key === 'entries') {
+                va = parseInt(a.dataset.entrantCount, 10) || 0;
+                vb = parseInt(b.dataset.entrantCount, 10) || 0;
+            } else if (key === 'premium') {
+                va = parseInt(a.dataset.isPremium, 10) || 0;
+                vb = parseInt(b.dataset.isPremium, 10) || 0;
+            }
+            if (va === vb) {
+                // Secondary sort by name
+                var na = a.dataset.gameName || '', nb = b.dataset.gameName || '';
+                return na.localeCompare(nb);
+            }
+            return dir === 'asc' ? va - vb : vb - va;
+        });
+        // Re-append rows (and their entrant-row children)
+        rows.forEach(function(row) {
+            tbody.appendChild(row);
+            // Move any entrant rows that belong to this game row
+            var gameId = row.dataset.gameId;
+            tbody.querySelectorAll('.entrant-row[data-game="' + gameId + '"]').forEach(function(er) {
+                tbody.appendChild(er);
+            });
+        });
+    }
+
+    if (gameTable) {
+        gameTable.querySelectorAll('th.sortable').forEach(function(th) {
+            th.addEventListener('click', function() {
+                var key = th.dataset.sort;
+                var dir;
+                if (currentSort === key) {
+                    dir = currentDir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    dir = key === 'entries' || key === 'premium' ? 'desc' : 'asc';
+                }
+                currentSort = key;
+                currentDir = dir;
+
+                // Update header indicators
+                gameTable.querySelectorAll('th.sortable').forEach(function(h) {
+                    h.classList.remove('sort-asc', 'sort-desc');
+                    h.querySelector('.sort-arrow').textContent = '\u25B2';
+                });
+                th.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
+                th.querySelector('.sort-arrow').textContent = dir === 'asc' ? '\u25B2' : '\u25BC';
+
+                sortRows(key, dir);
+            });
+        });
+    }
+
+    /* Search */
+    searchInput.addEventListener('input', function() {
+        var query = searchInput.value.trim().toLowerCase();
+        var rows = getGameRows();
+        var total = rows.length;
+        var visible = 0;
+
+        rows.forEach(function(row) {
+            var name = row.dataset.gameName || '';
+            var match = !query || name.indexOf(query) !== -1;
+            row.style.display = match ? '' : 'none';
+            if (match) visible++;
+
+            // Also hide entrant rows for hidden games
+            var gameId = row.dataset.gameId;
+            if (tbody) {
+                tbody.querySelectorAll('.entrant-row[data-game="' + gameId + '"]').forEach(function(er) {
+                    er.style.display = match ? '' : 'none';
+                });
+            }
+        });
+
+        if (query) {
+            searchCount.innerHTML = '<strong>' + visible + '</strong> of <strong>' + total + '</strong>';
+        } else {
+            searchCount.textContent = '';
+        }
+    });
 
     document.querySelectorAll('.premium-toggle').forEach(function(toggle) {
         toggle.addEventListener('change', savePremiumGames);
@@ -460,6 +608,7 @@
             const id = row.dataset.gameId;
             const isPremium = gameIds.includes(id);
             row.classList.toggle('premium', isPremium);
+            row.dataset.isPremium = isPremium ? '1' : '0';
             const label = row.querySelector('.premium-label');
             if (isPremium && !label) {
                 const td = row.querySelector('td');
