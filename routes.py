@@ -726,6 +726,32 @@ def award_next():
     })
 
 
+@main_bp.route("/drawing/entrants/<game_id>")
+def drawing_entrants(game_id):
+    """AJAX endpoint: return the shuffled entrant list for a game from drawing state."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    drawing_state = session.get("drawing_state", [])
+    not_here = set(session.get("not_here", []))
+
+    for item in drawing_state:
+        if item["game"]["id"] == game_id:
+            winner_index = item["winner_index"]
+            entrants = []
+            for i, entry in enumerate(item["shuffled"]):
+                entrants.append({
+                    "name": entry.get("name", entry.get("badge_id", "Unknown")),
+                    "badge_id": entry.get("badge_id", ""),
+                    "is_winner": i == winner_index,
+                    "is_not_here": entry.get("badge_id", "") in not_here,
+                    "position": i + 1,
+                })
+            return jsonify({"ok": True, "entrants": entrants})
+
+    return jsonify({"error": "Game not found in drawing state"}), 404
+
+
 @main_bp.route("/drawing/not-here", methods=["POST"])
 def mark_not_here():
     """Mark a person as 'not here' — permanently absent for this drawing."""

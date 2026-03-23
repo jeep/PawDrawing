@@ -354,6 +354,25 @@
     }
     .section-header:first-of-type { margin-top: 0; }
     .section-header h3 { margin: 0; color: #2c3e50; font-size: 1.05rem; }
+
+    .expand-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 0.85rem;
+        color: #3498db;
+        padding: 0;
+        margin-right: 0.4rem;
+    }
+    .expand-btn:hover { color: #2980b9; }
+    .entrant-row td {
+        padding: 0.3rem 1rem 0.3rem 2.5rem;
+        background: #f8f9fa;
+        border-bottom: 1px solid #eee;
+        font-size: 0.85rem;
+    }
+    .entrant-row.is-winner td { font-weight: 700; }
+    .entrant-row.is-not-here td { color: #999; text-decoration: line-through; }
     .section-count {
         font-size: 0.85rem;
         color: #888;
@@ -616,6 +635,7 @@
         <tr class="{{ 'premium' if r.is_premium }}{{ ' in-conflict' if r.game_id in conflicted_game_ids }}"
             data-game-id="{{ r.game_id }}" data-badge-id="{{ r.winner_badge }}">
             <td>
+                {% if r.total_entries > 0 %}<button class="expand-btn" data-game-id="{{ r.game_id }}" title="Show entrants">&#9654;</button>{% endif %}
                 {{ r.game_name }}
                 {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
             </td>
@@ -661,6 +681,7 @@
         {% for r in picked_up_list %}
         <tr class="{{ 'premium' if r.is_premium }}" data-game-id="{{ r.game_id }}">
             <td>
+                {% if r.total_entries > 0 %}<button class="expand-btn" data-game-id="{{ r.game_id }}" title="Show entrants">&#9654;</button>{% endif %}
                 {{ r.game_name }}
                 {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
             </td>
@@ -788,6 +809,57 @@
         var btn = document.getElementById('redraw-toggle');
         if (btn) { btn.classList.add('active'); btn.textContent = 'Exit Redraw Mode'; }
     }
+
+    /* ── Expand/collapse entrant list ── */
+    document.querySelectorAll('.expand-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var gameId = btn.dataset.gameId;
+            var row = btn.closest('tr');
+            var isExpanded = btn.dataset.expanded === '1';
+
+            if (isExpanded) {
+                var next = row.nextElementSibling;
+                while (next && next.classList.contains('entrant-row')) {
+                    var toRemove = next;
+                    next = next.nextElementSibling;
+                    toRemove.remove();
+                }
+                btn.innerHTML = '&#9654;';
+                btn.dataset.expanded = '0';
+                return;
+            }
+
+            btn.innerHTML = '&#9660;';
+            btn.dataset.expanded = '1';
+            var colCount = row.cells.length;
+            fetch('{{ url_for("main.drawing_entrants", game_id="__GID__") }}'.replace('__GID__', gameId))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (!data.ok) return;
+                var insertAfter = row;
+                data.entrants.forEach(function(ent) {
+                    var tr = document.createElement('tr');
+                    var cls = 'entrant-row';
+                    if (ent.is_winner) cls += ' is-winner';
+                    if (ent.is_not_here) cls += ' is-not-here';
+                    tr.className = cls;
+                    tr.innerHTML = '<td colspan="' + colCount + '">' +
+                        '<span style="color:#999;font-size:0.8rem;margin-right:0.5rem;">' + ent.position + '.</span>' +
+                        escHtml(ent.name) +
+                        ' <span style="color:#999;font-size:0.8rem">(#' + escHtml(ent.badge_id) + ')</span>' +
+                        (ent.is_winner ? ' <span style="color:#27ae60;font-size:0.75rem;font-weight:700;">★ WINNER</span>' : '') +
+                        (ent.is_not_here ? ' <span style="color:#e74c3c;font-size:0.75rem;">Not Here</span>' : '') +
+                        '</td>';
+                    insertAfter.after(tr);
+                    insertAfter = tr;
+                });
+            })
+            .catch(function() {
+                btn.innerHTML = '&#9654;';
+                btn.dataset.expanded = '0';
+            });
+        });
+    });
 
     window.switchView = function(view) {
         document.getElementById('tab-by-game').classList.toggle('active', view === 'by-game');
