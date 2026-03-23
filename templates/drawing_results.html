@@ -378,6 +378,30 @@
         text-transform: uppercase;
     }
 
+    /* Advanced actions hidden by default */
+    .award-next-btn,
+    .not-here-btn,
+    .not-here-badge,
+    .redraw-bar {
+        display: none;
+    }
+    body.advanced-mode .award-next-btn { display: inline-block; }
+    body.advanced-mode .not-here-btn { display: inline-block; }
+    body.advanced-mode .not-here-badge { display: inline-block; }
+    body.advanced-mode .redraw-bar { display: flex; }
+    .advanced-toggle {
+        background: none;
+        border: 1px solid #7f8c8d;
+        border-radius: 4px;
+        padding: 0.3rem 0.8rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        color: #7f8c8d;
+        margin-left: auto;
+    }
+    .advanced-toggle:hover { border-color: #2c3e50; color: #2c3e50; }
+    .advanced-toggle.active { background: #2c3e50; color: white; border-color: #2c3e50; }
+
     .redraw-bar {
         display: flex;
         gap: 1rem;
@@ -577,6 +601,7 @@
 <div class="section-header">
     <h3>Awaiting Pickup</h3>
     <span class="section-count" id="awaiting-count">{{ awaiting|length }}</span>
+    <button class="advanced-toggle" id="advanced-toggle" onclick="toggleAdvancedMode()">Show Advanced</button>
 </div>
 {% if awaiting %}
 <div class="redraw-bar" id="redraw-bar">
@@ -757,6 +782,13 @@
     var warningDismissed = {{ 'true' if not_here_warning_dismissed else 'false' }};
     var pendingNotHereBadge = null;
     var pendingNotHereName = null;
+
+    window.toggleAdvancedMode = function() {
+        document.body.classList.toggle('advanced-mode');
+        var btn = document.getElementById('advanced-toggle');
+        btn.classList.toggle('active');
+        btn.textContent = document.body.classList.contains('advanced-mode') ? 'Hide Advanced' : 'Show Advanced';
+    };
 
     window.switchView = function(view) {
         document.getElementById('tab-by-game').classList.toggle('active', view === 'by-game');
