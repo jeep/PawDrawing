@@ -126,17 +126,31 @@ Resolution may cascade — new conflicts can appear when an alternate winner is 
 
 As winners come to claim their prizes, click **Mark Picked Up** next to each game. The button turns green. Click again to undo if needed. The pickup counter in the summary bar updates in real time.
 
-If a winner is absent, you can click **Not Here** to mark them. This advances all their unpicked-up games to the next person in the shuffled list, and prevents them from being selected again in any future advances.
+### 9. Redraw Mode
 
-### 9. Redraw unclaimed games
+Click **Enter Redraw Mode** in the action bar to reveal advanced actions for managing unclaimed games. Click **Exit Redraw Mode** to hide them again. Redraw Mode is preserved across page reloads within the same browser tab.
 
-After the claiming period, click **Redraw Unclaimed** to run a fresh drawing for all games that have not been picked up. The redraw:
+While in Redraw Mode, three additional controls are available:
+
+#### Award to Next
+
+Click **Award to Next** on any awaiting game to advance to the next person in the shuffled entry list. This is useful when a winner declines their prize or cannot be reached.
+
+If there are no more eligible players for a game, the app shows a **"To the box!"** alert and moves the game to the "No Entries" section with a "To the box!" status, indicating it should be returned to the prize pool.
+
+#### Not Here
+
+Click **Not Here** to mark a winner as absent. This advances **all** of their unpicked-up games to the next person in the shuffled list and prevents them from being selected again in any future advances.
+
+#### Redraw All Unclaimed
+
+Click **Redraw All Unclaimed** to run a fresh drawing for all games that have not been picked up. The redraw:
 
 - Re-shuffles entries for each unclaimed game.
 - Excludes anyone marked as "Not Here."
 - Excludes anyone who won in the original drawing (regardless of whether they picked up).
 
-The one-win-per-person rule does **not** apply during the redraw — a person who already picked up another game may win an unclaimed game.
+The one-win-per-person rule does **not** apply during the redraw by default. Check the **"Apply one-win rules"** checkbox before redrawing to enforce the one-win limit.
 
 New winners appear in the results. Mark them as picked up as they claim their prizes.
 
@@ -156,13 +170,10 @@ Click **Export CSV** to download a spreadsheet of the results. The CSV includes:
 | Column | Description |
 |--------|-------------|
 | Game | Game name |
-| Premium | Yes/No |
-| Entries | Number of people who entered |
-| Winner | Winner's name |
-| Badge | Winner's badge ID |
-| Picked Up | Yes/No |
+| Winner's Name | Winner's name (empty if no winner) |
+| Winner's Badge | Winner's badge ID (empty if no winner) |
 
-The filename follows the pattern `PawDrawing_ConventionName_2026-03-21.csv`.
+Rows are sorted alphabetically by game name. The filename follows the pattern `PawDrawing_ConventionName_2026-03-21.csv`.
 
 ## Security Considerations
 
@@ -243,7 +254,7 @@ Clicking **Re-run Drawing** discards the current drawing state and starts fresh.
 - Performs a new random shuffle.
 - Resets pickup tracking, redraw state, and conflict resolution.
 
-**Warning:** Re-running is irreversible. If you've already done significant pickup tracking or redistribution, you'll lose that progress.
+**Warning:** Re-running is irreversible. If games have already been picked up or conflicts auto-resolved, the app shows a confirmation dialog warning you of the progress that will be lost and suggesting Redraw Mode as an alternative. If you've already done significant pickup tracking, you'll lose that progress.
 
 ### What happens on page refresh
 

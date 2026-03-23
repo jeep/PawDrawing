@@ -288,7 +288,7 @@ python -m pytest tests/ -v
 
 | File | Tests | Covers |
 |------|-------|--------|
-| `test_routes.py` | 156 | All routes, auth guards, AJAX endpoints, error handling |
+| `test_routes.py` | 161 | All routes, auth guards, AJAX endpoints, error handling |
 | `test_drawing.py` | 40 | Shuffle, conflicts, resolution, cascading, redraw |
 | `test_tte_client.py` | 22 | Rate limiting, auth, error handling, pagination, endpoints |
 | `test_data_processing.py` | 21 | Entry processing, ejection filtering, grouping |
