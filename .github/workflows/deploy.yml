@@ -41,4 +41,7 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Deploy to Azure Web App
-        run: az webapp deploy --resource-group PawDrawing-rg --name ${{ vars.AZURE_WEBAPP_NAME }} --src-path deploy.zip --type zip
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          package: deploy.zip
