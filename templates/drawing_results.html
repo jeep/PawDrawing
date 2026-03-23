@@ -506,6 +506,7 @@
     <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin-left:auto;" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running...';document.getElementById('loading-message').textContent='Running drawing\u2026';document.getElementById('loading-note').textContent='This may take a minute or two depending on the number of games and entries.';document.getElementById('loading-overlay').classList.add('active');">
         <button type="submit" class="rerun-btn">Re-run Drawing</button>
     </form>
+    <button class="redraw-toggle" id="redraw-toggle" onclick="toggleRedrawMode()">Enter Redraw Mode</button>
     <button class="push-btn" id="push-btn" onclick="pushToTTE()">Push to TTE</button>
     <a href="{{ url_for('main.export_csv') }}" class="rerun-btn" style="text-decoration:none;">Export CSV</a>
 </div>
@@ -600,7 +601,6 @@
 <div class="section-header">
     <h3>Awaiting Pickup</h3>
     <span class="section-count" id="awaiting-count">{{ awaiting|length }}</span>
-    <button class="redraw-toggle" id="redraw-toggle" onclick="toggleRedrawMode()">Enter Redraw Mode</button>
 </div>
 {% if awaiting %}
 <div class="redraw-bar" id="redraw-bar">
