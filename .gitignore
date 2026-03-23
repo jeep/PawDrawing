@@ -19,6 +19,7 @@ Application API Key.txt
 
 # Flask
 instance/
+flask_session/
 
 # IDE
 .vscode/
