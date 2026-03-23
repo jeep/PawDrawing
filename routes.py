@@ -630,7 +630,15 @@ def resolve_conflicts():
             keep_map[badge_id] = keep_game_id
 
     premium_games = set(session.get("premium_games", []))
-    apply_resolution(drawing_state, keep_map, premium_games)
+    advanced = apply_resolution(drawing_state, keep_map, premium_games)
+
+    # Track any games that exhausted their entrant list during resolution
+    winners = get_current_winners(drawing_state)
+    solo_dismissed = session.get("solo_dismissed_games", [])
+    for game_id in advanced:
+        if winners.get(game_id) is None and game_id not in solo_dismissed:
+            solo_dismissed.append(game_id)
+    session["solo_dismissed_games"] = solo_dismissed
 
     # Check for new conflicts from cascading
     new_conflicts = detect_conflicts(drawing_state)
@@ -713,9 +721,9 @@ def dismiss_conflict_game():
     not_here = set(session.get("not_here", []))
     found = advance_winner(drawing_state, game_id, not_here=not_here)
 
-    # If the game had only one entrant (and is now exhausted), track it
-    # so it doesn't show as "To the box" — it should be eligible for redraw only
-    if not found and total_entrants == 1:
+    # If the game is now exhausted (no more candidates), track it so it
+    # shows as "No winner (redraw eligible)" instead of "To the box!"
+    if not found:
         solo_dismissed = session.get("solo_dismissed_games", [])
         if game_id not in solo_dismissed:
             solo_dismissed.append(game_id)
@@ -782,6 +790,7 @@ def dismiss_conflict_game():
         "results": results,
         "conflicts": updated_conflicts,
         "dismissed_game_id": game_id,
+        "was_exhausted": not found,
         "was_solo_entrant": not found and total_entrants == 1,
     })
 

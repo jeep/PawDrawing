@@ -742,7 +742,7 @@
                 {{ r.game_name }}
                 {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
             </td>
-            <td>{% if r.is_solo_dismissed %}Dismissed (redraw eligible){% elif r.has_entries %}To the box!{% else %}No entries{% endif %}</td>
+            <td>{% if r.is_solo_dismissed %}No winner (redraw eligible){% elif r.has_entries %}To the box!{% else %}No entries{% endif %}</td>
         </tr>
         {% endfor %}
     </tbody>

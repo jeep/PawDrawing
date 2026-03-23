@@ -1380,9 +1380,10 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         data = resp.get_json()
         self.assertTrue(data["ok"])
         self.assertTrue(data["was_solo_entrant"])
+        self.assertTrue(data["was_exhausted"])
         self.assertEqual(data["dismissed_game_id"], "G1")
 
-        # Session should track the solo dismissal
+        # Session should track the dismissal
         with self.client.session_transaction() as sess:
             self.assertIn("G1", sess["solo_dismissed_games"])
 
@@ -1391,8 +1392,8 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         self.assertTrue(solo[0]["is_solo_dismissed"])
         self.assertFalse(solo[0]["has_winner"])
 
-    def test_dismiss_non_solo_not_marked(self):
-        """Dismissing a game with multiple entrants should NOT mark as solo dismissed."""
+    def test_dismiss_non_solo_not_exhausted(self):
+        """Dismissing a game with a next candidate should NOT mark as exhausted."""
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["drawing_state"] = self._multi_win_state()
@@ -1408,10 +1409,156 @@ class TestDismissConflictGameRoute(unittest.TestCase):
                                 json={"badge_id": "B1", "game_id": "G1"},
                                 content_type="application/json")
         data = resp.get_json()
+        self.assertFalse(data["was_exhausted"])
         self.assertFalse(data["was_solo_entrant"])
 
         with self.client.session_transaction() as sess:
             self.assertEqual(sess.get("solo_dismissed_games", []), [])
+
+    def test_dismiss_two_entrant_both_gone(self):
+        """Dismiss sole-remaining candidate from a 2-entry game -> exhausted."""
+        state = [
+            {
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "id": "e2", "name": "Bob"},
+                ],
+                "winner_index": 1,  # B2 is current winner (B1 already skipped)
+            },
+            {
+                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "shuffled": [
+                    {"badge_id": "B2", "id": "e3", "name": "Bob"},
+                    {"badge_id": "B3", "id": "e4", "name": "Carol"},
+                ],
+                "winner_index": 0,
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = state
+            sess["drawing_conflicts"] = [{
+                "badge_id": "B2", "winner_name": "Bob",
+                "game_ids": ["G1", "G2"],
+                "game_names": {"G1": "Catan", "G2": "Ticket to Ride"},
+                "is_premium_conflict": False,
+            }]
+            sess["premium_games"] = []
+
+        # Dismiss B2 from G1 -> advance tries index 2, no more candidates
+        resp = self.client.post("/drawing/dismiss-game",
+                                json={"badge_id": "B2", "game_id": "G1"},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["was_exhausted"])
+        self.assertFalse(data["was_solo_entrant"])  # 2 entrants, not solo
+
+        with self.client.session_transaction() as sess:
+            self.assertIn("G1", sess["solo_dismissed_games"])
+
+        # The results should show the game as no-winner (redraw eligible)
+        g1 = [r for r in data["results"] if r["game_id"] == "G1"]
+        self.assertTrue(g1[0]["is_solo_dismissed"])
+        self.assertFalse(g1[0]["has_winner"])
+
+    def test_resolve_tracks_exhausted_games(self):
+        """Resolve route tracks games exhausted after apply_resolution."""
+        # B1 wins G1 and G2. G1 has only B1, G2 has B1+B2.
+        # User keeps G2 for B1 -> G1 is relinquished and exhausted.
+        state = [
+            {
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "id": "e1", "name": "Alice"},
+                ],
+                "winner_index": 0,
+            },
+            {
+                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "shuffled": [
+                    {"badge_id": "B1", "id": "e2", "name": "Alice"},
+                    {"badge_id": "B2", "id": "e3", "name": "Bob"},
+                ],
+                "winner_index": 0,
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = state
+            sess["drawing_conflicts"] = [{
+                "badge_id": "B1", "winner_name": "Alice",
+                "game_ids": ["G1", "G2"],
+                "game_names": {"G1": "Catan", "G2": "Ticket to Ride"},
+                "is_premium_conflict": False,
+            }]
+            sess["premium_games"] = []
+
+        resp = self.client.post("/drawing/resolve",
+                                json={"resolutions": [{"badge_id": "B1", "keep_game_id": "G2"}]},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+
+        # G1 had only B1, who kept G2; G1 is now exhausted
+        with self.client.session_transaction() as sess:
+            self.assertIn("G1", sess.get("solo_dismissed_games", []))
+
+        # Results should show G1 as no-winner (redraw eligible)
+        g1 = [r for r in data["results"] if r["game_id"] == "G1"]
+        self.assertTrue(g1[0]["is_solo_dismissed"])
+        self.assertFalse(g1[0]["has_winner"])
+
+    def test_resolve_multi_entrant_exhausted(self):
+        """Resolve exhausts a multi-entrant game (cascade scenario).
+
+        G1 had [B1, B2]. B1 was already resolved away (winner_index=1).
+        Now B2 wins G1+G3, user keeps G3 -> G1 exhausted.
+        """
+        state = [
+            {
+                "game": {"id": "G1", "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "id": "e2", "name": "Bob"},
+                ],
+                "winner_index": 1,  # B2 is current winner (B1 already skipped)
+            },
+            {
+                "game": {"id": "G3", "name": "Wingspan"},
+                "shuffled": [
+                    {"badge_id": "B2", "id": "e4", "name": "Bob"},
+                ],
+                "winner_index": 0,
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = state
+            sess["drawing_conflicts"] = [{
+                "badge_id": "B2", "winner_name": "Bob",
+                "game_ids": ["G1", "G3"],
+                "game_names": {"G1": "Catan", "G3": "Wingspan"},
+                "is_premium_conflict": False,
+            }]
+            sess["premium_games"] = []
+
+        resp = self.client.post("/drawing/resolve",
+                                json={"resolutions": [
+                                    {"badge_id": "B2", "keep_game_id": "G3"},
+                                ]},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+
+        # G1 had 2 entrants, both resolved away -> exhausted
+        with self.client.session_transaction() as sess:
+            self.assertIn("G1", sess.get("solo_dismissed_games", []))
+
+        g1 = [r for r in data["results"] if r["game_id"] == "G1"]
+        self.assertTrue(g1[0]["is_solo_dismissed"])
+        self.assertFalse(g1[0]["has_winner"])
 
     def test_dismiss_cascading_conflict(self):
         """Dismissing G1 advances to B2 who already wins G3 -> new conflict."""
@@ -1462,7 +1609,7 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         self.assertEqual(set(data["conflicts"][0]["game_ids"]), {"G1", "G3"})
 
     def test_dismiss_shown_in_results_template(self):
-        """Solo-dismissed game shows 'Dismissed (redraw eligible)' not 'To the box!'."""
+        """Dismissed game shows 'No winner (redraw eligible)' not 'To the box!'."""
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["drawing_state"] = [
@@ -1478,7 +1625,7 @@ class TestDismissConflictGameRoute(unittest.TestCase):
 
         resp = self.client.get("/drawing/results")
         html = resp.data.decode()
-        self.assertIn("Dismissed (redraw eligible)", html)
+        self.assertIn("No winner (redraw eligible)", html)
         # The no-entries table should NOT show "To the box!" for this game
         no_entries_start = html.index('id="no-entries-table"')
         no_entries_end = html.index("</table>", no_entries_start)
