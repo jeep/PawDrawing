@@ -150,30 +150,6 @@
         font-size: 1rem;
         color: #2c3e50;
     }
-    .eject-form {
-        display: flex;
-        gap: 0.5rem;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-    .eject-form input {
-        padding: 0.4rem 0.75rem;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        font-size: 0.9rem;
-        width: 200px;
-    }
-    .eject-form button {
-        background: #e74c3c;
-        color: white;
-        border: none;
-        padding: 0.4rem 1rem;
-        border-radius: 5px;
-        cursor: pointer;
-        font-weight: 600;
-        font-size: 0.85rem;
-    }
-    .eject-form button:hover { background: #c0392b; }
     .eject-list {
         margin-top: 0.75rem;
         display: flex;
@@ -254,7 +230,7 @@
     <span class="stat"><strong>{{ total_games }}</strong> games</span>
     <span class="stat"><strong>{{ total_entries }}</strong> unique entries</span>
     {% if ejected_entries %}
-    <span class="stat"><strong>{{ ejected_entries|length }}</strong> ejected<span class="eject-count">!</span></span>
+    <span class="stat"><strong>{{ ejected_entries|length }}</strong> removed<span class="eject-count">!</span></span>
     {% endif %}
     <span class="stat" style="font-size:0.8rem;color:#888;">Loaded {{ data_loaded_at }}</span>
     <span class="save-status" id="save-status">Saved</span>
@@ -262,10 +238,12 @@
 </div>
 
 <div class="eject-panel" id="eject-panel">
-    <h3>Eject Player from Drawing</h3>
-    <div class="eject-form">
-        <input type="text" id="eject-badge-input" placeholder="Badge ID" autocomplete="off">
-        <button type="button" id="eject-all-btn">Eject from All Games</button>
+    <h3>Player Management</h3>
+    <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+        <a href="{{ url_for('main.players') }}" style="background:#3498db;color:white;border:none;padding:0.4rem 1rem;font-size:0.85rem;border-radius:5px;cursor:pointer;font-weight:600;text-decoration:none;">Manage Players</a>
+        {% if ejected_entries %}
+        <span style="font-size:0.85rem;color:#888;">{{ ejected_entries|length }} player(s) removed from drawing</span>
+        {% endif %}
     </div>
     <div class="eject-list" id="eject-list">
         {% for badge_id, game_id in ejected_entries %}
@@ -335,21 +313,8 @@
 (function() {
     const statusEl = document.getElementById('save-status');
 
-    /* ── Ejection: global eject ── */
-    const ejectInput = document.getElementById('eject-badge-input');
-    const ejectBtn = document.getElementById('eject-all-btn');
+    /* ── Removal: undo chips ── */
     const ejectList = document.getElementById('eject-list');
-
-    ejectBtn.addEventListener('click', function() {
-        const badgeId = ejectInput.value.trim();
-        if (!badgeId) return;
-        doEject(badgeId, '*');
-        ejectInput.value = '';
-    });
-
-    ejectInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); ejectBtn.click(); }
-    });
 
     /* Undo buttons on existing chips */
     ejectList.addEventListener('click', function(e) {
@@ -444,7 +409,7 @@
                     tr.dataset.game = gameId;
                     const action = ent.ejected ? 'uneject' : 'eject';
                     const btnClass = ent.ejected ? 'uneject' : 'eject';
-                    const btnText = ent.ejected ? 'Undo' : 'Eject';
+                    const btnText = ent.ejected ? 'Undo' : 'Remove';
                     tr.innerHTML = '<td colspan="2">' + escapeHtml(ent.name) +
                         ' <span style="color:#999;font-size:0.8rem">(#' + escapeHtml(ent.badge_id) + ')</span></td>' +
                         '<td style="text-align:center"><button class="entrant-eject-btn ' + btnClass + '" ' +

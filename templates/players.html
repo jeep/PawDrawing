@@ -1,0 +1,374 @@
+{% extends "base.html" %}
+
+{% block title %}PawDrawing — Player Management{% endblock %}
+
+{% block nav %}
+<a href="{{ url_for('main.games') }}">Back to Games</a>
+<form method="POST" action="{{ url_for('main.logout') }}" style="display:inline">
+    <button type="submit" style="background:none;border:none;color:#ecf0f1;cursor:pointer;font-size:0.9rem;">
+        Logout ({{ session.get('tte_username', '') }})
+    </button>
+</form>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .summary {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        gap: 2rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .summary h2 { margin: 0; color: #2c3e50; font-size: 1.2rem; }
+    .stat { font-size: 0.9rem; color: #555; }
+    .stat strong { color: #2c3e50; font-size: 1.1rem; }
+
+    .search-bar {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        padding: 0.75rem 1.5rem;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    .search-bar input {
+        flex: 1;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        font-size: 0.95rem;
+        outline: none;
+    }
+    .search-bar input:focus { border-color: #3498db; box-shadow: 0 0 0 2px rgba(52,152,219,0.15); }
+    .search-count { font-size: 0.85rem; color: #888; white-space: nowrap; }
+    .search-count strong { color: #2c3e50; }
+
+    .player-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .player-table th {
+        background: #2c3e50;
+        color: white;
+        padding: 0.75rem 1rem;
+        text-align: left;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .player-table td {
+        padding: 0.65rem 1rem;
+        border-bottom: 1px solid #eee;
+        font-size: 0.95rem;
+    }
+    .player-table tr:last-child td { border-bottom: none; }
+    .player-table tr:hover td { background: #f8f9fa; }
+    .player-table tr.removed td {
+        background: #fdecea;
+        color: #999;
+    }
+    .player-table tr.removed:hover td { background: #fbd9d3; }
+
+    .removed-badge {
+        display: inline-block;
+        background: #e74c3c;
+        color: white;
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 0.1rem 0.4rem;
+        border-radius: 3px;
+        margin-left: 0.3rem;
+        text-transform: uppercase;
+    }
+    .partial-badge {
+        display: inline-block;
+        background: #f39c12;
+        color: white;
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 0.1rem 0.4rem;
+        border-radius: 3px;
+        margin-left: 0.3rem;
+        text-transform: uppercase;
+    }
+
+    .remove-btn {
+        background: none;
+        border: 1px solid #e74c3c;
+        border-radius: 4px;
+        padding: 0.25rem 0.6rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        color: #e74c3c;
+        font-weight: 500;
+    }
+    .remove-btn:hover { background: #fdecea; }
+    .restore-btn {
+        background: none;
+        border: 1px solid #27ae60;
+        border-radius: 4px;
+        padding: 0.25rem 0.6rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        color: #27ae60;
+        font-weight: 500;
+    }
+    .restore-btn:hover { background: #eafaf1; }
+
+    .game-list {
+        font-size: 0.82rem;
+        color: #666;
+        max-width: 400px;
+    }
+    .game-list .game-tag {
+        display: inline-block;
+        background: #eef2f7;
+        padding: 0.1rem 0.45rem;
+        border-radius: 3px;
+        margin: 0.1rem 0.15rem;
+        white-space: nowrap;
+    }
+    .game-list .game-tag.removed-game {
+        background: #fdecea;
+        text-decoration: line-through;
+        color: #999;
+    }
+
+    .expand-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 0.85rem;
+        color: #3498db;
+        padding: 0;
+        margin-right: 0.4rem;
+    }
+    .expand-btn:hover { color: #2980b9; }
+
+    .game-detail-row td {
+        padding: 0.3rem 1rem 0.3rem 2.5rem;
+        background: #f8f9fa;
+        border-bottom: 1px solid #eee;
+        font-size: 0.85rem;
+    }
+    .game-detail-row.removed-game td {
+        background: #fdecea;
+        color: #999;
+        text-decoration: line-through;
+    }
+    .game-remove-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 0.82rem;
+        padding: 0.1rem 0.4rem;
+        border-radius: 3px;
+    }
+    .game-remove-btn.remove { color: #e74c3c; }
+    .game-remove-btn.remove:hover { background: #fdecea; }
+    .game-remove-btn.restore { color: #27ae60; }
+    .game-remove-btn.restore:hover { background: #eafaf1; }
+
+    .th-actions { width: 180px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="summary">
+    <h2>Player Management — {{ convention_name }}</h2>
+    <span class="stat"><strong>{{ total_players }}</strong> players</span>
+    <span class="stat"><strong>{{ total_games }}</strong> games</span>
+    {% set removed_count = removed_all|length + removed_per_game|length %}
+    {% if removed_count > 0 %}
+    <span class="stat"><strong id="removed-count">{{ removed_count }}</strong> removed</span>
+    {% endif %}
+</div>
+
+<div class="search-bar">
+    <input type="text" id="search-input" placeholder="Search by name or badge ID…" autocomplete="off">
+    <span class="search-count" id="search-count"></span>
+</div>
+
+{% if player_list %}
+<table class="player-table" id="player-table">
+    <thead>
+        <tr>
+            <th>Player</th>
+            <th>Badge ID</th>
+            <th>Games Entered</th>
+            <th>Games</th>
+            <th class="th-actions">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for player in player_list %}
+        {% set is_removed_all = player.badge_id in removed_all %}
+        {% set per_game_removals = removed_per_game.get(player.badge_id, {}) %}
+        {% set has_partial = per_game_removals|length > 0 and not is_removed_all %}
+        <tr class="{{ 'removed' if is_removed_all }}"
+            data-badge-id="{{ player.badge_id }}"
+            data-name="{{ player.name|lower }}">
+            <td>
+                {% if player.games|length > 0 %}
+                <button class="expand-btn" data-badge-id="{{ player.badge_id }}" title="Show games">&#9654;</button>
+                {% endif %}
+                {{ player.name }}
+                {% if is_removed_all %}<span class="removed-badge">Removed</span>{% endif %}
+                {% if has_partial %}<span class="partial-badge">Partial</span>{% endif %}
+            </td>
+            <td>{{ player.badge_id }}</td>
+            <td>{{ player.games|length }}</td>
+            <td>
+                <div class="game-list">
+                    {% for g in player.games %}
+                    <span class="game-tag{{ ' removed-game' if is_removed_all or g.game_id in per_game_removals }}">{{ g.game_name }}</span>
+                    {% endfor %}
+                </div>
+            </td>
+            <td>
+                {% if is_removed_all %}
+                <button class="restore-btn" data-badge-id="{{ player.badge_id }}" data-game-id="*" onclick="restorePlayer(this)">Restore to Drawing</button>
+                {% else %}
+                <button class="remove-btn" data-badge-id="{{ player.badge_id }}" data-game-id="*" onclick="removePlayer(this)">Remove from Drawing</button>
+                {% endif %}
+            </td>
+        </tr>
+        {% for g in player.games %}
+        <tr class="game-detail-row{{ ' removed-game' if is_removed_all or g.game_id in per_game_removals }}"
+            data-parent-badge="{{ player.badge_id }}"
+            data-game-id="{{ g.game_id }}"
+            style="display:none;">
+            <td colspan="3">{{ g.game_name }}</td>
+            <td></td>
+            <td>
+                {% if not is_removed_all %}
+                    {% if g.game_id in per_game_removals %}
+                    <button class="game-remove-btn restore" data-badge-id="{{ player.badge_id }}" data-game-id="{{ g.game_id }}" onclick="restorePlayer(this)">Restore</button>
+                    {% else %}
+                    <button class="game-remove-btn remove" data-badge-id="{{ player.badge_id }}" data-game-id="{{ g.game_id }}" onclick="removePlayer(this)">Remove from Game</button>
+                    {% endif %}
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p style="color:#888;font-style:italic;">No players found.</p>
+{% endif %}
+
+<script>
+(function() {
+    /* ── Expand/collapse game details ── */
+    document.querySelectorAll('.expand-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var badgeId = btn.dataset.badgeId;
+            var isExpanded = btn.dataset.expanded === '1';
+            var rows = document.querySelectorAll('.game-detail-row[data-parent-badge="' + badgeId + '"]');
+            rows.forEach(function(r) { r.style.display = isExpanded ? 'none' : ''; });
+            btn.innerHTML = isExpanded ? '&#9654;' : '&#9660;';
+            btn.dataset.expanded = isExpanded ? '0' : '1';
+        });
+    });
+
+    /* ── Remove player ── */
+    window.removePlayer = function(btn) {
+        var badgeId = btn.dataset.badgeId;
+        var gameId = btn.dataset.gameId;
+        btn.disabled = true;
+        btn.textContent = 'Removing...';
+
+        fetch('{{ url_for("main.eject_player") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({badge_id: badgeId, game_id: gameId})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error && data.error !== 'Already ejected') {
+                btn.disabled = false;
+                btn.textContent = gameId === '*' ? 'Remove from Drawing' : 'Remove from Game';
+                return;
+            }
+            window.location.reload();
+        })
+        .catch(function() {
+            btn.disabled = false;
+            btn.textContent = gameId === '*' ? 'Remove from Drawing' : 'Remove from Game';
+        });
+    };
+
+    /* ── Restore player ── */
+    window.restorePlayer = function(btn) {
+        var badgeId = btn.dataset.badgeId;
+        var gameId = btn.dataset.gameId;
+        btn.disabled = true;
+        btn.textContent = 'Restoring...';
+
+        fetch('{{ url_for("main.uneject_player") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({badge_id: badgeId, game_id: gameId})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.ok) {
+                btn.disabled = false;
+                btn.textContent = gameId === '*' ? 'Restore to Drawing' : 'Restore';
+                return;
+            }
+            window.location.reload();
+        })
+        .catch(function() {
+            btn.disabled = false;
+            btn.textContent = gameId === '*' ? 'Restore to Drawing' : 'Restore';
+        });
+    };
+
+    /* ── Search / Filter ── */
+    var searchInput = document.getElementById('search-input');
+    var searchCount = document.getElementById('search-count');
+
+    searchInput.addEventListener('input', function() {
+        var query = searchInput.value.trim().toLowerCase();
+        var rows = document.querySelectorAll('#player-table > tbody > tr:not(.game-detail-row)');
+        var total = rows.length;
+        var visible = 0;
+
+        rows.forEach(function(row) {
+            var badgeId = (row.dataset.badgeId || '').toLowerCase();
+            var name = (row.dataset.name || '');
+            var match = !query || name.indexOf(query) !== -1 || badgeId.indexOf(query) !== -1;
+            row.style.display = match ? '' : 'none';
+            if (match) visible++;
+
+            // Also show/hide detail rows
+            var details = document.querySelectorAll('.game-detail-row[data-parent-badge="' + row.dataset.badgeId + '"]');
+            details.forEach(function(d) {
+                if (!match) d.style.display = 'none';
+                // If match and was expanded, keep visible; otherwise stay hidden
+            });
+        });
+
+        if (query) {
+            searchCount.innerHTML = '<strong>' + visible + '</strong> of <strong>' + total + '</strong>';
+        } else {
+            searchCount.textContent = '';
+        }
+    });
+})();
+</script>
+{% endblock %}

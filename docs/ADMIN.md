@@ -84,13 +84,15 @@ The source selection page has two tabs:
 
 The games page shows all Play-to-Win games in the selected source (convention library or standalone library), along with the number of entries (people who played) for each game.
 
-### 4. Eject players (optional)
+### 4. Manage players (optional)
 
-If a player needs to be excluded from the drawing (e.g., rule violation), click the **View Entrants** button for a game, then click **Eject** next to the player. You can eject a player from a single game or from all games.
+Click **Manage Players** on the games page to open the player management screen. This page lists every player who entered a Play-to-Win game, along with their badge ID, the number of games they entered, and which games.
 
-Ejected players are excluded when the drawing is run. Ejections can be undone at any time before running the drawing.
+To exclude a player from the drawing, click **Remove from Drawing** next to their name. To exclude them from a single game, expand their row and click **Remove from Game** on the specific game.
 
-Ejections are cleared when you change the convention or library source.
+Removed players are shown with a "Removed" badge and can be restored at any time before running the drawing. Removals are cleared when you change the convention or library source.
+
+You can search/filter the player list by name or badge ID using the search bar.
 
 ### 5. Designate premium games
 

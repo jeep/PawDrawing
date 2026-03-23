@@ -280,6 +280,84 @@ def games():
     )
 
 
+@main_bp.route("/games/players")
+def players():
+    """Player management page — lists all players with game counts and removal controls."""
+    if not session.get("tte_session_id"):
+        flash("Please log in first.", "error")
+        return redirect(url_for("main.login"))
+
+    library_id = session.get("library_id")
+    convention_id = session.get("convention_id")
+    if not library_id:
+        flash("Please select a convention first.", "error")
+        return redirect(url_for("main.convention_select"))
+
+    client = _get_client()
+
+    try:
+        all_games = client.get_library_games(library_id, play_to_win_only=True)
+    except TTEAPIError as exc:
+        return _handle_api_error(exc, url_for("main.convention_select"), "load games")
+
+    try:
+        if convention_id:
+            raw_entries = client.get_convention_playtowins(convention_id)
+        else:
+            raw_entries = []
+            for game in all_games:
+                gid = game.get("id")
+                if gid:
+                    raw_entries.extend(client.get_library_game_playtowins(gid))
+    except TTEAPIError as exc:
+        return _handle_api_error(exc, url_for("main.convention_select"), "load entries")
+
+    entries = process_entries(raw_entries)
+
+    # Build game name lookup
+    game_names = {g.get("id"): g.get("name", "Unknown") for g in all_games}
+
+    # Aggregate by player (badge_id)
+    players_map = {}
+    for entry in entries:
+        badge_id = entry.get("badge_id")
+        if not badge_id:
+            continue
+        if badge_id not in players_map:
+            players_map[badge_id] = {
+                "badge_id": badge_id,
+                "name": entry.get("name", badge_id),
+                "games": [],
+            }
+        game_id = entry.get("librarygame_id")
+        players_map[badge_id]["games"].append({
+            "game_id": game_id,
+            "game_name": game_names.get(game_id, "Unknown"),
+        })
+
+    player_list = sorted(players_map.values(), key=lambda p: p["name"].lower())
+
+    # Build removed set from session
+    ejected_entries = session.get("ejected_entries", [])
+    removed_all = set()
+    removed_per_game = {}
+    for badge_id, game_id in ejected_entries:
+        if game_id == "*":
+            removed_all.add(badge_id)
+        else:
+            removed_per_game.setdefault(badge_id, set()).add(game_id)
+
+    return render_template(
+        "players.html",
+        player_list=player_list,
+        total_players=len(player_list),
+        total_games=len(all_games),
+        convention_name=session.get("convention_name") or session.get("library_name", ""),
+        removed_all=removed_all,
+        removed_per_game=removed_per_game,
+    )
+
+
 @main_bp.route("/games/premium", methods=["POST"])
 def set_premium_games():
     """AJAX endpoint: save premium game designations to session."""

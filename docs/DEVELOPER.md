@@ -33,7 +33,8 @@ PawDrawing/
 │   ├── convention_select.html  # Convention search & library browse
 │   ├── convention_confirm.html # Confirm selected convention
 │   ├── library_confirm.html    # Confirm selected library (no convention)
-│   ├── games.html              # Game list with premium toggles & ejections
+│   ├── games.html              # Game list with premium toggles & player management
+│   ├── players.html            # Player management with remove/restore controls
 │   └── drawing_results.html    # Results with conflicts, pickup, push, export
 ├── tests/
 │   ├── test_routes.py          # Route/view tests
@@ -83,6 +84,7 @@ All routes live on a single Blueprint (`main_bp`). Helper functions:
 | GET | `/library/browse` | `library_browse` | AJAX: list user's libraries |
 | POST | `/library/select` | `library_select_route` | Fetch and confirm library (no convention) |
 | GET | `/games` | `games` | Load and display P2W games |
+| GET | `/games/players` | `players` | Player management (list, remove, restore) |
 | POST | `/games/premium` | `set_premium_games` | AJAX: save premium designations |
 | POST | `/games/eject` | `eject_player` | AJAX: eject player from drawing |
 | POST | `/games/uneject` | `uneject_player` | AJAX: undo an ejection |
@@ -185,8 +187,9 @@ Games Page                     GET /games
   │                              │    └─ TTEClient.get_library_game_playtowins() per game
   │                              └─ process_entries() + apply_ejections() + group_entries_by_game()
   │                              └─ Premium toggles: AJAX POST /games/premium
-  │                              └─ Eject player: AJAX POST /games/eject
-  │                              └─ Undo ejection: AJAX POST /games/uneject
+  │                              └─ Manage Players: GET /games/players
+  │                              └─ Remove player: AJAX POST /games/eject
+  │                              └─ Restore player: AJAX POST /games/uneject
   │                              └─ View entrants: AJAX GET /games/entrants/<game_id>
   ▼
 Run Drawing                    POST /drawing → 302 → GET /drawing/results
@@ -283,7 +286,7 @@ python -m pytest tests/ -v
 
 | File | Tests | Covers |
 |------|-------|--------|
-| `test_routes.py` | 146 | All routes, auth guards, AJAX endpoints, error handling |
+| `test_routes.py` | 156 | All routes, auth guards, AJAX endpoints, error handling |
 | `test_drawing.py` | 40 | Shuffle, conflicts, resolution, cascading, redraw |
 | `test_tte_client.py` | 22 | Rate limiting, auth, error handling, pagination, endpoints |
 | `test_data_processing.py` | 21 | Entry processing, ejection filtering, grouping |
