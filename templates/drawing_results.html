@@ -503,7 +503,7 @@
     {% if drawing_timestamp %}
     <span class="stat" style="font-size:0.8rem;color:#888;">Data from {{ drawing_timestamp }}</span>
     {% endif %}
-    <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin-left:auto;" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running...';document.getElementById('loading-message').textContent='Running drawing\u2026';document.getElementById('loading-note').textContent='This may take a minute or two depending on the number of games and entries.';document.getElementById('loading-overlay').classList.add('active');">
+    <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin-left:auto;" onsubmit="{% if picked_up %}if(!confirm('{{ picked_up|length }} game{{ 's' if picked_up|length != 1 }} already picked up. Re-running will redraw ALL games including those.\n\nIf you only want to redraw unclaimed games, cancel and use Enter Redraw Mode instead.')){return false;}{% endif %}var b=this.querySelector('button');b.disabled=true;b.textContent='Running...';document.getElementById('loading-message').textContent='Running drawing\u2026';document.getElementById('loading-note').textContent='This may take a minute or two depending on the number of games and entries.';document.getElementById('loading-overlay').classList.add('active');">
         <button type="submit" class="rerun-btn">Re-run Drawing</button>
     </form>
     <button class="redraw-toggle" id="redraw-toggle" onclick="toggleRedrawMode()">Enter Redraw Mode</button>
