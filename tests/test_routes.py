@@ -34,7 +34,7 @@ class TestLoginRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn(b"required", resp.data)
 
-    @patch("routes.TTEClient")
+    @patch("routes.auth.TTEClient")
     def test_login_success_redirects_to_convention(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.session_id = "session-123"
@@ -52,7 +52,7 @@ class TestLoginRoute(unittest.TestCase):
         MockClient.assert_called_once_with(api_key_id="user-api-key")
         mock_instance.login.assert_called_once_with("admin", "secret")
 
-    @patch("routes.TTEClient")
+    @patch("routes.auth.TTEClient")
     def test_login_success_stores_session(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.session_id = "session-123"
@@ -75,7 +75,7 @@ class TestLoginRoute(unittest.TestCase):
             self.assertEqual(sess["tte_user_id"], "user-456")
             self.assertEqual(sess["tte_api_key"], "user-api-key")
 
-    @patch("routes.TTEClient")
+    @patch("routes.auth.TTEClient")
     def test_login_failure_shows_error(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.login.side_effect = TTEAPIError("Invalid credentials")
@@ -102,7 +102,7 @@ class TestLogoutRoute(unittest.TestCase):
         self.app.config["TTE_API_KEY"] = "test-key"
         self.client = self.app.test_client()
 
-    @patch("routes.TTEClient")
+    @patch("routes.auth.TTEClient")
     def test_logout_clears_session(self, MockClient):
         mock_instance = MagicMock()
         MockClient.return_value = mock_instance
@@ -121,7 +121,7 @@ class TestLogoutRoute(unittest.TestCase):
             self.assertNotIn("tte_username", sess)
             self.assertNotIn("tte_api_key", sess)
 
-    @patch("routes.TTEClient")
+    @patch("routes.auth.TTEClient")
     def test_logout_calls_api_logout(self, MockClient):
         mock_instance = MagicMock()
         MockClient.return_value = mock_instance
@@ -177,7 +177,7 @@ class TestConventionSearchRoute(unittest.TestCase):
         data = resp.get_json()
         self.assertEqual(data["results"], [])
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_search_returns_results(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.search_conventions.return_value = [
@@ -195,7 +195,7 @@ class TestConventionSearchRoute(unittest.TestCase):
         self.assertEqual(len(data["results"]), 2)
         self.assertEqual(data["results"][0]["name"], "GameFest 2026")
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_search_api_error_returns_502(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.search_conventions.side_effect = TTEAPIError("API down")
@@ -231,7 +231,7 @@ class TestConventionConfirmRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/convention", resp.headers["Location"])
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_select_success_stores_session(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_convention.return_value = {
@@ -252,7 +252,7 @@ class TestConventionConfirmRoute(unittest.TestCase):
             self.assertEqual(sess["convention_id"], "conv-1")
             self.assertEqual(sess["library_id"], "lib-1")
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_confirm_shows_loading_overlay_and_warning(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_convention.return_value = {
@@ -292,7 +292,7 @@ class TestConventionConfirmRoute(unittest.TestCase):
         self.assertIn(b"GameFest 2026", resp.data)
         self.assertIn(b"GameFest Library", resp.data)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_select_no_library_shows_error(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_convention.return_value = {
@@ -308,7 +308,7 @@ class TestConventionConfirmRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/convention", resp.headers["Location"])
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_select_api_error_shows_flash(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_convention.side_effect = TTEAPIError("Not found", 404)
@@ -341,7 +341,7 @@ class TestLibraryBrowseRoute(unittest.TestCase):
         resp = self.client.get("/library/browse")
         self.assertEqual(resp.status_code, 400)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_browse_returns_libraries(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_user_libraries.return_value = [
@@ -360,7 +360,7 @@ class TestLibraryBrowseRoute(unittest.TestCase):
         self.assertEqual(len(data["results"]), 2)
         self.assertEqual(data["results"][0]["name"], "My Library")
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_browse_empty_libraries(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_user_libraries.return_value = []
@@ -375,7 +375,7 @@ class TestLibraryBrowseRoute(unittest.TestCase):
         data = resp.get_json()
         self.assertEqual(len(data["results"]), 0)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_browse_api_error(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_user_libraries.side_effect = TTEAPIError("Server error", 500)
@@ -388,7 +388,7 @@ class TestLibraryBrowseRoute(unittest.TestCase):
         resp = self.client.get("/library/browse")
         self.assertEqual(resp.status_code, 502)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_browse_auth_error_clears_session(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_user_libraries.side_effect = TTEAPIError("Unauthorized", 401)
@@ -423,7 +423,7 @@ class TestLibraryConfirmRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/convention", resp.headers["Location"])
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_library_confirm_stores_session(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library.return_value = {
@@ -444,7 +444,7 @@ class TestLibraryConfirmRoute(unittest.TestCase):
             self.assertEqual(sess["library_name"], "My P2W Library")
             self.assertNotIn("convention_id", sess)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_library_confirm_clears_convention(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library.return_value = {
@@ -465,7 +465,7 @@ class TestLibraryConfirmRoute(unittest.TestCase):
             self.assertNotIn("convention_name", sess)
             self.assertEqual(sess["library_id"], "lib-1")
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_library_confirm_shows_loading_overlay_and_warning(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library.return_value = {
@@ -503,7 +503,7 @@ class TestLibraryConfirmRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Test Library", resp.data)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_library_confirm_api_error(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library.side_effect = TTEAPIError("Not found", 404)
@@ -516,7 +516,7 @@ class TestLibraryConfirmRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/convention", resp.headers["Location"])
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_games_page_works_in_library_only_mode(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
@@ -584,7 +584,7 @@ class TestGamesRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/convention", resp.headers["Location"])
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_games_loads_and_displays(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
@@ -613,7 +613,7 @@ class TestGamesRoute(unittest.TestCase):
         # 3 unique entries after de-dup and badge filter
         self.assertIn(b"3", resp.data)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_games_shows_no_entries_badge(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
@@ -632,7 +632,7 @@ class TestGamesRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"No entries", resp.data)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_games_api_error_redirects(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.side_effect = TTEAPIError("API error")
@@ -647,7 +647,7 @@ class TestGamesRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/convention", resp.headers["Location"])
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_games_uses_library_when_no_convention(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
@@ -723,7 +723,7 @@ class TestPremiumGamesRoute(unittest.TestCase):
                                 json={"other": "data"})
         self.assertEqual(resp.status_code, 400)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_games_page_shows_premium_styling(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
@@ -747,7 +747,7 @@ class TestPremiumGamesRoute(unittest.TestCase):
         self.assertIn(b"Premium", resp.data)
         self.assertIn(b"checked", resp.data)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_games_page_no_premium(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
@@ -2001,7 +2001,7 @@ class TestPushToTTE(unittest.TestCase):
         data = resp.get_json()
         self.assertIn("No games", data["error"])
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_push_updates_picked_up_games(self, MockClient):
         mock_instance = MagicMock()
         MockClient.return_value = mock_instance
@@ -2022,7 +2022,7 @@ class TestPushToTTE(unittest.TestCase):
         for call in calls:
             self.assertEqual(call[0][1], {"win": 1})
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_push_uses_advanced_winner(self, MockClient):
         mock_instance = MagicMock()
         MockClient.return_value = mock_instance
@@ -2052,7 +2052,7 @@ class TestPushToTTE(unittest.TestCase):
         # Should update e2 (Bob's entry), not e1 (Alice's)
         mock_instance.update_playtowin.assert_called_once_with("e2", {"win": 1})
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_push_handles_partial_failure(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.update_playtowin.side_effect = [
@@ -2272,7 +2272,7 @@ class TestErrorHandlingRoutes(unittest.TestCase):
 
     # ── Auth expiration clears session ─────────────────────────────────
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_convention_select_auth_error_clears_session(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_convention.side_effect = TTEAPIError("Unauthorized", 401)
@@ -2287,7 +2287,7 @@ class TestErrorHandlingRoutes(unittest.TestCase):
         with self.client.session_transaction() as sess:
             self.assertNotIn("tte_session_id", sess)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_games_auth_error_clears_session(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.side_effect = TTEAPIError("Forbidden", 403)
@@ -2308,7 +2308,7 @@ class TestErrorHandlingRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/games", resp.headers["Location"])
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_search_auth_error_returns_401(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.search_conventions.side_effect = TTEAPIError("Expired", 401)
@@ -2322,7 +2322,7 @@ class TestErrorHandlingRoutes(unittest.TestCase):
         data = resp.get_json()
         self.assertIn("expired", data["error"].lower())
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_push_auth_error_returns_401(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.update_playtowin.side_effect = TTEAPIError("Expired", 401)
@@ -2346,7 +2346,7 @@ class TestErrorHandlingRoutes(unittest.TestCase):
 
     # ── Timeout produces friendly message ──────────────────────────────
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_games_timeout_shows_friendly_message(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.side_effect = TTETimeoutError()
@@ -2363,7 +2363,7 @@ class TestErrorHandlingRoutes(unittest.TestCase):
         resp = self.client.post("/drawing", follow_redirects=True)
         self.assertIn(b"Please load the games page first", resp.data)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_convention_timeout_shows_friendly_message(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_convention.side_effect = TTETimeoutError()
@@ -2375,7 +2375,7 @@ class TestErrorHandlingRoutes(unittest.TestCase):
                                 follow_redirects=True)
         self.assertIn(b"timed out", resp.data)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_search_timeout_returns_error(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.search_conventions.side_effect = TTETimeoutError()
@@ -2391,7 +2391,7 @@ class TestErrorHandlingRoutes(unittest.TestCase):
 
     # ── Non-auth API errors show descriptive flash ─────────────────────
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_games_500_error_shows_action_message(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.side_effect = TTEAPIError("Server error", 500)
@@ -2401,7 +2401,7 @@ class TestErrorHandlingRoutes(unittest.TestCase):
         resp = self.client.get("/games", follow_redirects=True)
         self.assertIn(b"Could not load games", resp.data)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_games_entry_loading_error_shows_action(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = []
@@ -2431,7 +2431,7 @@ class TestRefreshData(unittest.TestCase):
         self.app.config["TTE_API_KEY"] = "test-key"
         self.client = self.app.test_client()
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_games_page_shows_refresh_button(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
@@ -2453,7 +2453,7 @@ class TestRefreshData(unittest.TestCase):
         self.assertIn(b"Refresh Data", resp.data)
         self.assertIn(b"loading-overlay", resp.data)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_games_page_shows_loaded_timestamp(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = []
@@ -2470,7 +2470,7 @@ class TestRefreshData(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Loaded", resp.data)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_refresh_preserves_premium_selections(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
@@ -2499,7 +2499,7 @@ class TestRefreshData(unittest.TestCase):
         with self.client.session_transaction() as sess:
             self.assertEqual(sess["premium_games"], ["G1"])
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_refresh_fetches_fresh_data(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
@@ -2556,7 +2556,7 @@ class TestRefreshData(unittest.TestCase):
             self.assertIn("drawing_timestamp", sess)
             self.assertTrue(len(sess["drawing_timestamp"]) > 0)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_games_page_has_sortable_headers(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
@@ -2580,7 +2580,7 @@ class TestRefreshData(unittest.TestCase):
         self.assertIn(b'data-sort="premium"', resp.data)
         self.assertIn(b'sortable', resp.data)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_games_page_has_search(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
@@ -2602,7 +2602,7 @@ class TestRefreshData(unittest.TestCase):
         self.assertIn(b'game-search-input', resp.data)
         self.assertIn(b'Search games', resp.data)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_games_page_has_sort_data_attributes(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
@@ -2733,7 +2733,7 @@ class TestGetEntrantsRoute(unittest.TestCase):
         resp = self.client.get("/games/entrants/G1")
         self.assertEqual(resp.status_code, 401)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_entrants_returns_filtered_list(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_game_playtowins.return_value = [
@@ -2757,7 +2757,7 @@ class TestGetEntrantsRoute(unittest.TestCase):
         b2 = next(e for e in data["entrants"] if e["badge_id"] == "B2")
         self.assertFalse(b2["ejected"])
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_entrants_per_game_ejection(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_game_playtowins.return_value = [
@@ -2783,7 +2783,7 @@ class TestEjectionClearedOnSourceChange(unittest.TestCase):
         self.app.config["TTE_API_KEY"] = "test-key"
         self.client = self.app.test_client()
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_convention_confirm_clears_ejections(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_convention.return_value = {
@@ -2803,7 +2803,7 @@ class TestEjectionClearedOnSourceChange(unittest.TestCase):
         with self.client.session_transaction() as sess:
             self.assertNotIn("ejected_entries", sess)
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_library_confirm_clears_ejections(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library.return_value = {
@@ -2977,7 +2977,7 @@ class TestPlayersRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/games", resp.headers["Location"])
 
-    @patch("routes.TTEClient")
+    @patch("routes.helpers.TTEClient")
     def test_players_has_manage_players_link_from_games(self, MockClient):
         """Games page links to the player management page."""
         mock_instance = MagicMock()

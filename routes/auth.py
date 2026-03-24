@@ -1,0 +1,60 @@
+from flask import flash, jsonify, redirect, render_template, request, session, url_for
+
+from tte_client import TTEAPIError
+
+from . import main_bp
+from .helpers import TTEClient
+
+
+@main_bp.route("/health")
+def health():
+    return jsonify(status="ok")
+
+
+@main_bp.route("/")
+def index():
+    if session.get("tte_session_id"):
+        return redirect(url_for("main.convention_select"))
+    return redirect(url_for("main.login"))
+
+
+@main_bp.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        api_key = request.form.get("api_key", "").strip()
+
+        if not username or not password or not api_key:
+            flash("Username, password, and API key are required.", "error")
+            return render_template("login.html"), 400
+
+        client = TTEClient(api_key_id=api_key)
+        try:
+            client.login(username, password)
+        except TTEAPIError as exc:
+            flash(f"Login failed: {exc}", "error")
+            return render_template("login.html"), 401
+
+        session["tte_session_id"] = client.session_id
+        session["tte_username"] = username
+        session["tte_user_id"] = client.user_id
+        session["tte_api_key"] = api_key
+        return redirect(url_for("main.convention_select"))
+
+    return render_template("login.html")
+
+
+@main_bp.route("/logout", methods=["POST"])
+def logout():
+    tte_session_id = session.pop("tte_session_id", None)
+    tte_api_key = session.pop("tte_api_key", None)
+    session.pop("tte_username", None)
+
+    if tte_session_id:
+        client = TTEClient(api_key_id=tte_api_key)
+        client.session_id = tte_session_id
+        client.logout()
+
+    flash("You have been logged out.", "info")
+    return redirect(url_for("main.login"))

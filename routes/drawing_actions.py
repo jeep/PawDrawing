@@ -1,0 +1,331 @@
+import csv
+import io
+from datetime import date
+
+from flask import Response, flash, jsonify, redirect, request, session, url_for
+
+from drawing import advance_winner, get_current_winners, redraw_unclaimed
+from tte_client import TTEAPIError
+
+from . import main_bp
+from .drawing import _build_results_from_session
+from .helpers import _get_client
+
+
+@main_bp.route("/drawing/pickup", methods=["POST"])
+def toggle_pickup():
+    """Toggle the picked-up status of a game."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    if not session.get("drawing_state"):
+        return jsonify({"error": "No active drawing"}), 400
+
+    data = request.get_json(silent=True)
+    if not data or "game_id" not in data:
+        return jsonify({"error": "Invalid request"}), 400
+
+    game_id = data["game_id"]
+    picked_up = session.get("picked_up", [])
+
+    if game_id in picked_up:
+        picked_up.remove(game_id)
+        is_picked_up = False
+    else:
+        picked_up.append(game_id)
+        is_picked_up = True
+
+    session["picked_up"] = picked_up
+
+    return jsonify({
+        "ok": True,
+        "game_id": game_id,
+        "is_picked_up": is_picked_up,
+        "picked_up_count": len(picked_up),
+    })
+
+
+@main_bp.route("/drawing/award-next", methods=["POST"])
+def award_next():
+    """Advance a game to the next entrant in the shuffled list."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    drawing_state = session.get("drawing_state")
+    if not drawing_state:
+        return jsonify({"error": "No active drawing"}), 400
+
+    data = request.get_json(silent=True)
+    if not data or "game_id" not in data:
+        return jsonify({"error": "Invalid request"}), 400
+
+    game_id = data["game_id"]
+    not_here = set(session.get("not_here", []))
+
+    found = advance_winner(drawing_state, game_id, not_here=not_here)
+    session["drawing_state"] = drawing_state
+
+    winners = get_current_winners(drawing_state)
+    winner = winners.get(game_id)
+
+    # Look up game name for the response
+    game_name = None
+    for item in drawing_state:
+        if item["game"]["id"] == game_id:
+            game_name = item["game"].get("name", "Unknown")
+            break
+
+    return jsonify({
+        "ok": True,
+        "game_id": game_id,
+        "has_winner": found,
+        "game_name": game_name,
+        "winner_name": winner.get("name", "Unknown") if winner else None,
+        "winner_badge": winner.get("badge_id", "") if winner else None,
+    })
+
+
+@main_bp.route("/drawing/entrants/<game_id>")
+def drawing_entrants(game_id):
+    """AJAX endpoint: return the shuffled entrant list for a game from drawing state."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    drawing_state = session.get("drawing_state", [])
+    not_here = set(session.get("not_here", []))
+
+    for item in drawing_state:
+        if item["game"]["id"] == game_id:
+            winner_index = item["winner_index"]
+            entrants = []
+            for i, entry in enumerate(item["shuffled"]):
+                entrants.append({
+                    "name": entry.get("name", entry.get("badge_id", "Unknown")),
+                    "badge_id": entry.get("badge_id", ""),
+                    "is_winner": i == winner_index,
+                    "is_not_here": entry.get("badge_id", "") in not_here,
+                    "position": i + 1,
+                })
+            return jsonify({"ok": True, "entrants": entrants})
+
+    return jsonify({"error": "Game not found in drawing state"}), 404
+
+
+@main_bp.route("/drawing/not-here", methods=["POST"])
+def mark_not_here():
+    """Mark a person as 'not here' — permanently absent for this drawing."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    drawing_state = session.get("drawing_state")
+    if not drawing_state:
+        return jsonify({"error": "No active drawing"}), 400
+
+    data = request.get_json(silent=True)
+    if not data or "badge_id" not in data:
+        return jsonify({"error": "Invalid request"}), 400
+
+    badge_id = data["badge_id"]
+    not_here = session.get("not_here", [])
+
+    if badge_id in not_here:
+        return jsonify({"error": "Already marked as not here"}), 400
+
+    not_here.append(badge_id)
+    session["not_here"] = not_here
+
+    # Dismiss warning if requested
+    if data.get("dismiss_warning"):
+        session["not_here_warning_dismissed"] = True
+
+    # Auto-advance all unpicked-up games won by this person
+    picked_up = set(session.get("picked_up", []))
+    not_here_set = set(not_here)
+    winners = get_current_winners(drawing_state)
+    advanced_games = []
+
+    for game_id, winner in winners.items():
+        if winner and winner.get("badge_id") == badge_id and game_id not in picked_up:
+            advance_winner(drawing_state, game_id, not_here=not_here_set)
+            new_winner = get_current_winners(drawing_state).get(game_id)
+            advanced_games.append({
+                "game_id": game_id,
+                "winner_name": new_winner.get("name", "Unknown") if new_winner else None,
+                "winner_badge": new_winner.get("badge_id", "") if new_winner else None,
+                "has_winner": new_winner is not None,
+            })
+
+    session["drawing_state"] = drawing_state
+
+    return jsonify({
+        "ok": True,
+        "badge_id": badge_id,
+        "advanced_games": advanced_games,
+    })
+
+
+@main_bp.route("/drawing/redraw-unclaimed", methods=["POST"])
+def redraw_all_unclaimed():
+    """Redraw all unclaimed games with fresh shuffle."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    drawing_state = session.get("drawing_state")
+    if not drawing_state:
+        return jsonify({"error": "No active drawing"}), 400
+
+    data = request.get_json(silent=True) or {}
+    same_rules = data.get("same_rules", False)
+
+    picked_up = set(session.get("picked_up", []))
+    not_here_set = set(session.get("not_here", []))
+    premium_games = session.get("premium_games", [])
+
+    # Determine unclaimed game IDs (have a winner or had one, not picked up)
+    winners = get_current_winners(drawing_state)
+    unclaimed_ids = set()
+    original_winner_badges = set()
+    for item in drawing_state:
+        game_id = item["game"]["id"]
+        if game_id not in picked_up and item["shuffled"]:
+            unclaimed_ids.add(game_id)
+            # Collect original first-draw winners (index 0) for exclusion
+            if item["shuffled"]:
+                badge = item["shuffled"][0].get("badge_id")
+                if badge:
+                    original_winner_badges.add(badge)
+
+    if not unclaimed_ids:
+        return jsonify({"error": "No unclaimed games to redraw"}), 400
+
+    conflicts, auto_resolved = redraw_unclaimed(
+        drawing_state, unclaimed_ids, not_here_set, original_winner_badges,
+        same_rules=same_rules, premium_game_ids=premium_games,
+    )
+
+    session["drawing_state"] = drawing_state
+    session["solo_dismissed_games"] = []
+    if conflicts:
+        session["drawing_conflicts"] = conflicts
+    else:
+        session["drawing_conflicts"] = []
+    if auto_resolved:
+        session["auto_resolved"] = auto_resolved
+    else:
+        session["auto_resolved"] = []
+
+    # Build fresh results
+    results = _build_results_from_session()
+
+    conflicted_game_ids = []
+    for conflict in conflicts:
+        conflicted_game_ids.extend(conflict["game_ids"])
+
+    return jsonify({
+        "ok": True,
+        "results": results,
+        "conflicts": conflicts,
+        "auto_resolved": auto_resolved,
+        "conflicted_game_ids": conflicted_game_ids,
+    })
+
+
+@main_bp.route("/drawing/push", methods=["POST"])
+def push_to_tte():
+    """Push win flags to TTE for all picked-up games."""
+    if not session.get("tte_session_id"):
+        return jsonify({"error": "Not authenticated"}), 401
+
+    drawing_state = session.get("drawing_state")
+    if not drawing_state:
+        return jsonify({"error": "No active drawing"}), 400
+
+    picked_up = set(session.get("picked_up", []))
+    if not picked_up:
+        return jsonify({"error": "No games marked as picked up"}), 400
+
+    winners = get_current_winners(drawing_state)
+
+    # Collect PlayToWin entry IDs for picked-up games
+    entries_to_update = []
+    for game_id in picked_up:
+        winner = winners.get(game_id)
+        if winner and winner.get("id"):
+            entries_to_update.append({
+                "playtowin_id": winner["id"],
+                "game_id": game_id,
+            })
+
+    client = _get_client()
+    successes = []
+    failures = []
+
+    for entry in entries_to_update:
+        try:
+            client.update_playtowin(entry["playtowin_id"], {"win": 1})
+            successes.append(entry["game_id"])
+        except TTEAPIError as exc:
+            if getattr(exc, 'status_code', None) in (401, 403):
+                session.clear()
+                return jsonify({"error": "Session expired — please log in again."}), 401
+            failures.append({
+                "game_id": entry["game_id"],
+                "error": str(exc),
+            })
+
+    return jsonify({
+        "ok": True,
+        "total": len(entries_to_update),
+        "successes": len(successes),
+        "failures": failures,
+    })
+
+
+@main_bp.route("/drawing/export")
+def export_csv():
+    """Export drawing results as a CSV file."""
+    if not session.get("tte_session_id"):
+        flash("Please log in first.", "error")
+        return redirect(url_for("main.login"))
+
+    drawing_state = session.get("drawing_state")
+    if not drawing_state:
+        flash("No active drawing to export.", "error")
+        return redirect(url_for("main.games"))
+
+    winners = get_current_winners(drawing_state)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Game", "Winner's Name", "Winner's Badge"])
+
+    rows = []
+    for item in drawing_state:
+        game = item["game"]
+        game_id = game["id"]
+        winner = winners.get(game_id)
+
+        rows.append({
+            "game_name": game.get("name", "Unknown"),
+            "winner_name": winner.get("name", "Unknown") if winner else "",
+            "winner_badge": winner.get("badge_id", "") if winner else "",
+        })
+
+    rows.sort(key=lambda r: r["game_name"])
+
+    for row in rows:
+        writer.writerow([
+            row["game_name"],
+            row["winner_name"],
+            row["winner_badge"],
+        ])
+
+    convention_name = session.get("convention_name", "Drawing")
+    safe_name = "".join(c if c.isalnum() or c in " -_" else "" for c in convention_name).strip().replace(" ", "_")
+    filename = f"PawDrawing_{safe_name}_{date.today().isoformat()}.csv"
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
