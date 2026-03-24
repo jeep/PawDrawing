@@ -7,7 +7,13 @@ from session_keys import SK
 from tte_client import TTEAPIError
 
 from . import main_bp
-from .helpers import _get_client, _handle_api_error, login_required
+from .helpers import (
+    _get_client,
+    _handle_api_error,
+    is_valid_badge_id,
+    is_valid_tte_id,
+    login_required,
+)
 
 
 @main_bp.route("/games")
@@ -154,6 +160,8 @@ def set_premium_games():
     game_ids = data["premium_games"]
     if not isinstance(game_ids, list):
         return jsonify({"error": "premium_games must be a list"}), 400
+    if any(not is_valid_tte_id(gid) for gid in game_ids):
+        return jsonify({"error": "Invalid game ID format"}), 400
 
     session[SK.PREMIUM_GAMES] = game_ids
     return jsonify({"ok": True, "count": len(game_ids)})
@@ -171,6 +179,10 @@ def eject_player():
     game_id = str(data.get("game_id", "*")).strip()
     if not badge_id:
         return jsonify({"error": "badge_id is required"}), 400
+    if not is_valid_badge_id(badge_id):
+        return jsonify({"error": "Invalid badge ID format"}), 400
+    if game_id != "*" and not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID format"}), 400
 
     ejected = session.get(SK.EJECTED_ENTRIES, [])
 
@@ -198,6 +210,10 @@ def uneject_player():
 
     badge_id = str(data["badge_id"]).strip()
     game_id = str(data.get("game_id", "*")).strip()
+    if not is_valid_badge_id(badge_id):
+        return jsonify({"error": "Invalid badge ID format"}), 400
+    if game_id != "*" and not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID format"}), 400
 
     ejected = session.get(SK.EJECTED_ENTRIES, [])
     updated = [[b, g] for b, g in ejected if not (b == badge_id and g == game_id)]
@@ -213,6 +229,8 @@ def uneject_player():
 @login_required(api=True)
 def get_entrants(game_id):
     """AJAX endpoint: return entrants for a specific game."""
+    if not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID format"}), 400
     library_id = session.get(SK.LIBRARY_ID)
     if not library_id:
         return jsonify({"error": "No library selected"}), 400

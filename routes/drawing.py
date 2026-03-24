@@ -15,7 +15,7 @@ from drawing import (
 from session_keys import SK
 
 from . import main_bp
-from .helpers import login_required
+from .helpers import is_valid_badge_id, is_valid_tte_id, login_required
 
 
 def _build_results_from_session():
@@ -141,8 +141,11 @@ def resolve_conflicts():
     for res in data["resolutions"]:
         badge_id = res.get("badge_id")
         keep_game_id = res.get("keep_game_id")
-        if badge_id and keep_game_id:
-            keep_map[badge_id] = keep_game_id
+        if not badge_id or not keep_game_id:
+            continue
+        if not is_valid_badge_id(badge_id) or not is_valid_tte_id(keep_game_id):
+            return jsonify({"error": "Invalid ID format in resolutions"}), 400
+        keep_map[badge_id] = keep_game_id
 
     premium_games = set(session.get(SK.PREMIUM_GAMES, []))
     advanced = apply_resolution(drawing_state, keep_map, premium_games)
@@ -204,6 +207,10 @@ def dismiss_conflict_game():
 
     badge_id = data["badge_id"]
     game_id = data["game_id"]
+    if not is_valid_badge_id(badge_id):
+        return jsonify({"error": "Invalid badge ID format"}), 400
+    if not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID format"}), 400
 
     # Find how many entrants this game has
     total_entrants = 0

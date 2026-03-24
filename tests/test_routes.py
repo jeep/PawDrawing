@@ -181,7 +181,7 @@ class TestConventionSearchRoute(unittest.TestCase):
     def test_search_returns_results(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.search_conventions.return_value = [
-            {"id": "conv-1", "name": "GameFest 2026"},
+            {"id": "C0000001-0000-4000-A000-000000000001", "name": "GameFest 2026"},
             {"id": "conv-2", "name": "GameCon 2026"},
         ]
         MockClient.return_value = mock_instance
@@ -235,37 +235,37 @@ class TestConventionConfirmRoute(unittest.TestCase):
     def test_select_success_stores_session(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_convention.return_value = {
-            "id": "conv-1",
+            "id": "C0000001-0000-4000-A000-000000000001",
             "name": "GameFest 2026",
-            "library": {"id": "lib-1", "name": "GameFest Library"},
+            "library": {"id": "10000001-0000-4000-A000-000000000001", "name": "GameFest Library"},
         }
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
 
-        resp = self.client.post("/convention/select", data={"convention_id": "conv-1"})
+        resp = self.client.post("/convention/select", data={"convention_id": "C0000001-0000-4000-A000-000000000001"})
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/convention/confirm", resp.headers["Location"])
 
         with self.client.session_transaction() as sess:
-            self.assertEqual(sess["convention_id"], "conv-1")
-            self.assertEqual(sess["library_id"], "lib-1")
+            self.assertEqual(sess["convention_id"], "C0000001-0000-4000-A000-000000000001")
+            self.assertEqual(sess["library_id"], "10000001-0000-4000-A000-000000000001")
 
     @patch("routes.helpers.TTEClient")
     def test_confirm_shows_loading_overlay_and_warning(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_convention.return_value = {
-            "id": "conv-1",
+            "id": "C0000001-0000-4000-A000-000000000001",
             "name": "GameFest 2026",
-            "library": {"id": "lib-1", "name": "GameFest Library"},
+            "library": {"id": "10000001-0000-4000-A000-000000000001", "name": "GameFest Library"},
         }
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
 
-        resp = self.client.post("/convention/select", data={"convention_id": "conv-1"}, follow_redirects=True)
+        resp = self.client.post("/convention/select", data={"convention_id": "C0000001-0000-4000-A000-000000000001"}, follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"loading-overlay", resp.data)
         self.assertIn(b"may take a minute or two", resp.data)
@@ -296,7 +296,7 @@ class TestConventionConfirmRoute(unittest.TestCase):
     def test_select_no_library_shows_error(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_convention.return_value = {
-            "id": "conv-1",
+            "id": "C0000001-0000-4000-A000-000000000001",
             "name": "GameFest 2026",
         }
         MockClient.return_value = mock_instance
@@ -304,7 +304,7 @@ class TestConventionConfirmRoute(unittest.TestCase):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
 
-        resp = self.client.post("/convention/select", data={"convention_id": "conv-1"})
+        resp = self.client.post("/convention/select", data={"convention_id": "C0000001-0000-4000-A000-000000000001"})
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/convention", resp.headers["Location"])
 
@@ -345,7 +345,7 @@ class TestLibraryBrowseRoute(unittest.TestCase):
     def test_browse_returns_libraries(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_user_libraries.return_value = [
-            {"id": "lib-1", "name": "My Library"},
+            {"id": "10000001-0000-4000-A000-000000000001", "name": "My Library"},
             {"id": "lib-2", "name": "Second Library"},
         ]
         MockClient.return_value = mock_instance
@@ -411,7 +411,7 @@ class TestLibraryConfirmRoute(unittest.TestCase):
         self.client = self.app.test_client()
 
     def test_library_confirm_requires_login(self):
-        resp = self.client.post("/library/select", data={"library_id": "lib-1"})
+        resp = self.client.post("/library/select", data={"library_id": "10000001-0000-4000-A000-000000000001"})
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/login", resp.headers["Location"])
 
@@ -427,7 +427,7 @@ class TestLibraryConfirmRoute(unittest.TestCase):
     def test_library_confirm_stores_session(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library.return_value = {
-            "id": "lib-1",
+            "id": "10000001-0000-4000-A000-000000000001",
             "name": "My P2W Library",
         }
         MockClient.return_value = mock_instance
@@ -435,12 +435,12 @@ class TestLibraryConfirmRoute(unittest.TestCase):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
 
-        resp = self.client.post("/library/select", data={"library_id": "lib-1"})
+        resp = self.client.post("/library/select", data={"library_id": "10000001-0000-4000-A000-000000000001"})
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/library/confirm", resp.headers["Location"])
 
         with self.client.session_transaction() as sess:
-            self.assertEqual(sess["library_id"], "lib-1")
+            self.assertEqual(sess["library_id"], "10000001-0000-4000-A000-000000000001")
             self.assertEqual(sess["library_name"], "My P2W Library")
             self.assertNotIn("convention_id", sess)
 
@@ -448,7 +448,7 @@ class TestLibraryConfirmRoute(unittest.TestCase):
     def test_library_confirm_clears_convention(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library.return_value = {
-            "id": "lib-1",
+            "id": "10000001-0000-4000-A000-000000000001",
             "name": "My Library",
         }
         MockClient.return_value = mock_instance
@@ -458,18 +458,18 @@ class TestLibraryConfirmRoute(unittest.TestCase):
             sess["convention_id"] = "conv-old"
             sess["convention_name"] = "Old Convention"
 
-        self.client.post("/library/select", data={"library_id": "lib-1"})
+        self.client.post("/library/select", data={"library_id": "10000001-0000-4000-A000-000000000001"})
 
         with self.client.session_transaction() as sess:
             self.assertNotIn("convention_id", sess)
             self.assertNotIn("convention_name", sess)
-            self.assertEqual(sess["library_id"], "lib-1")
+            self.assertEqual(sess["library_id"], "10000001-0000-4000-A000-000000000001")
 
     @patch("routes.helpers.TTEClient")
     def test_library_confirm_shows_loading_overlay_and_warning(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library.return_value = {
-            "id": "lib-1",
+            "id": "10000001-0000-4000-A000-000000000001",
             "name": "My Library",
         }
         MockClient.return_value = mock_instance
@@ -478,7 +478,7 @@ class TestLibraryConfirmRoute(unittest.TestCase):
             sess["tte_session_id"] = "session-123"
 
         # POST redirects, then follow to GET /library/confirm
-        resp = self.client.post("/library/select", data={"library_id": "lib-1"}, follow_redirects=True)
+        resp = self.client.post("/library/select", data={"library_id": "10000001-0000-4000-A000-000000000001"}, follow_redirects=True)
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"loading-overlay", resp.data)
         self.assertIn(b"may take a minute or two", resp.data)
@@ -520,32 +520,32 @@ class TestLibraryConfirmRoute(unittest.TestCase):
     def test_games_page_works_in_library_only_mode(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
+            {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
         ]
         mock_instance.get_library_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1"},
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001"},
         ]
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
             sess["library_name"] = "My Library"
 
         resp = self.client.get("/games")
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Catan", resp.data)
         self.assertIn(b"My Library", resp.data)
-        mock_instance.get_library_playtowins.assert_called_once_with("lib-1")
+        mock_instance.get_library_playtowins.assert_called_once_with("10000001-0000-4000-A000-000000000001")
 
     def test_drawing_works_in_library_only_mode(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
             sess["library_name"] = "My Library"
-            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_games"] = [{"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"}]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
             ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
@@ -588,22 +588,22 @@ class TestGamesRoute(unittest.TestCase):
     def test_games_loads_and_displays(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-            {"id": "G2", "name": "Wingspan"},
+            {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
+            {"id": "A0000002-0000-4000-A000-000000000002", "name": "Wingspan"},
         ]
         mock_instance.get_convention_playtowins.return_value = [
-            {"badge_id": "B1", "librarygame_id": "G1", "id": "e1"},
-            {"badge_id": "B2", "librarygame_id": "G1", "id": "e2"},
-            {"badge_id": "B1", "librarygame_id": "G1", "id": "e3"},  # dup
-            {"badge_id": None, "librarygame_id": "G2", "id": "e4"},  # no badge
-            {"badge_id": "B3", "librarygame_id": "G2", "id": "e5"},
+            {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1"},
+            {"badge_id": "B2", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e2"},
+            {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e3"},  # dup
+            {"badge_id": None, "librarygame_id": "A0000002-0000-4000-A000-000000000002", "id": "e4"},  # no badge
+            {"badge_id": "B3", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "id": "e5"},
         ]
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
 
         resp = self.client.get("/games")
@@ -617,15 +617,15 @@ class TestGamesRoute(unittest.TestCase):
     def test_games_shows_no_entries_badge(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
+            {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
         ]
         mock_instance.get_convention_playtowins.return_value = []
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
 
         resp = self.client.get("/games")
@@ -640,8 +640,8 @@ class TestGamesRoute(unittest.TestCase):
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
 
         resp = self.client.get("/games")
         self.assertEqual(resp.status_code, 302)
@@ -651,20 +651,20 @@ class TestGamesRoute(unittest.TestCase):
     def test_games_uses_library_when_no_convention(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "TestGame"},
+            {"id": "A0000001-0000-4000-A000-000000000001", "name": "TestGame"},
         ]
         mock_instance.get_library_playtowins.return_value = []
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "Test"
             # no convention_id
 
         resp = self.client.get("/games")
         self.assertEqual(resp.status_code, 200)
-        mock_instance.get_library_playtowins.assert_called_once_with("lib-1")
+        mock_instance.get_library_playtowins.assert_called_once_with("10000001-0000-4000-A000-000000000001")
 
 
 class TestPremiumGamesRoute(unittest.TestCase):
@@ -677,7 +677,7 @@ class TestPremiumGamesRoute(unittest.TestCase):
 
     def test_set_premium_requires_login(self):
         resp = self.client.post("/games/premium",
-                                json={"premium_games": ["G1"]})
+                                json={"premium_games": ["A0000001-0000-4000-A000-000000000001"]})
         self.assertEqual(resp.status_code, 401)
 
     def test_set_premium_stores_in_session(self):
@@ -685,19 +685,19 @@ class TestPremiumGamesRoute(unittest.TestCase):
             sess["tte_session_id"] = "session-123"
 
         resp = self.client.post("/games/premium",
-                                json={"premium_games": ["G1", "G2"]})
+                                json={"premium_games": ["A0000001-0000-4000-A000-000000000001", "A0000002-0000-4000-A000-000000000002"]})
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json()
         self.assertTrue(data["ok"])
         self.assertEqual(data["count"], 2)
 
         with self.client.session_transaction() as sess:
-            self.assertEqual(sess["premium_games"], ["G1", "G2"])
+            self.assertEqual(sess["premium_games"], ["A0000001-0000-4000-A000-000000000001", "A0000002-0000-4000-A000-000000000002"])
 
     def test_set_premium_empty_list(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["premium_games"] = ["G1"]
+            sess["premium_games"] = ["A0000001-0000-4000-A000-000000000001"]
 
         resp = self.client.post("/games/premium",
                                 json={"premium_games": []})
@@ -727,20 +727,20 @@ class TestPremiumGamesRoute(unittest.TestCase):
     def test_games_page_shows_premium_styling(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-            {"id": "G2", "name": "Wingspan"},
+            {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
+            {"id": "A0000002-0000-4000-A000-000000000002", "name": "Wingspan"},
         ]
         mock_instance.get_convention_playtowins.return_value = [
-            {"badge_id": "B1", "librarygame_id": "G1", "id": "e1"},
+            {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1"},
         ]
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
-            sess["premium_games"] = ["G1"]
+            sess["premium_games"] = ["A0000001-0000-4000-A000-000000000001"]
 
         resp = self.client.get("/games")
         self.assertEqual(resp.status_code, 200)
@@ -751,15 +751,15 @@ class TestPremiumGamesRoute(unittest.TestCase):
     def test_games_page_no_premium(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
+            {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
         ]
         mock_instance.get_convention_playtowins.return_value = []
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
             # no premium_games in session
 
@@ -797,13 +797,13 @@ class TestDrawingRoutes(unittest.TestCase):
     def test_drawing_post_redirects_to_results(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "Test Con"
             sess["premium_games"] = []
-            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_games"] = [{"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"}]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1",
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001",
                  "name": "Alice"},
             ]
         resp = self.client.post("/drawing")
@@ -821,16 +821,16 @@ class TestDrawingRoutes(unittest.TestCase):
     def test_drawing_runs_and_shows_results(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
             sess["cached_games"] = [
-                {"id": "G1", "name": "Catan"},
-                {"id": "G2", "name": "Ticket to Ride"},
+                {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
+                {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
             ]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-                {"id": "e2", "badge_id": "B2", "librarygame_id": "G2", "name": "Bob"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
+                {"id": "e2", "badge_id": "B2", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "name": "Bob"},
             ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
@@ -842,17 +842,17 @@ class TestDrawingRoutes(unittest.TestCase):
     def test_drawing_with_conflict_shows_panel(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
             sess["cached_games"] = [
-                {"id": "G1", "name": "Catan"},
-                {"id": "G2", "name": "Ticket to Ride"},
+                {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
+                {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
             ]
             # B1 entered both games -> potential conflict
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-                {"id": "e2", "badge_id": "B1", "librarygame_id": "G2", "name": "Alice"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
+                {"id": "e2", "badge_id": "B1", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "name": "Alice"},
             ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
@@ -867,12 +867,12 @@ class TestDrawingRoutes(unittest.TestCase):
     def test_drawing_conflict_shows_rerun_button(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
-            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_games"] = [{"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"}]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
             ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
@@ -882,22 +882,22 @@ class TestDrawingRoutes(unittest.TestCase):
     def test_drawing_separates_premium_conflicts(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
-            sess["premium_games"] = ["G1", "G2"]
+            sess["premium_games"] = ["A0000001-0000-4000-A000-000000000001", "A0000002-0000-4000-A000-000000000002"]
             sess["cached_games"] = [
-                {"id": "G1", "name": "Catan"},
-                {"id": "G2", "name": "Ticket to Ride"},
-                {"id": "G3", "name": "Wingspan"},
-                {"id": "G4", "name": "Azul"},
+                {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
+                {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
+                {"id": "A0000003-0000-4000-A000-000000000003", "name": "Wingspan"},
+                {"id": "A0000004-0000-4000-A000-000000000004", "name": "Azul"},
             ]
             # B1 wins G1+G2 (both premium), B2 wins G3+G4 (not premium)
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-                {"id": "e2", "badge_id": "B1", "librarygame_id": "G2", "name": "Alice"},
-                {"id": "e3", "badge_id": "B2", "librarygame_id": "G3", "name": "Bob"},
-                {"id": "e4", "badge_id": "B2", "librarygame_id": "G4", "name": "Bob"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
+                {"id": "e2", "badge_id": "B1", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "name": "Alice"},
+                {"id": "e3", "badge_id": "B2", "librarygame_id": "A0000003-0000-4000-A000-000000000003", "name": "Bob"},
+                {"id": "e4", "badge_id": "B2", "librarygame_id": "A0000004-0000-4000-A000-000000000004", "name": "Bob"},
             ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
@@ -924,18 +924,18 @@ class TestDrawingRoutes(unittest.TestCase):
     def test_resolve_applies_resolution(self):
         drawing_state = [
             {
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [
-                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
-                    {"badge_id": "B2", "librarygame_id": "G1", "id": "e3", "name": "Bob"},
+                    {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e3", "name": "Bob"},
                 ],
                 "winner_index": 0,
             },
             {
-                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "game": {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
                 "shuffled": [
-                    {"badge_id": "B1", "librarygame_id": "G2", "id": "e2", "name": "Alice"},
-                    {"badge_id": "B3", "librarygame_id": "G2", "id": "e4", "name": "Carol"},
+                    {"badge_id": "B1", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "id": "e2", "name": "Alice"},
+                    {"badge_id": "B3", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "id": "e4", "name": "Carol"},
                 ],
                 "winner_index": 0,
             },
@@ -948,7 +948,7 @@ class TestDrawingRoutes(unittest.TestCase):
 
         resp = self.client.post("/drawing/resolve",
                                 json={"resolutions": [
-                                    {"badge_id": "B1", "keep_game_id": "G1"}
+                                    {"badge_id": "B1", "keep_game_id": "A0000001-0000-4000-A000-000000000001"}
                                 ]},
                                 content_type="application/json")
         self.assertEqual(resp.status_code, 200)
@@ -957,8 +957,8 @@ class TestDrawingRoutes(unittest.TestCase):
 
         # B1 keeps G1, G2 advanced to B3
         winners = {r["game_id"]: r["winner_badge"] for r in data["results"]}
-        self.assertEqual(winners["G1"], "B1")
-        self.assertEqual(winners["G2"], "B3")
+        self.assertEqual(winners["A0000001-0000-4000-A000-000000000001"], "B1")
+        self.assertEqual(winners["A0000002-0000-4000-A000-000000000002"], "B3")
         # Verify no remaining conflicts
         self.assertEqual(data["conflicts"], [])
 
@@ -967,24 +967,24 @@ class TestDrawingRoutes(unittest.TestCase):
         # Resolving B1 -> keep G1 cascades G2 to B2, who now wins G2+G3.
         drawing_state = [
             {
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [
-                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1", "name": "Alice"},
                 ],
                 "winner_index": 0,
             },
             {
-                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "game": {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
                 "shuffled": [
-                    {"badge_id": "B1", "librarygame_id": "G2", "id": "e2", "name": "Alice"},
-                    {"badge_id": "B2", "librarygame_id": "G2", "id": "e3", "name": "Bob"},
+                    {"badge_id": "B1", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "id": "e2", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "id": "e3", "name": "Bob"},
                 ],
                 "winner_index": 0,
             },
             {
-                "game": {"id": "G3", "name": "Wingspan"},
+                "game": {"id": "A0000003-0000-4000-A000-000000000003", "name": "Wingspan"},
                 "shuffled": [
-                    {"badge_id": "B2", "librarygame_id": "G3", "id": "e4", "name": "Bob"},
+                    {"badge_id": "B2", "librarygame_id": "A0000003-0000-4000-A000-000000000003", "id": "e4", "name": "Bob"},
                 ],
                 "winner_index": 0,
             },
@@ -997,7 +997,7 @@ class TestDrawingRoutes(unittest.TestCase):
 
         resp = self.client.post("/drawing/resolve",
                                 json={"resolutions": [
-                                    {"badge_id": "B1", "keep_game_id": "G1"}
+                                    {"badge_id": "B1", "keep_game_id": "A0000001-0000-4000-A000-000000000001"}
                                 ]},
                                 content_type="application/json")
         data = resp.get_json()
@@ -1010,12 +1010,12 @@ class TestDrawingRoutes(unittest.TestCase):
     def test_drawing_has_view_tabs(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
-            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_games"] = [{"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"}]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
             ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
@@ -1030,15 +1030,15 @@ class TestDrawingRoutes(unittest.TestCase):
     def test_by_game_view_shows_all_games(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
             sess["cached_games"] = [
-                {"id": "G1", "name": "Catan"},
-                {"id": "G2", "name": "Ticket to Ride"},
+                {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
+                {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
             ]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
             ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
@@ -1052,15 +1052,15 @@ class TestDrawingRoutes(unittest.TestCase):
     def test_by_winner_view_shows_winners_only(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
             sess["cached_games"] = [
-                {"id": "G1", "name": "Catan"},
-                {"id": "G2", "name": "Ticket to Ride"},
+                {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
+                {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
             ]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
             ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
@@ -1079,17 +1079,17 @@ class TestDrawingRoutes(unittest.TestCase):
     def test_by_winner_view_highlights_premium(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
-            sess["premium_games"] = ["G1"]
+            sess["premium_games"] = ["A0000001-0000-4000-A000-000000000001"]
             sess["cached_games"] = [
-                {"id": "G1", "name": "Catan"},
-                {"id": "G2", "name": "Ticket to Ride"},
+                {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
+                {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
             ]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-                {"id": "e2", "badge_id": "B2", "librarygame_id": "G2", "name": "Bob"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
+                {"id": "e2", "badge_id": "B2", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "name": "Bob"},
             ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
@@ -1102,12 +1102,12 @@ class TestDrawingRoutes(unittest.TestCase):
     def test_drawing_shows_pickup_summary(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
-            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_games"] = [{"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"}]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
             ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
@@ -1118,15 +1118,15 @@ class TestDrawingRoutes(unittest.TestCase):
     def test_drawing_shows_pickup_buttons(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
             sess["cached_games"] = [
-                {"id": "G1", "name": "Catan"},
-                {"id": "G2", "name": "Ticket to Ride"},
+                {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
+                {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
             ]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
             ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
@@ -1136,7 +1136,7 @@ class TestDrawingRoutes(unittest.TestCase):
 
     def test_pickup_requires_auth(self):
         resp = self.client.post("/drawing/pickup",
-                                json={"game_id": "G1"},
+                                json={"game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         self.assertEqual(resp.status_code, 401)
 
@@ -1145,14 +1145,14 @@ class TestDrawingRoutes(unittest.TestCase):
             sess["tte_session_id"] = "session-123"
 
         resp = self.client.post("/drawing/pickup",
-                                json={"game_id": "G1"},
+                                json={"game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         self.assertEqual(resp.status_code, 400)
 
     def test_pickup_requires_game_id(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["drawing_state"] = [{"game": {"id": "G1"}, "shuffled": [], "winner_index": 0}]
+            sess["drawing_state"] = [{"game": {"id": "A0000001-0000-4000-A000-000000000001"}, "shuffled": [], "winner_index": 0}]
 
         resp = self.client.post("/drawing/pickup",
                                 json={},
@@ -1162,11 +1162,11 @@ class TestDrawingRoutes(unittest.TestCase):
     def test_pickup_toggle_marks_picked_up(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["drawing_state"] = [{"game": {"id": "G1"}, "shuffled": [], "winner_index": 0}]
+            sess["drawing_state"] = [{"game": {"id": "A0000001-0000-4000-A000-000000000001"}, "shuffled": [], "winner_index": 0}]
             sess["picked_up"] = []
 
         resp = self.client.post("/drawing/pickup",
-                                json={"game_id": "G1"},
+                                json={"game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         data = resp.get_json()
         self.assertTrue(data["ok"])
@@ -1175,16 +1175,16 @@ class TestDrawingRoutes(unittest.TestCase):
 
         # Verify session was updated
         with self.client.session_transaction() as sess:
-            self.assertIn("G1", sess["picked_up"])
+            self.assertIn("A0000001-0000-4000-A000-000000000001", sess["picked_up"])
 
     def test_pickup_toggle_unmarks_picked_up(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["drawing_state"] = [{"game": {"id": "G1"}, "shuffled": [], "winner_index": 0}]
-            sess["picked_up"] = ["G1"]
+            sess["drawing_state"] = [{"game": {"id": "A0000001-0000-4000-A000-000000000001"}, "shuffled": [], "winner_index": 0}]
+            sess["picked_up"] = ["A0000001-0000-4000-A000-000000000001"]
 
         resp = self.client.post("/drawing/pickup",
-                                json={"game_id": "G1"},
+                                json={"game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         data = resp.get_json()
         self.assertTrue(data["ok"])
@@ -1192,18 +1192,18 @@ class TestDrawingRoutes(unittest.TestCase):
         self.assertEqual(data["picked_up_count"], 0)
 
         with self.client.session_transaction() as sess:
-            self.assertNotIn("G1", sess["picked_up"])
+            self.assertNotIn("A0000001-0000-4000-A000-000000000001", sess["picked_up"])
 
     def test_rerun_drawing_clears_pickup(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
-            sess["picked_up"] = ["G1"]
-            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["picked_up"] = ["A0000001-0000-4000-A000-000000000001"]
+            sess["cached_games"] = [{"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"}]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
             ]
 
         self.client.post("/drawing")
@@ -1214,12 +1214,12 @@ class TestDrawingRoutes(unittest.TestCase):
     def test_drawing_shows_redraw_button(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
-            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_games"] = [{"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"}]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
             ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
@@ -1228,12 +1228,12 @@ class TestDrawingRoutes(unittest.TestCase):
     def test_drawing_results_has_search_filter(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
-            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_games"] = [{"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"}]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
             ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
@@ -1254,7 +1254,7 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         """B1 wins G1 + G2 (conflict). G1 also has B3, G2 also has B2."""
         return [
             {
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [
                     {"badge_id": "B1", "id": "e1", "name": "Alice"},
                     {"badge_id": "B3", "id": "e3", "name": "Carol"},
@@ -1262,7 +1262,7 @@ class TestDismissConflictGameRoute(unittest.TestCase):
                 "winner_index": 0,
             },
             {
-                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "game": {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
                 "shuffled": [
                     {"badge_id": "B1", "id": "e2", "name": "Alice"},
                     {"badge_id": "B2", "id": "e4", "name": "Bob"},
@@ -1273,7 +1273,7 @@ class TestDismissConflictGameRoute(unittest.TestCase):
 
     def test_dismiss_requires_auth(self):
         resp = self.client.post("/drawing/dismiss-game",
-                                json={"badge_id": "B1", "game_id": "G1"},
+                                json={"badge_id": "B1", "game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         self.assertEqual(resp.status_code, 401)
 
@@ -1281,7 +1281,7 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
         resp = self.client.post("/drawing/dismiss-game",
-                                json={"badge_id": "B1", "game_id": "G1"},
+                                json={"badge_id": "B1", "game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         self.assertEqual(resp.status_code, 400)
 
@@ -1300,22 +1300,22 @@ class TestDismissConflictGameRoute(unittest.TestCase):
             sess["drawing_state"] = self._multi_win_state()
             sess["drawing_conflicts"] = [{
                 "badge_id": "B1", "winner_name": "Alice",
-                "game_ids": ["G1", "G2"],
-                "game_names": {"G1": "Catan", "G2": "Ticket to Ride"},
+                "game_ids": ["A0000001-0000-4000-A000-000000000001", "A0000002-0000-4000-A000-000000000002"],
+                "game_names": {"A0000001-0000-4000-A000-000000000001": "Catan", "A0000002-0000-4000-A000-000000000002": "Ticket to Ride"},
                 "is_premium_conflict": False,
             }]
             sess["premium_games"] = []
 
         resp = self.client.post("/drawing/dismiss-game",
-                                json={"badge_id": "B1", "game_id": "G1"},
+                                json={"badge_id": "B1", "game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         data = resp.get_json()
         self.assertTrue(data["ok"])
 
         # G1 advanced to Carol, B1 still wins G2
         winners = {r["game_id"]: r["winner_badge"] for r in data["results"]}
-        self.assertEqual(winners["G1"], "B3")  # Carol
-        self.assertEqual(winners["G2"], "B1")  # Alice keeps G2
+        self.assertEqual(winners["A0000001-0000-4000-A000-000000000001"], "B3")  # Carol
+        self.assertEqual(winners["A0000002-0000-4000-A000-000000000002"], "B1")  # Alice keeps G2
 
         # Conflict auto-resolved (only 1 game left for B1)
         self.assertEqual(data["conflicts"], [])
@@ -1324,7 +1324,7 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         """If person wins 3 games and dismisses 1, still 2 remain -> still a conflict."""
         state = self._multi_win_state()
         state.append({
-            "game": {"id": "G3", "name": "Wingspan"},
+            "game": {"id": "A0000003-0000-4000-A000-000000000003", "name": "Wingspan"},
             "shuffled": [
                 {"badge_id": "B1", "id": "e5", "name": "Alice"},
                 {"badge_id": "B4", "id": "e6", "name": "Dave"},
@@ -1336,34 +1336,34 @@ class TestDismissConflictGameRoute(unittest.TestCase):
             sess["drawing_state"] = state
             sess["drawing_conflicts"] = [{
                 "badge_id": "B1", "winner_name": "Alice",
-                "game_ids": ["G1", "G2", "G3"],
-                "game_names": {"G1": "Catan", "G2": "Ticket to Ride", "G3": "Wingspan"},
+                "game_ids": ["A0000001-0000-4000-A000-000000000001", "A0000002-0000-4000-A000-000000000002", "A0000003-0000-4000-A000-000000000003"],
+                "game_names": {"A0000001-0000-4000-A000-000000000001": "Catan", "A0000002-0000-4000-A000-000000000002": "Ticket to Ride", "A0000003-0000-4000-A000-000000000003": "Wingspan"},
                 "is_premium_conflict": False,
             }]
             sess["premium_games"] = []
 
         resp = self.client.post("/drawing/dismiss-game",
-                                json={"badge_id": "B1", "game_id": "G1"},
+                                json={"badge_id": "B1", "game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         data = resp.get_json()
         self.assertTrue(data["ok"])
 
         # Still a conflict for B1 with G2 + G3
         self.assertEqual(len(data["conflicts"]), 1)
-        self.assertEqual(set(data["conflicts"][0]["game_ids"]), {"G2", "G3"})
+        self.assertEqual(set(data["conflicts"][0]["game_ids"]), {"A0000002-0000-4000-A000-000000000002", "A0000003-0000-4000-A000-000000000003"})
 
     def test_dismiss_solo_entrant_marks_game(self):
         """Dismissing a game where the winner was the only entrant -> solo_dismissed."""
         state = [
             {
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [
                     {"badge_id": "B1", "id": "e1", "name": "Alice"},
                 ],
                 "winner_index": 0,
             },
             {
-                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "game": {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
                 "shuffled": [
                     {"badge_id": "B1", "id": "e2", "name": "Alice"},
                     {"badge_id": "B2", "id": "e3", "name": "Bob"},
@@ -1376,27 +1376,27 @@ class TestDismissConflictGameRoute(unittest.TestCase):
             sess["drawing_state"] = state
             sess["drawing_conflicts"] = [{
                 "badge_id": "B1", "winner_name": "Alice",
-                "game_ids": ["G1", "G2"],
-                "game_names": {"G1": "Catan", "G2": "Ticket to Ride"},
+                "game_ids": ["A0000001-0000-4000-A000-000000000001", "A0000002-0000-4000-A000-000000000002"],
+                "game_names": {"A0000001-0000-4000-A000-000000000001": "Catan", "A0000002-0000-4000-A000-000000000002": "Ticket to Ride"},
                 "is_premium_conflict": False,
             }]
             sess["premium_games"] = []
 
         resp = self.client.post("/drawing/dismiss-game",
-                                json={"badge_id": "B1", "game_id": "G1"},
+                                json={"badge_id": "B1", "game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         data = resp.get_json()
         self.assertTrue(data["ok"])
         self.assertTrue(data["was_solo_entrant"])
         self.assertTrue(data["was_exhausted"])
-        self.assertEqual(data["dismissed_game_id"], "G1")
+        self.assertEqual(data["dismissed_game_id"], "A0000001-0000-4000-A000-000000000001")
 
         # Session should track the dismissal
         with self.client.session_transaction() as sess:
-            self.assertIn("G1", sess["solo_dismissed_games"])
+            self.assertIn("A0000001-0000-4000-A000-000000000001", sess["solo_dismissed_games"])
 
         # The results should show the game as solo-dismissed
-        solo = [r for r in data["results"] if r["game_id"] == "G1"]
+        solo = [r for r in data["results"] if r["game_id"] == "A0000001-0000-4000-A000-000000000001"]
         self.assertTrue(solo[0]["is_solo_dismissed"])
         self.assertFalse(solo[0]["has_winner"])
 
@@ -1407,14 +1407,14 @@ class TestDismissConflictGameRoute(unittest.TestCase):
             sess["drawing_state"] = self._multi_win_state()
             sess["drawing_conflicts"] = [{
                 "badge_id": "B1", "winner_name": "Alice",
-                "game_ids": ["G1", "G2"],
-                "game_names": {"G1": "Catan", "G2": "Ticket to Ride"},
+                "game_ids": ["A0000001-0000-4000-A000-000000000001", "A0000002-0000-4000-A000-000000000002"],
+                "game_names": {"A0000001-0000-4000-A000-000000000001": "Catan", "A0000002-0000-4000-A000-000000000002": "Ticket to Ride"},
                 "is_premium_conflict": False,
             }]
             sess["premium_games"] = []
 
         resp = self.client.post("/drawing/dismiss-game",
-                                json={"badge_id": "B1", "game_id": "G1"},
+                                json={"badge_id": "B1", "game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         data = resp.get_json()
         self.assertFalse(data["was_exhausted"])
@@ -1427,7 +1427,7 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         """Dismiss sole-remaining candidate from a 2-entry game -> exhausted."""
         state = [
             {
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [
                     {"badge_id": "B1", "id": "e1", "name": "Alice"},
                     {"badge_id": "B2", "id": "e2", "name": "Bob"},
@@ -1435,7 +1435,7 @@ class TestDismissConflictGameRoute(unittest.TestCase):
                 "winner_index": 1,  # B2 is current winner (B1 already skipped)
             },
             {
-                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "game": {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
                 "shuffled": [
                     {"badge_id": "B2", "id": "e3", "name": "Bob"},
                     {"badge_id": "B3", "id": "e4", "name": "Carol"},
@@ -1448,15 +1448,15 @@ class TestDismissConflictGameRoute(unittest.TestCase):
             sess["drawing_state"] = state
             sess["drawing_conflicts"] = [{
                 "badge_id": "B2", "winner_name": "Bob",
-                "game_ids": ["G1", "G2"],
-                "game_names": {"G1": "Catan", "G2": "Ticket to Ride"},
+                "game_ids": ["A0000001-0000-4000-A000-000000000001", "A0000002-0000-4000-A000-000000000002"],
+                "game_names": {"A0000001-0000-4000-A000-000000000001": "Catan", "A0000002-0000-4000-A000-000000000002": "Ticket to Ride"},
                 "is_premium_conflict": False,
             }]
             sess["premium_games"] = []
 
         # Dismiss B2 from G1 -> advance tries index 2, no more candidates
         resp = self.client.post("/drawing/dismiss-game",
-                                json={"badge_id": "B2", "game_id": "G1"},
+                                json={"badge_id": "B2", "game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         data = resp.get_json()
         self.assertTrue(data["ok"])
@@ -1464,10 +1464,10 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         self.assertFalse(data["was_solo_entrant"])  # 2 entrants, not solo
 
         with self.client.session_transaction() as sess:
-            self.assertIn("G1", sess["solo_dismissed_games"])
+            self.assertIn("A0000001-0000-4000-A000-000000000001", sess["solo_dismissed_games"])
 
         # The results should show the game as no-winner (redraw eligible)
-        g1 = [r for r in data["results"] if r["game_id"] == "G1"]
+        g1 = [r for r in data["results"] if r["game_id"] == "A0000001-0000-4000-A000-000000000001"]
         self.assertTrue(g1[0]["is_solo_dismissed"])
         self.assertFalse(g1[0]["has_winner"])
 
@@ -1477,14 +1477,14 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         # User keeps G2 for B1 -> G1 is relinquished and exhausted.
         state = [
             {
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [
                     {"badge_id": "B1", "id": "e1", "name": "Alice"},
                 ],
                 "winner_index": 0,
             },
             {
-                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "game": {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
                 "shuffled": [
                     {"badge_id": "B1", "id": "e2", "name": "Alice"},
                     {"badge_id": "B2", "id": "e3", "name": "Bob"},
@@ -1497,24 +1497,24 @@ class TestDismissConflictGameRoute(unittest.TestCase):
             sess["drawing_state"] = state
             sess["drawing_conflicts"] = [{
                 "badge_id": "B1", "winner_name": "Alice",
-                "game_ids": ["G1", "G2"],
-                "game_names": {"G1": "Catan", "G2": "Ticket to Ride"},
+                "game_ids": ["A0000001-0000-4000-A000-000000000001", "A0000002-0000-4000-A000-000000000002"],
+                "game_names": {"A0000001-0000-4000-A000-000000000001": "Catan", "A0000002-0000-4000-A000-000000000002": "Ticket to Ride"},
                 "is_premium_conflict": False,
             }]
             sess["premium_games"] = []
 
         resp = self.client.post("/drawing/resolve",
-                                json={"resolutions": [{"badge_id": "B1", "keep_game_id": "G2"}]},
+                                json={"resolutions": [{"badge_id": "B1", "keep_game_id": "A0000002-0000-4000-A000-000000000002"}]},
                                 content_type="application/json")
         data = resp.get_json()
         self.assertTrue(data["ok"])
 
         # G1 had only B1, who kept G2; G1 is now exhausted
         with self.client.session_transaction() as sess:
-            self.assertIn("G1", sess.get("solo_dismissed_games", []))
+            self.assertIn("A0000001-0000-4000-A000-000000000001", sess.get("solo_dismissed_games", []))
 
         # Results should show G1 as no-winner (redraw eligible)
-        g1 = [r for r in data["results"] if r["game_id"] == "G1"]
+        g1 = [r for r in data["results"] if r["game_id"] == "A0000001-0000-4000-A000-000000000001"]
         self.assertTrue(g1[0]["is_solo_dismissed"])
         self.assertFalse(g1[0]["has_winner"])
 
@@ -1526,7 +1526,7 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         """
         state = [
             {
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [
                     {"badge_id": "B1", "id": "e1", "name": "Alice"},
                     {"badge_id": "B2", "id": "e2", "name": "Bob"},
@@ -1534,7 +1534,7 @@ class TestDismissConflictGameRoute(unittest.TestCase):
                 "winner_index": 1,  # B2 is current winner (B1 already skipped)
             },
             {
-                "game": {"id": "G3", "name": "Wingspan"},
+                "game": {"id": "A0000003-0000-4000-A000-000000000003", "name": "Wingspan"},
                 "shuffled": [
                     {"badge_id": "B2", "id": "e4", "name": "Bob"},
                 ],
@@ -1546,15 +1546,15 @@ class TestDismissConflictGameRoute(unittest.TestCase):
             sess["drawing_state"] = state
             sess["drawing_conflicts"] = [{
                 "badge_id": "B2", "winner_name": "Bob",
-                "game_ids": ["G1", "G3"],
-                "game_names": {"G1": "Catan", "G3": "Wingspan"},
+                "game_ids": ["A0000001-0000-4000-A000-000000000001", "A0000003-0000-4000-A000-000000000003"],
+                "game_names": {"A0000001-0000-4000-A000-000000000001": "Catan", "A0000003-0000-4000-A000-000000000003": "Wingspan"},
                 "is_premium_conflict": False,
             }]
             sess["premium_games"] = []
 
         resp = self.client.post("/drawing/resolve",
                                 json={"resolutions": [
-                                    {"badge_id": "B2", "keep_game_id": "G3"},
+                                    {"badge_id": "B2", "keep_game_id": "A0000003-0000-4000-A000-000000000003"},
                                 ]},
                                 content_type="application/json")
         data = resp.get_json()
@@ -1562,9 +1562,9 @@ class TestDismissConflictGameRoute(unittest.TestCase):
 
         # G1 had 2 entrants, both resolved away -> exhausted
         with self.client.session_transaction() as sess:
-            self.assertIn("G1", sess.get("solo_dismissed_games", []))
+            self.assertIn("A0000001-0000-4000-A000-000000000001", sess.get("solo_dismissed_games", []))
 
-        g1 = [r for r in data["results"] if r["game_id"] == "G1"]
+        g1 = [r for r in data["results"] if r["game_id"] == "A0000001-0000-4000-A000-000000000001"]
         self.assertTrue(g1[0]["is_solo_dismissed"])
         self.assertFalse(g1[0]["has_winner"])
 
@@ -1572,7 +1572,7 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         """Dismissing G1 advances to B2 who already wins G3 -> new conflict."""
         state = [
             {
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [
                     {"badge_id": "B1", "id": "e1", "name": "Alice"},
                     {"badge_id": "B2", "id": "e3", "name": "Bob"},
@@ -1580,14 +1580,14 @@ class TestDismissConflictGameRoute(unittest.TestCase):
                 "winner_index": 0,
             },
             {
-                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "game": {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
                 "shuffled": [
                     {"badge_id": "B1", "id": "e2", "name": "Alice"},
                 ],
                 "winner_index": 0,
             },
             {
-                "game": {"id": "G3", "name": "Wingspan"},
+                "game": {"id": "A0000003-0000-4000-A000-000000000003", "name": "Wingspan"},
                 "shuffled": [
                     {"badge_id": "B2", "id": "e4", "name": "Bob"},
                 ],
@@ -1599,14 +1599,14 @@ class TestDismissConflictGameRoute(unittest.TestCase):
             sess["drawing_state"] = state
             sess["drawing_conflicts"] = [{
                 "badge_id": "B1", "winner_name": "Alice",
-                "game_ids": ["G1", "G2"],
-                "game_names": {"G1": "Catan", "G2": "Ticket to Ride"},
+                "game_ids": ["A0000001-0000-4000-A000-000000000001", "A0000002-0000-4000-A000-000000000002"],
+                "game_names": {"A0000001-0000-4000-A000-000000000001": "Catan", "A0000002-0000-4000-A000-000000000002": "Ticket to Ride"},
                 "is_premium_conflict": False,
             }]
             sess["premium_games"] = []
 
         resp = self.client.post("/drawing/dismiss-game",
-                                json={"badge_id": "B1", "game_id": "G1"},
+                                json={"badge_id": "B1", "game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         data = resp.get_json()
         self.assertTrue(data["ok"])
@@ -1614,7 +1614,7 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         # B1's conflict is resolved (only G2 left), but B2 now has G1+G3
         self.assertEqual(len(data["conflicts"]), 1)
         self.assertEqual(data["conflicts"][0]["badge_id"], "B2")
-        self.assertEqual(set(data["conflicts"][0]["game_ids"]), {"G1", "G3"})
+        self.assertEqual(set(data["conflicts"][0]["game_ids"]), {"A0000001-0000-4000-A000-000000000001", "A0000003-0000-4000-A000-000000000003"})
 
     def test_dismiss_shown_in_results_template(self):
         """Dismissed game shows 'No winner (redraw eligible)' not 'To the box!'."""
@@ -1622,14 +1622,14 @@ class TestDismissConflictGameRoute(unittest.TestCase):
             sess["tte_session_id"] = "session-123"
             sess["drawing_state"] = [
                 {
-                    "game": {"id": "G1", "name": "Catan"},
+                    "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                     "shuffled": [
                         {"badge_id": "B1", "id": "e1", "name": "Alice"},
                     ],
                     "winner_index": 1,  # exhausted
                 },
             ]
-            sess["solo_dismissed_games"] = ["G1"]
+            sess["solo_dismissed_games"] = ["A0000001-0000-4000-A000-000000000001"]
 
         resp = self.client.get("/drawing/results")
         html = resp.data.decode()
@@ -1643,13 +1643,13 @@ class TestDismissConflictGameRoute(unittest.TestCase):
     def test_new_drawing_clears_solo_dismissed(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
-            sess["solo_dismissed_games"] = ["G1"]
-            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["solo_dismissed_games"] = ["A0000001-0000-4000-A000-000000000001"]
+            sess["cached_games"] = [{"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"}]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
             ]
 
         self.client.post("/drawing")
@@ -1669,11 +1669,11 @@ class TestAwardNextRoute(unittest.TestCase):
     def _setup_drawing_state(self, picked_up=None, not_here=None):
         drawing_state = [
             {
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [
-                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
-                    {"badge_id": "B2", "librarygame_id": "G1", "id": "e2", "name": "Bob"},
-                    {"badge_id": "B3", "librarygame_id": "G1", "id": "e3", "name": "Carol"},
+                    {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e2", "name": "Bob"},
+                    {"badge_id": "B3", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e3", "name": "Carol"},
                 ],
                 "winner_index": 0,
             },
@@ -1687,7 +1687,7 @@ class TestAwardNextRoute(unittest.TestCase):
 
     def test_award_next_requires_auth(self):
         resp = self.client.post("/drawing/award-next",
-                                json={"game_id": "G1"},
+                                json={"game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         self.assertEqual(resp.status_code, 401)
 
@@ -1695,7 +1695,7 @@ class TestAwardNextRoute(unittest.TestCase):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
         resp = self.client.post("/drawing/award-next",
-                                json={"game_id": "G1"},
+                                json={"game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         self.assertEqual(resp.status_code, 400)
 
@@ -1709,7 +1709,7 @@ class TestAwardNextRoute(unittest.TestCase):
     def test_award_next_advances_winner(self):
         self._setup_drawing_state()
         resp = self.client.post("/drawing/award-next",
-                                json={"game_id": "G1"},
+                                json={"game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         data = resp.get_json()
         self.assertTrue(data["ok"])
@@ -1723,7 +1723,7 @@ class TestAwardNextRoute(unittest.TestCase):
     def test_award_next_skips_not_here(self):
         self._setup_drawing_state(not_here=["B2"])
         resp = self.client.post("/drawing/award-next",
-                                json={"game_id": "G1"},
+                                json={"game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         data = resp.get_json()
         self.assertTrue(data["ok"])
@@ -1736,13 +1736,13 @@ class TestAwardNextRoute(unittest.TestCase):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["drawing_state"] = [{
-                "game": {"id": "G1", "name": "Catan"},
-                "shuffled": [{"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"}],
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
+                "shuffled": [{"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1", "name": "Alice"}],
                 "winner_index": 0,
             }]
             sess["not_here"] = []
         resp = self.client.post("/drawing/award-next",
-                                json={"game_id": "G1"},
+                                json={"game_id": "A0000001-0000-4000-A000-000000000001"},
                                 content_type="application/json")
         data = resp.get_json()
         self.assertTrue(data["ok"])
@@ -1760,18 +1760,18 @@ class TestMarkNotHereRoute(unittest.TestCase):
     def _setup_drawing_state(self, picked_up=None):
         drawing_state = [
             {
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [
-                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
-                    {"badge_id": "B2", "librarygame_id": "G1", "id": "e2", "name": "Bob"},
+                    {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e2", "name": "Bob"},
                 ],
                 "winner_index": 0,
             },
             {
-                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "game": {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
                 "shuffled": [
-                    {"badge_id": "B1", "librarygame_id": "G2", "id": "e3", "name": "Alice"},
-                    {"badge_id": "B3", "librarygame_id": "G2", "id": "e4", "name": "Carol"},
+                    {"badge_id": "B1", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "id": "e3", "name": "Alice"},
+                    {"badge_id": "B3", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "id": "e4", "name": "Carol"},
                 ],
                 "winner_index": 0,
             },
@@ -1824,7 +1824,7 @@ class TestMarkNotHereRoute(unittest.TestCase):
             self.assertEqual(sess["drawing_state"][1]["winner_index"], 1)
 
     def test_not_here_skips_picked_up_games(self):
-        self._setup_drawing_state(picked_up=["G1"])
+        self._setup_drawing_state(picked_up=["A0000001-0000-4000-A000-000000000001"])
         resp = self.client.post("/drawing/not-here",
                                 json={"badge_id": "B1"},
                                 content_type="application/json")
@@ -1832,7 +1832,7 @@ class TestMarkNotHereRoute(unittest.TestCase):
         self.assertTrue(data["ok"])
         # G1 is picked up, only G2 should be advanced
         self.assertEqual(len(data["advanced_games"]), 1)
-        self.assertEqual(data["advanced_games"][0]["game_id"], "G2")
+        self.assertEqual(data["advanced_games"][0]["game_id"], "A0000002-0000-4000-A000-000000000002")
 
     def test_not_here_duplicate_returns_error(self):
         self._setup_drawing_state()
@@ -1865,18 +1865,18 @@ class TestRedrawUnclaimedRoute(unittest.TestCase):
     def _setup_drawing_state(self, picked_up=None):
         drawing_state = [
             {
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [
-                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
-                    {"badge_id": "B2", "librarygame_id": "G1", "id": "e2", "name": "Bob"},
-                    {"badge_id": "B3", "librarygame_id": "G1", "id": "e3", "name": "Carol"},
+                    {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e2", "name": "Bob"},
+                    {"badge_id": "B3", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e3", "name": "Carol"},
                 ],
                 "winner_index": 0,
             },
             {
-                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "game": {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
                 "shuffled": [
-                    {"badge_id": "B4", "librarygame_id": "G2", "id": "e4", "name": "Dave"},
+                    {"badge_id": "B4", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "id": "e4", "name": "Dave"},
                 ],
                 "winner_index": 0,
             },
@@ -1904,7 +1904,7 @@ class TestRedrawUnclaimedRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
 
     def test_redraw_all_picked_up_returns_error(self):
-        self._setup_drawing_state(picked_up=["G1", "G2"])
+        self._setup_drawing_state(picked_up=["A0000001-0000-4000-A000-000000000001", "A0000002-0000-4000-A000-000000000002"])
         resp = self.client.post("/drawing/redraw-unclaimed",
                                 json={},
                                 content_type="application/json")
@@ -1912,7 +1912,7 @@ class TestRedrawUnclaimedRoute(unittest.TestCase):
         self.assertIn("No unclaimed", resp.get_json()["error"])
 
     def test_redraw_returns_results(self):
-        self._setup_drawing_state(picked_up=["G2"])
+        self._setup_drawing_state(picked_up=["A0000002-0000-4000-A000-000000000002"])
         resp = self.client.post("/drawing/redraw-unclaimed",
                                 json={},
                                 content_type="application/json")
@@ -1922,7 +1922,7 @@ class TestRedrawUnclaimedRoute(unittest.TestCase):
         self.assertIsInstance(data["conflicts"], list)
 
     def test_redraw_updates_session(self):
-        self._setup_drawing_state(picked_up=["G2"])
+        self._setup_drawing_state(picked_up=["A0000002-0000-4000-A000-000000000002"])
         self.client.post("/drawing/redraw-unclaimed",
                          json={},
                          content_type="application/json")
@@ -1933,14 +1933,14 @@ class TestRedrawUnclaimedRoute(unittest.TestCase):
     def test_rerun_clears_not_here(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
             sess["not_here"] = ["B1"]
             sess["not_here_warning_dismissed"] = True
-            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_games"] = [{"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"}]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
             ]
 
         self.client.post("/drawing")
@@ -1961,17 +1961,17 @@ class TestPushToTTE(unittest.TestCase):
     def _setup_session(self, picked_up=None):
         drawing_state = [
             {
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [
-                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
-                    {"badge_id": "B2", "librarygame_id": "G1", "id": "e2", "name": "Bob"},
+                    {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e2", "name": "Bob"},
                 ],
                 "winner_index": 0,
             },
             {
-                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "game": {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
                 "shuffled": [
-                    {"badge_id": "B3", "librarygame_id": "G2", "id": "e3", "name": "Carol"},
+                    {"badge_id": "B3", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "id": "e3", "name": "Carol"},
                 ],
                 "winner_index": 0,
             },
@@ -2006,7 +2006,7 @@ class TestPushToTTE(unittest.TestCase):
         mock_instance = MagicMock()
         MockClient.return_value = mock_instance
 
-        self._setup_session(picked_up=["G1", "G2"])
+        self._setup_session(picked_up=["A0000001-0000-4000-A000-000000000001", "A0000002-0000-4000-A000-000000000002"])
         resp = self.client.post("/drawing/push",
                                 content_type="application/json")
         data = resp.get_json()
@@ -2030,10 +2030,10 @@ class TestPushToTTE(unittest.TestCase):
         # G1 winner was advanced to index 1 (Bob), simulating award-next
         drawing_state = [
             {
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [
-                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
-                    {"badge_id": "B2", "librarygame_id": "G1", "id": "e2", "name": "Bob"},
+                    {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e2", "name": "Bob"},
                 ],
                 "winner_index": 1,
             },
@@ -2041,7 +2041,7 @@ class TestPushToTTE(unittest.TestCase):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["drawing_state"] = drawing_state
-            sess["picked_up"] = ["G1"]
+            sess["picked_up"] = ["A0000001-0000-4000-A000-000000000001"]
 
         resp = self.client.post("/drawing/push",
                                 content_type="application/json")
@@ -2061,7 +2061,7 @@ class TestPushToTTE(unittest.TestCase):
         ]
         MockClient.return_value = mock_instance
 
-        self._setup_session(picked_up=["G1", "G2"])
+        self._setup_session(picked_up=["A0000001-0000-4000-A000-000000000001", "A0000002-0000-4000-A000-000000000002"])
         resp = self.client.post("/drawing/push",
                                 content_type="application/json")
         data = resp.get_json()
@@ -2073,12 +2073,12 @@ class TestPushToTTE(unittest.TestCase):
     def test_push_button_in_results(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
-            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_games"] = [{"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"}]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
             ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
@@ -2098,17 +2098,17 @@ class TestCSVExport(unittest.TestCase):
                        convention_name="PawCon 2026"):
         drawing_state = [
             {
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [
-                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
-                    {"badge_id": "B2", "librarygame_id": "G1", "id": "e2", "name": "Bob"},
+                    {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e2", "name": "Bob"},
                 ],
                 "winner_index": 0,
             },
             {
-                "game": {"id": "G2", "name": "Ticket to Ride"},
+                "game": {"id": "A0000002-0000-4000-A000-000000000002", "name": "Ticket to Ride"},
                 "shuffled": [
-                    {"badge_id": "B3", "librarygame_id": "G2", "id": "e3", "name": "Carol"},
+                    {"badge_id": "B3", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "id": "e3", "name": "Carol"},
                 ],
                 "winner_index": 0,
             },
@@ -2197,7 +2197,7 @@ class TestCSVExport(unittest.TestCase):
     def test_export_no_winner_shows_empty(self):
         drawing_state = [
             {
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [],
                 "winner_index": -1,
             },
@@ -2216,10 +2216,10 @@ class TestCSVExport(unittest.TestCase):
         # G1 winner was advanced to index 1 (Bob)
         drawing_state = [
             {
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [
-                    {"badge_id": "B1", "librarygame_id": "G1", "id": "e1", "name": "Alice"},
-                    {"badge_id": "B2", "librarygame_id": "G1", "id": "e2", "name": "Bob"},
+                    {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e2", "name": "Bob"},
                 ],
                 "winner_index": 1,
             },
@@ -2238,14 +2238,14 @@ class TestCSVExport(unittest.TestCase):
     def test_export_button_on_results_page(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["convention_id"] = "conv-1"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "Test Con"
-            sess["library_id"] = "lib-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
             sess["library_name"] = "P2W Library"
             sess["premium_games"] = []
-            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_games"] = [{"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"}]
             sess["cached_entries"] = [
-                {"librarygame_id": "G1", "badge_id": "B1", "id": "e1",
+                {"librarygame_id": "A0000001-0000-4000-A000-000000000001", "badge_id": "B1", "id": "e1",
                  "name": "Alice", "gamename": "Catan"},
             ]
         resp = self.client.post("/drawing", follow_redirects=True)
@@ -2264,9 +2264,9 @@ class TestErrorHandlingRoutes(unittest.TestCase):
     def _setup_session(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["convention_id"] = "conv-1"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "Test Con"
-            sess["library_id"] = "lib-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
             sess["library_name"] = "P2W Library"
             sess["premium_games"] = []
 
@@ -2280,7 +2280,7 @@ class TestErrorHandlingRoutes(unittest.TestCase):
         self._setup_session()
 
         resp = self.client.post("/convention/select",
-                                data={"convention_id": "conv-1"})
+                                data={"convention_id": "C0000001-0000-4000-A000-000000000001"})
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/login", resp.headers["Location"])
 
@@ -2331,11 +2331,11 @@ class TestErrorHandlingRoutes(unittest.TestCase):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["drawing_state"] = [{
-                "game": {"id": "G1", "name": "Catan"},
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
                 "shuffled": [{"badge_id": "B1", "id": "e1", "name": "Alice"}],
                 "winner_index": 0,
             }]
-            sess["picked_up"] = ["G1"]
+            sess["picked_up"] = ["A0000001-0000-4000-A000-000000000001"]
             sess["redistribution_winners"] = {}
 
         resp = self.client.post("/drawing/push",
@@ -2371,7 +2371,7 @@ class TestErrorHandlingRoutes(unittest.TestCase):
         self._setup_session()
 
         resp = self.client.post("/convention/select",
-                                data={"convention_id": "conv-1"},
+                                data={"convention_id": "C0000001-0000-4000-A000-000000000001"},
                                 follow_redirects=True)
         self.assertIn(b"timed out", resp.data)
 
@@ -2415,7 +2415,7 @@ class TestErrorHandlingRoutes(unittest.TestCase):
     def test_drawing_partial_cache_redirects_to_games(self):
         self._setup_session()
         with self.client.session_transaction() as sess:
-            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_games"] = [{"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"}]
             # cached_entries intentionally missing
 
         resp = self.client.post("/drawing")
@@ -2435,17 +2435,17 @@ class TestRefreshData(unittest.TestCase):
     def test_games_page_shows_refresh_button(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
+            {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
         ]
         mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1"},
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001"},
         ]
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
 
         resp = self.client.get("/games")
@@ -2462,8 +2462,8 @@ class TestRefreshData(unittest.TestCase):
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
 
         resp = self.client.get("/games")
@@ -2474,21 +2474,21 @@ class TestRefreshData(unittest.TestCase):
     def test_refresh_preserves_premium_selections(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-            {"id": "G2", "name": "Wingspan"},
+            {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
+            {"id": "A0000002-0000-4000-A000-000000000002", "name": "Wingspan"},
         ]
         mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1"},
-            {"id": "e2", "badge_id": "B2", "librarygame_id": "G2"},
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001"},
+            {"id": "e2", "badge_id": "B2", "librarygame_id": "A0000002-0000-4000-A000-000000000002"},
         ]
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
-            sess["premium_games"] = ["G1"]
+            sess["premium_games"] = ["A0000001-0000-4000-A000-000000000001"]
 
         resp = self.client.get("/games")
         self.assertEqual(resp.status_code, 200)
@@ -2497,21 +2497,21 @@ class TestRefreshData(unittest.TestCase):
 
         # Premium selections still in session after refresh
         with self.client.session_transaction() as sess:
-            self.assertEqual(sess["premium_games"], ["G1"])
+            self.assertEqual(sess["premium_games"], ["A0000001-0000-4000-A000-000000000001"])
 
     @patch("routes.helpers.TTEClient")
     def test_refresh_fetches_fresh_data(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
+            {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
         ]
         mock_instance.get_convention_playtowins.return_value = []
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
 
         # First load — fetches from API
@@ -2527,12 +2527,12 @@ class TestRefreshData(unittest.TestCase):
     def test_drawing_results_shows_timestamp(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
-            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_games"] = [{"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"}]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
             ]
 
         resp = self.client.post("/drawing", follow_redirects=True)
@@ -2542,12 +2542,12 @@ class TestRefreshData(unittest.TestCase):
     def test_drawing_stores_timestamp_in_session(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
-            sess["cached_games"] = [{"id": "G1", "name": "Catan"}]
+            sess["cached_games"] = [{"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"}]
             sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
             ]
 
         self.client.post("/drawing")
@@ -2560,17 +2560,17 @@ class TestRefreshData(unittest.TestCase):
     def test_games_page_has_sortable_headers(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
+            {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
         ]
         mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1"},
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001"},
         ]
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
 
         resp = self.client.get("/games")
@@ -2584,17 +2584,17 @@ class TestRefreshData(unittest.TestCase):
     def test_games_page_has_search(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
+            {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
         ]
         mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1"},
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001"},
         ]
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
 
         resp = self.client.get("/games")
@@ -2606,19 +2606,19 @@ class TestRefreshData(unittest.TestCase):
     def test_games_page_has_sort_data_attributes(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
-            {"id": "G2", "name": "Wingspan"},
+            {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
+            {"id": "A0000002-0000-4000-A000-000000000002", "name": "Wingspan"},
         ]
         mock_instance.get_convention_playtowins.return_value = [
-            {"id": "e1", "badge_id": "B1", "librarygame_id": "G1"},
-            {"id": "e2", "badge_id": "B2", "librarygame_id": "G2"},
+            {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001"},
+            {"id": "e2", "badge_id": "B2", "librarygame_id": "A0000002-0000-4000-A000-000000000002"},
         ]
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
 
         resp = self.client.get("/games")
@@ -2663,10 +2663,10 @@ class TestEjectPlayerRoute(unittest.TestCase):
 
     def test_eject_specific_game(self):
         self._auth()
-        resp = self.client.post("/games/eject", json={"badge_id": "B1", "game_id": "G1"})
+        resp = self.client.post("/games/eject", json={"badge_id": "B1", "game_id": "A0000001-0000-4000-A000-000000000001"})
         self.assertEqual(resp.status_code, 200)
         with self.client.session_transaction() as sess:
-            self.assertEqual(sess["ejected_entries"], [["B1", "G1"]])
+            self.assertEqual(sess["ejected_entries"], [["B1", "A0000001-0000-4000-A000-000000000001"]])
 
     def test_eject_duplicate_returns_409(self):
         self._auth(ejected_entries=[["B1", "*"]])
@@ -2674,7 +2674,7 @@ class TestEjectPlayerRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 409)
 
     def test_eject_all_removes_per_game(self):
-        self._auth(ejected_entries=[["B1", "G1"], ["B1", "G2"]])
+        self._auth(ejected_entries=[["B1", "A0000001-0000-4000-A000-000000000001"], ["B1", "A0000002-0000-4000-A000-000000000002"]])
         resp = self.client.post("/games/eject", json={"badge_id": "B1"})
         self.assertEqual(resp.status_code, 200)
         with self.client.session_transaction() as sess:
@@ -2714,11 +2714,11 @@ class TestUnejectPlayerRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_uneject_specific_game(self):
-        self._auth(ejected_entries=[["B1", "G1"], ["B1", "G2"]])
-        resp = self.client.post("/games/uneject", json={"badge_id": "B1", "game_id": "G1"})
+        self._auth(ejected_entries=[["B1", "A0000001-0000-4000-A000-000000000001"], ["B1", "A0000002-0000-4000-A000-000000000002"]])
+        resp = self.client.post("/games/uneject", json={"badge_id": "B1", "game_id": "A0000001-0000-4000-A000-000000000001"})
         self.assertEqual(resp.status_code, 200)
         with self.client.session_transaction() as sess:
-            self.assertEqual(sess["ejected_entries"], [["B1", "G2"]])
+            self.assertEqual(sess["ejected_entries"], [["B1", "A0000002-0000-4000-A000-000000000002"]])
 
 
 class TestGetEntrantsRoute(unittest.TestCase):
@@ -2730,24 +2730,24 @@ class TestGetEntrantsRoute(unittest.TestCase):
         self.client = self.app.test_client()
 
     def test_entrants_requires_auth(self):
-        resp = self.client.get("/games/entrants/G1")
+        resp = self.client.get("/games/entrants/A0000001-0000-4000-A000-000000000001")
         self.assertEqual(resp.status_code, 401)
 
     @patch("routes.helpers.TTEClient")
     def test_entrants_returns_filtered_list(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_game_playtowins.return_value = [
-            {"badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
-            {"badge_id": "B2", "librarygame_id": "G1", "name": "Bob"},
+            {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
+            {"badge_id": "B2", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Bob"},
         ]
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
             sess["ejected_entries"] = [["B1", "*"]]
 
-        resp = self.client.get("/games/entrants/G1")
+        resp = self.client.get("/games/entrants/A0000001-0000-4000-A000-000000000001")
         data = resp.get_json()
         self.assertTrue(data["ok"])
         self.assertEqual(len(data["entrants"]), 2)
@@ -2761,16 +2761,16 @@ class TestGetEntrantsRoute(unittest.TestCase):
     def test_entrants_per_game_ejection(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_game_playtowins.return_value = [
-            {"badge_id": "B1", "librarygame_id": "G1", "name": "Alice"},
+            {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
         ]
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["ejected_entries"] = [["B1", "G1"]]
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["ejected_entries"] = [["B1", "A0000001-0000-4000-A000-000000000001"]]
 
-        resp = self.client.get("/games/entrants/G1")
+        resp = self.client.get("/games/entrants/A0000001-0000-4000-A000-000000000001")
         data = resp.get_json()
         self.assertTrue(data["entrants"][0]["ejected"])
 
@@ -2787,9 +2787,9 @@ class TestEjectionClearedOnSourceChange(unittest.TestCase):
     def test_convention_confirm_clears_ejections(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_convention.return_value = {
-            "id": "conv-1",
+            "id": "C0000001-0000-4000-A000-000000000001",
             "name": "GameFest",
-            "library": {"id": "lib-1", "name": "Main Library"},
+            "library": {"id": "10000001-0000-4000-A000-000000000001", "name": "Main Library"},
         }
         MockClient.return_value = mock_instance
 
@@ -2798,7 +2798,7 @@ class TestEjectionClearedOnSourceChange(unittest.TestCase):
             sess["tte_username"] = "admin"
             sess["ejected_entries"] = [["B1", "*"]]
 
-        self.client.post("/convention/select", data={"convention_id": "conv-1"})
+        self.client.post("/convention/select", data={"convention_id": "C0000001-0000-4000-A000-000000000001"})
 
         with self.client.session_transaction() as sess:
             self.assertNotIn("ejected_entries", sess)
@@ -2807,7 +2807,7 @@ class TestEjectionClearedOnSourceChange(unittest.TestCase):
     def test_library_confirm_clears_ejections(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library.return_value = {
-            "id": "lib-1",
+            "id": "10000001-0000-4000-A000-000000000001",
             "name": "Main Library",
         }
         MockClient.return_value = mock_instance
@@ -2817,7 +2817,7 @@ class TestEjectionClearedOnSourceChange(unittest.TestCase):
             sess["tte_username"] = "admin"
             sess["ejected_entries"] = [["B1", "*"]]
 
-        self.client.post("/library/select", data={"library_id": "lib-1"})
+        self.client.post("/library/select", data={"library_id": "10000001-0000-4000-A000-000000000001"})
 
         with self.client.session_transaction() as sess:
             self.assertNotIn("ejected_entries", sess)
@@ -2846,19 +2846,19 @@ class TestPlayersRoute(unittest.TestCase):
     def test_players_lists_all_players(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
             sess["cached_games"] = [
-                {"id": "G1", "name": "Catan"},
-                {"id": "G2", "name": "Wingspan"},
+                {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
+                {"id": "A0000002-0000-4000-A000-000000000002", "name": "Wingspan"},
             ]
             sess["cached_entries"] = [
-                {"badge_id": "B1", "librarygame_id": "G1", "id": "e1",
+                {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1",
                  "name": "Alice"},
-                {"badge_id": "B2", "librarygame_id": "G1", "id": "e2",
+                {"badge_id": "B2", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e2",
                  "name": "Bob"},
-                {"badge_id": "B1", "librarygame_id": "G2", "id": "e3",
+                {"badge_id": "B1", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "id": "e3",
                  "name": "Alice"},
             ]
 
@@ -2871,17 +2871,17 @@ class TestPlayersRoute(unittest.TestCase):
     def test_players_shows_game_count(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
             sess["cached_games"] = [
-                {"id": "G1", "name": "Catan"},
-                {"id": "G2", "name": "Wingspan"},
+                {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
+                {"id": "A0000002-0000-4000-A000-000000000002", "name": "Wingspan"},
             ]
             sess["cached_entries"] = [
-                {"badge_id": "B1", "librarygame_id": "G1", "id": "e1",
+                {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1",
                  "name": "Alice"},
-                {"badge_id": "B1", "librarygame_id": "G2", "id": "e2",
+                {"badge_id": "B1", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "id": "e2",
                  "name": "Alice"},
             ]
 
@@ -2894,14 +2894,14 @@ class TestPlayersRoute(unittest.TestCase):
     def test_players_shows_removed_badge(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
             sess["cached_games"] = [
-                {"id": "G1", "name": "Catan"},
+                {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
             ]
             sess["cached_entries"] = [
-                {"badge_id": "B1", "librarygame_id": "G1", "id": "e1",
+                {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1",
                  "name": "Alice"},
             ]
             sess["ejected_entries"] = [["B1", "*"]]
@@ -2914,20 +2914,20 @@ class TestPlayersRoute(unittest.TestCase):
     def test_players_shows_partial_removal(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
             sess["cached_games"] = [
-                {"id": "G1", "name": "Catan"},
-                {"id": "G2", "name": "Wingspan"},
+                {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
+                {"id": "A0000002-0000-4000-A000-000000000002", "name": "Wingspan"},
             ]
             sess["cached_entries"] = [
-                {"badge_id": "B1", "librarygame_id": "G1", "id": "e1",
+                {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1",
                  "name": "Alice"},
-                {"badge_id": "B1", "librarygame_id": "G2", "id": "e2",
+                {"badge_id": "B1", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "id": "e2",
                  "name": "Alice"},
             ]
-            sess["ejected_entries"] = [["B1", "G1"]]
+            sess["ejected_entries"] = [["B1", "A0000001-0000-4000-A000-000000000001"]]
 
         resp = self.client.get("/games/players")
         self.assertEqual(resp.status_code, 200)
@@ -2936,13 +2936,13 @@ class TestPlayersRoute(unittest.TestCase):
     def test_players_library_only_mode(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
             sess["library_name"] = "My Library"
             sess["cached_games"] = [
-                {"id": "G1", "name": "Catan"},
+                {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
             ]
             sess["cached_entries"] = [
-                {"badge_id": "B1", "librarygame_id": "G1", "id": "e1",
+                {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1",
                  "name": "Alice"},
             ]
 
@@ -2954,11 +2954,11 @@ class TestPlayersRoute(unittest.TestCase):
     def test_players_empty_list(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
             sess["cached_games"] = [
-                {"id": "G1", "name": "Catan"},
+                {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
             ]
             sess["cached_entries"] = []
 
@@ -2969,8 +2969,8 @@ class TestPlayersRoute(unittest.TestCase):
     def test_players_redirects_without_cache(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
 
         resp = self.client.get("/games/players")
@@ -2982,18 +2982,18 @@ class TestPlayersRoute(unittest.TestCase):
         """Games page links to the player management page."""
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
-            {"id": "G1", "name": "Catan"},
+            {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
         ]
         mock_instance.get_convention_playtowins.return_value = [
-            {"badge_id": "B1", "librarygame_id": "G1", "id": "e1",
+            {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1",
              "name": "Alice"},
         ]
         MockClient.return_value = mock_instance
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "lib-1"
-            sess["convention_id"] = "conv-1"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
             sess["convention_name"] = "GameFest"
 
         resp = self.client.get("/games")
@@ -3012,6 +3012,82 @@ class TestHealthRoute(unittest.TestCase):
         resp = self.client.get("/health")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.get_json(), {"status": "ok"})
+
+
+class TestIDValidationHelpers(unittest.TestCase):
+    """Unit tests for is_valid_tte_id and is_valid_badge_id."""
+
+    def test_valid_tte_id(self):
+        from routes.helpers import is_valid_tte_id
+        self.assertTrue(is_valid_tte_id("150C7270-24C1-11F1-A9DF-B92257809274"))
+        self.assertTrue(is_valid_tte_id("abcdef01-2345-6789-abcd-ef0123456789"))
+
+    def test_invalid_tte_id(self):
+        from routes.helpers import is_valid_tte_id
+        self.assertFalse(is_valid_tte_id("not-a-uuid"))
+        self.assertFalse(is_valid_tte_id(""))
+        self.assertFalse(is_valid_tte_id(None))
+        self.assertFalse(is_valid_tte_id(123))
+        self.assertFalse(is_valid_tte_id("ZZZZZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZZZZZZZZZ"))
+        self.assertFalse(is_valid_tte_id("150C7270-24C1-11F1-A9DF-B92257809274; DROP TABLE"))
+
+    def test_valid_badge_id(self):
+        from routes.helpers import is_valid_badge_id
+        self.assertTrue(is_valid_badge_id("B1"))
+        self.assertTrue(is_valid_badge_id("badge-123"))
+        self.assertTrue(is_valid_badge_id("badge_456"))
+
+    def test_invalid_badge_id(self):
+        from routes.helpers import is_valid_badge_id
+        self.assertFalse(is_valid_badge_id(""))
+        self.assertFalse(is_valid_badge_id(None))
+        self.assertFalse(is_valid_badge_id("badge id"))
+        self.assertFalse(is_valid_badge_id("<script>"))
+
+
+class TestIDValidationRoutes(unittest.TestCase):
+    """Integration tests verifying routes reject invalid IDs."""
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    def _login(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+
+    @patch("routes.helpers.TTEClient")
+    def test_library_select_rejects_invalid_id(self, MockClient):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+        resp = self.client.post("/library/select",
+                                data={"library_id": "not-valid"})
+        self.assertEqual(resp.status_code, 302)
+
+    @patch("routes.helpers.TTEClient")
+    def test_convention_select_rejects_invalid_id(self, MockClient):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+        resp = self.client.post("/convention/select",
+                                data={"convention_id": "<script>alert(1)</script>"})
+        self.assertEqual(resp.status_code, 302)
+
+    @patch("routes.helpers.TTEClient")
+    def test_toggle_pickup_rejects_invalid_game_id(self, MockClient):
+        self._login()
+        resp = self.client.post("/drawing/pickup",
+                                json={"game_id": "DROP TABLE"})
+        self.assertEqual(resp.status_code, 400)
+
+    @patch("routes.helpers.TTEClient")
+    def test_get_entrants_rejects_invalid_game_id(self, MockClient):
+        self._login()
+        resp = self.client.get("/games/entrants/not-a-uuid")
+        self.assertEqual(resp.status_code, 400)
 
 
 if __name__ == "__main__":

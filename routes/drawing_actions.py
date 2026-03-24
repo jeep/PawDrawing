@@ -10,7 +10,7 @@ from tte_client import TTEAPIError
 
 from . import main_bp
 from .drawing import _build_results_from_session
-from .helpers import _get_client, login_required
+from .helpers import _get_client, is_valid_badge_id, is_valid_tte_id, login_required
 
 
 @main_bp.route("/drawing/pickup", methods=["POST"])
@@ -25,6 +25,8 @@ def toggle_pickup():
         return jsonify({"error": "Invalid request"}), 400
 
     game_id = data["game_id"]
+    if not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID format"}), 400
     picked_up = session.get(SK.PICKED_UP, [])
 
     if game_id in picked_up:
@@ -57,6 +59,8 @@ def award_next():
         return jsonify({"error": "Invalid request"}), 400
 
     game_id = data["game_id"]
+    if not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID format"}), 400
     not_here = set(session.get(SK.NOT_HERE, []))
 
     found = advance_winner(drawing_state, game_id, not_here=not_here)
@@ -86,6 +90,8 @@ def award_next():
 @login_required(api=True)
 def drawing_entrants(game_id):
     """AJAX endpoint: return the shuffled entrant list for a game from drawing state."""
+    if not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID format"}), 400
     drawing_state = session.get(SK.DRAWING_STATE, [])
     not_here = set(session.get(SK.NOT_HERE, []))
 
@@ -119,6 +125,8 @@ def mark_not_here():
         return jsonify({"error": "Invalid request"}), 400
 
     badge_id = data["badge_id"]
+    if not is_valid_badge_id(badge_id):
+        return jsonify({"error": "Invalid badge ID format"}), 400
     not_here = session.get(SK.NOT_HERE, [])
 
     if badge_id in not_here:

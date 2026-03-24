@@ -4,7 +4,7 @@ from session_keys import SK
 from tte_client import TTEAPIError
 
 from . import main_bp
-from .helpers import _get_client, _handle_api_error, login_required
+from .helpers import _get_client, _handle_api_error, is_valid_tte_id, login_required
 
 
 @main_bp.route("/convention")
@@ -41,6 +41,9 @@ def library_select_route():
     library_id = request.form.get("library_id", "").strip()
     if not library_id:
         flash("Please enter or select a library.", "error")
+        return redirect(url_for("main.convention_select"))
+    if not is_valid_tte_id(library_id):
+        flash("Invalid library ID format.", "error")
         return redirect(url_for("main.convention_select"))
 
     client = _get_client()
@@ -99,6 +102,9 @@ def convention_select_route():
     convention_id = request.form.get("convention_id", "").strip()
     if not convention_id:
         flash("Please enter or select a convention.", "error")
+        return redirect(url_for("main.convention_select"))
+    if not is_valid_tte_id(convention_id):
+        flash("Invalid convention ID format.", "error")
         return redirect(url_for("main.convention_select"))
 
     client = _get_client()

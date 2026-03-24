@@ -1,9 +1,25 @@
+import re
 from functools import wraps
 
 from flask import flash, jsonify, redirect, request, session, url_for
 
 from session_keys import SK
 from tte_client import TTEAPIError, TTEClient
+
+_UUID_RE = re.compile(
+    r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
+)
+_BADGE_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def is_valid_tte_id(value):
+    """Check that a TTE entity ID matches UUID format."""
+    return isinstance(value, str) and _UUID_RE.match(value) is not None
+
+
+def is_valid_badge_id(value):
+    """Check that a badge ID is a non-empty alphanumeric string."""
+    return isinstance(value, str) and _BADGE_RE.match(value) is not None
 
 
 def login_required(f=None, *, api=False):
