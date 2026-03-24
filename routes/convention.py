@@ -6,6 +6,13 @@ from tte_client import TTEAPIError
 from . import main_bp
 from .helpers import _get_client, _handle_api_error, is_valid_tte_id, login_required
 
+_LIBRARY_SCOPED_KEYS = (
+    SK.CACHED_GAMES, SK.CACHED_ENTRIES,
+    SK.DRAWING_STATE, SK.DRAWING_CONFLICTS, SK.DRAWING_TIMESTAMP, SK.AUTO_RESOLVED,
+    SK.PREMIUM_GAMES, SK.EJECTED_ENTRIES,
+    SK.PICKED_UP, SK.NOT_HERE, SK.NOT_HERE_WARNING_DISMISSED, SK.SOLO_DISMISSED_GAMES,
+)
+
 
 @main_bp.route("/convention")
 @login_required
@@ -58,7 +65,8 @@ def library_select_route():
     session.pop(SK.CONVENTION_NAME, None)
     session[SK.LIBRARY_ID] = library_id
     session[SK.LIBRARY_NAME] = library_name
-    session.pop(SK.EJECTED_ENTRIES, None)
+    for key in _LIBRARY_SCOPED_KEYS:
+        session.pop(key, None)
 
     return redirect(url_for("main.library_confirm"))
 
@@ -126,7 +134,8 @@ def convention_select_route():
     session[SK.CONVENTION_NAME] = convention_name
     session[SK.LIBRARY_ID] = library_id
     session[SK.LIBRARY_NAME] = library_name
-    session.pop(SK.EJECTED_ENTRIES, None)
+    for key in _LIBRARY_SCOPED_KEYS:
+        session.pop(key, None)
 
     return redirect(url_for("main.convention_confirm"))
 

@@ -2822,6 +2822,59 @@ class TestEjectionClearedOnSourceChange(unittest.TestCase):
         with self.client.session_transaction() as sess:
             self.assertNotIn("ejected_entries", sess)
 
+    @patch("routes.helpers.TTEClient")
+    def test_library_select_clears_cached_games(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_library.return_value = {
+            "id": "10000001-0000-4000-A000-000000000001",
+            "name": "New Library",
+        }
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["tte_username"] = "admin"
+            sess["cached_games"] = [{"id": "old-game"}]
+            sess["cached_entries"] = [{"id": "old-entry"}]
+            sess["drawing_state"] = {"some": "state"}
+            sess["premium_games"] = ["A0000001-0000-4000-A000-000000000001"]
+            sess["picked_up"] = {"A0000001-0000-4000-A000-000000000001": True}
+
+        self.client.post("/library/select", data={"library_id": "10000001-0000-4000-A000-000000000001"})
+
+        with self.client.session_transaction() as sess:
+            self.assertNotIn("cached_games", sess)
+            self.assertNotIn("cached_entries", sess)
+            self.assertNotIn("drawing_state", sess)
+            self.assertNotIn("premium_games", sess)
+            self.assertNotIn("picked_up", sess)
+
+    @patch("routes.helpers.TTEClient")
+    def test_convention_select_clears_cached_games(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_convention.return_value = {
+            "id": "C0000001-0000-4000-A000-000000000001",
+            "name": "GameFest",
+            "library": {"id": "10000001-0000-4000-A000-000000000001", "name": "Main Library"},
+        }
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["tte_username"] = "admin"
+            sess["cached_games"] = [{"id": "old-game"}]
+            sess["cached_entries"] = [{"id": "old-entry"}]
+            sess["drawing_state"] = {"some": "state"}
+            sess["not_here"] = {"B1": True}
+
+        self.client.post("/convention/select", data={"convention_id": "C0000001-0000-4000-A000-000000000001"})
+
+        with self.client.session_transaction() as sess:
+            self.assertNotIn("cached_games", sess)
+            self.assertNotIn("cached_entries", sess)
+            self.assertNotIn("drawing_state", sess)
+            self.assertNotIn("not_here", sess)
+
 
 class TestPlayersRoute(unittest.TestCase):
 
