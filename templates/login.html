@@ -81,6 +81,7 @@
 <div class="login-card">
     <h2>Log In</h2>
     <form method="POST" action="{{ url_for('main.login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
             <label for="username">Username or Email Address</label>
             <input type="text" id="username" name="username" required autofocus

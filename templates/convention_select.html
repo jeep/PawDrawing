@@ -4,6 +4,7 @@
 
 {% block nav %}
 <form method="POST" action="{{ url_for('main.logout') }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" style="background:none;border:none;color:#ecf0f1;cursor:pointer;font-size:0.9rem;">
         Logout ({{ session.get('tte_username', '') }})
     </button>
@@ -150,6 +151,7 @@
         <div class="divider">or</div>
 
         <form method="POST" action="{{ url_for('main.convention_select_route') }}" id="select-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-row">
                 <label class="section-label" for="convention_id">Paste Convention ID</label>
                 <input type="text" id="convention_id" name="convention_id"
@@ -171,6 +173,7 @@
         <div class="divider">or</div>
 
         <form method="POST" action="{{ url_for('main.library_select_route') }}" id="library-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-row">
                 <label class="section-label" for="library_id">Paste Library ID</label>
                 <input type="text" id="library_id" name="library_id"
