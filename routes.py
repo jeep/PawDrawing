@@ -25,7 +25,7 @@ def health():
 
 def _get_client():
     """Create a TTEClient with the current user's session."""
-    client = TTEClient()
+    client = TTEClient(api_key_id=session.get("tte_api_key"))
     client.session_id = session.get("tte_session_id")
     return client
 
@@ -57,12 +57,13 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
+        api_key = request.form.get("api_key", "").strip()
 
-        if not username or not password:
-            flash("Username and password are required.", "error")
+        if not username or not password or not api_key:
+            flash("Username, password, and API key are required.", "error")
             return render_template("login.html"), 400
 
-        client = TTEClient()
+        client = TTEClient(api_key_id=api_key)
         try:
             client.login(username, password)
         except TTEAPIError as exc:
@@ -72,6 +73,7 @@ def login():
         session["tte_session_id"] = client.session_id
         session["tte_username"] = username
         session["tte_user_id"] = client.user_id
+        session["tte_api_key"] = api_key
         return redirect(url_for("main.convention_select"))
 
     return render_template("login.html")
@@ -80,10 +82,11 @@ def login():
 @main_bp.route("/logout", methods=["POST"])
 def logout():
     tte_session_id = session.pop("tte_session_id", None)
+    tte_api_key = session.pop("tte_api_key", None)
     session.pop("tte_username", None)
 
     if tte_session_id:
-        client = TTEClient()
+        client = TTEClient(api_key_id=tte_api_key)
         client.session_id = tte_session_id
         client.logout()
 

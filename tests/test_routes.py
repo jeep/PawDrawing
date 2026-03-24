@@ -28,7 +28,9 @@ class TestLoginRoute(unittest.TestCase):
         self.assertIn(b"password", resp.data)
 
     def test_login_empty_fields_returns_error(self):
-        resp = self.client.post("/login", data={"username": "", "password": ""})
+        resp = self.client.post("/login", data={
+            "username": "", "password": "", "api_key": "",
+        })
         self.assertEqual(resp.status_code, 400)
         self.assertIn(b"required", resp.data)
 
@@ -43,9 +45,11 @@ class TestLoginRoute(unittest.TestCase):
         resp = self.client.post("/login", data={
             "username": "admin",
             "password": "secret",
+            "api_key": "user-api-key",
         })
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/convention", resp.headers["Location"])
+        MockClient.assert_called_once_with(api_key_id="user-api-key")
         mock_instance.login.assert_called_once_with("admin", "secret")
 
     @patch("routes.TTEClient")
@@ -62,12 +66,14 @@ class TestLoginRoute(unittest.TestCase):
         self.client.post("/login", data={
             "username": "admin",
             "password": "secret",
+            "api_key": "user-api-key",
         })
 
         with self.client.session_transaction() as sess:
             self.assertEqual(sess["tte_session_id"], "session-123")
             self.assertEqual(sess["tte_username"], "admin")
             self.assertEqual(sess["tte_user_id"], "user-456")
+            self.assertEqual(sess["tte_api_key"], "user-api-key")
 
     @patch("routes.TTEClient")
     def test_login_failure_shows_error(self, MockClient):
@@ -78,6 +84,7 @@ class TestLoginRoute(unittest.TestCase):
         resp = self.client.post("/login", data={
             "username": "admin",
             "password": "wrong",
+            "api_key": "user-api-key",
         })
         self.assertEqual(resp.status_code, 401)
         self.assertIn(b"Login failed", resp.data)
@@ -103,6 +110,7 @@ class TestLogoutRoute(unittest.TestCase):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["tte_username"] = "admin"
+            sess["tte_api_key"] = "user-api-key"
 
         resp = self.client.post("/logout")
         self.assertEqual(resp.status_code, 302)
@@ -111,6 +119,7 @@ class TestLogoutRoute(unittest.TestCase):
         with self.client.session_transaction() as sess:
             self.assertNotIn("tte_session_id", sess)
             self.assertNotIn("tte_username", sess)
+            self.assertNotIn("tte_api_key", sess)
 
     @patch("routes.TTEClient")
     def test_logout_calls_api_logout(self, MockClient):
