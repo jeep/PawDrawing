@@ -6,16 +6,13 @@ from data_processing import apply_ejections, group_entries_by_game, process_entr
 from tte_client import TTEAPIError
 
 from . import main_bp
-from .helpers import _get_client, _handle_api_error
+from .helpers import _get_client, _handle_api_error, login_required
 
 
 @main_bp.route("/games")
+@login_required
 def games():
     """Load P2W games and entries, process, and display."""
-    if not session.get("tte_session_id"):
-        flash("Please log in first.", "error")
-        return redirect(url_for("main.login"))
-
     library_id = session.get("library_id")
     convention_id = session.get("convention_id")
     if not library_id:
@@ -84,12 +81,9 @@ def games():
 
 
 @main_bp.route("/games/players")
+@login_required
 def players():
     """Player management page — lists all players with game counts and removal controls."""
-    if not session.get("tte_session_id"):
-        flash("Please log in first.", "error")
-        return redirect(url_for("main.login"))
-
     library_id = session.get("library_id")
     if not library_id:
         flash("Please select a convention first.", "error")
@@ -149,11 +143,9 @@ def players():
 
 
 @main_bp.route("/games/premium", methods=["POST"])
+@login_required
 def set_premium_games():
     """AJAX endpoint: save premium game designations to session."""
-    if not session.get("tte_session_id"):
-        return jsonify({"error": "Not authenticated"}), 401
-
     data = request.get_json(silent=True)
     if data is None or "premium_games" not in data:
         return jsonify({"error": "Invalid request"}), 400
@@ -167,11 +159,9 @@ def set_premium_games():
 
 
 @main_bp.route("/games/eject", methods=["POST"])
+@login_required
 def eject_player():
     """AJAX endpoint: eject a player from the drawing."""
-    if not session.get("tte_session_id"):
-        return jsonify({"error": "Not authenticated"}), 401
-
     data = request.get_json(silent=True)
     if not data or "badge_id" not in data:
         return jsonify({"error": "badge_id is required"}), 400
@@ -198,11 +188,9 @@ def eject_player():
 
 
 @main_bp.route("/games/uneject", methods=["POST"])
+@login_required
 def uneject_player():
     """AJAX endpoint: undo an ejection."""
-    if not session.get("tte_session_id"):
-        return jsonify({"error": "Not authenticated"}), 401
-
     data = request.get_json(silent=True)
     if not data or "badge_id" not in data:
         return jsonify({"error": "badge_id is required"}), 400
@@ -221,11 +209,9 @@ def uneject_player():
 
 
 @main_bp.route("/games/entrants/<game_id>")
+@login_required(api=True)
 def get_entrants(game_id):
     """AJAX endpoint: return entrants for a specific game."""
-    if not session.get("tte_session_id"):
-        return jsonify({"error": "Not authenticated"}), 401
-
     library_id = session.get("library_id")
     if not library_id:
         return jsonify({"error": "No library selected"}), 400

@@ -1,6 +1,24 @@
-from flask import flash, redirect, session, url_for
+from functools import wraps
+
+from flask import flash, jsonify, redirect, request, session, url_for
 
 from tte_client import TTEAPIError, TTEClient
+
+
+def login_required(f=None, *, api=False):
+    def decorator(func):
+        @wraps(func)
+        def decorated(*args, **kwargs):
+            if not session.get("tte_session_id"):
+                if api or request.is_json:
+                    return jsonify({"error": "Not authenticated"}), 401
+                flash("Please log in first.", "error")
+                return redirect(url_for("main.login"))
+            return func(*args, **kwargs)
+        return decorated
+    if f is not None:
+        return decorator(f)
+    return decorator
 
 
 def _get_client():

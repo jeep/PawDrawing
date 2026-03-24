@@ -12,6 +12,7 @@ from drawing import (
 )
 
 from . import main_bp
+from .helpers import login_required
 
 
 def _build_results_from_session():
@@ -46,12 +47,9 @@ def _build_results_from_session():
 
 
 @main_bp.route("/drawing", methods=["POST"])
+@login_required
 def run_drawing_route():
     """Execute the drawing algorithm and redirect to results."""
-    if not session.get("tte_session_id"):
-        flash("Please log in first.", "error")
-        return redirect(url_for("main.login"))
-
     library_id = session.get("library_id")
     if not library_id:
         flash("Please select a convention first.", "error")
@@ -86,12 +84,9 @@ def run_drawing_route():
 
 
 @main_bp.route("/drawing/results")
+@login_required
 def drawing_results():
     """Display drawing results from session state."""
-    if not session.get("tte_session_id"):
-        flash("Please log in first.", "error")
-        return redirect(url_for("main.login"))
-
     drawing_state = session.get("drawing_state")
     if drawing_state is None:
         flash("No drawing results to display.", "error")
@@ -127,11 +122,9 @@ def drawing_results():
 
 
 @main_bp.route("/drawing/resolve", methods=["POST"])
+@login_required
 def resolve_conflicts():
     """Apply admin conflict resolution choices."""
-    if not session.get("tte_session_id"):
-        return jsonify({"error": "Not authenticated"}), 401
-
     drawing_state = session.get("drawing_state")
     if not drawing_state:
         return jsonify({"error": "No active drawing"}), 400
@@ -209,6 +202,7 @@ def resolve_conflicts():
 
 
 @main_bp.route("/drawing/dismiss-game", methods=["POST"])
+@login_required
 def dismiss_conflict_game():
     """Dismiss a single game from a multi-win conflict.
 
@@ -216,9 +210,6 @@ def dismiss_conflict_game():
     for that person, auto-resolves the conflict. Tracks single-entrant
     dismissed games so they aren't shown as "To the box".
     """
-    if not session.get("tte_session_id"):
-        return jsonify({"error": "Not authenticated"}), 401
-
     drawing_state = session.get("drawing_state")
     if not drawing_state:
         return jsonify({"error": "No active drawing"}), 400

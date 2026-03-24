@@ -9,15 +9,13 @@ from tte_client import TTEAPIError
 
 from . import main_bp
 from .drawing import _build_results_from_session
-from .helpers import _get_client
+from .helpers import _get_client, login_required
 
 
 @main_bp.route("/drawing/pickup", methods=["POST"])
+@login_required
 def toggle_pickup():
     """Toggle the picked-up status of a game."""
-    if not session.get("tte_session_id"):
-        return jsonify({"error": "Not authenticated"}), 401
-
     if not session.get("drawing_state"):
         return jsonify({"error": "No active drawing"}), 400
 
@@ -46,11 +44,9 @@ def toggle_pickup():
 
 
 @main_bp.route("/drawing/award-next", methods=["POST"])
+@login_required
 def award_next():
     """Advance a game to the next entrant in the shuffled list."""
-    if not session.get("tte_session_id"):
-        return jsonify({"error": "Not authenticated"}), 401
-
     drawing_state = session.get("drawing_state")
     if not drawing_state:
         return jsonify({"error": "No active drawing"}), 400
@@ -86,11 +82,9 @@ def award_next():
 
 
 @main_bp.route("/drawing/entrants/<game_id>")
+@login_required(api=True)
 def drawing_entrants(game_id):
     """AJAX endpoint: return the shuffled entrant list for a game from drawing state."""
-    if not session.get("tte_session_id"):
-        return jsonify({"error": "Not authenticated"}), 401
-
     drawing_state = session.get("drawing_state", [])
     not_here = set(session.get("not_here", []))
 
@@ -112,11 +106,9 @@ def drawing_entrants(game_id):
 
 
 @main_bp.route("/drawing/not-here", methods=["POST"])
+@login_required
 def mark_not_here():
     """Mark a person as 'not here' — permanently absent for this drawing."""
-    if not session.get("tte_session_id"):
-        return jsonify({"error": "Not authenticated"}), 401
-
     drawing_state = session.get("drawing_state")
     if not drawing_state:
         return jsonify({"error": "No active drawing"}), 400
@@ -165,11 +157,9 @@ def mark_not_here():
 
 
 @main_bp.route("/drawing/redraw-unclaimed", methods=["POST"])
+@login_required
 def redraw_all_unclaimed():
     """Redraw all unclaimed games with fresh shuffle."""
-    if not session.get("tte_session_id"):
-        return jsonify({"error": "Not authenticated"}), 401
-
     drawing_state = session.get("drawing_state")
     if not drawing_state:
         return jsonify({"error": "No active drawing"}), 400
@@ -231,11 +221,9 @@ def redraw_all_unclaimed():
 
 
 @main_bp.route("/drawing/push", methods=["POST"])
+@login_required
 def push_to_tte():
     """Push win flags to TTE for all picked-up games."""
-    if not session.get("tte_session_id"):
-        return jsonify({"error": "Not authenticated"}), 401
-
     drawing_state = session.get("drawing_state")
     if not drawing_state:
         return jsonify({"error": "No active drawing"}), 400
@@ -282,12 +270,9 @@ def push_to_tte():
 
 
 @main_bp.route("/drawing/export")
+@login_required
 def export_csv():
     """Export drawing results as a CSV file."""
-    if not session.get("tte_session_id"):
-        flash("Please log in first.", "error")
-        return redirect(url_for("main.login"))
-
     drawing_state = session.get("drawing_state")
     if not drawing_state:
         flash("No active drawing to export.", "error")

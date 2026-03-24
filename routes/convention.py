@@ -3,23 +3,19 @@ from flask import flash, jsonify, redirect, render_template, request, session, u
 from tte_client import TTEAPIError
 
 from . import main_bp
-from .helpers import _get_client, _handle_api_error
+from .helpers import _get_client, _handle_api_error, login_required
 
 
 @main_bp.route("/convention")
+@login_required
 def convention_select():
-    if not session.get("tte_session_id"):
-        flash("Please log in first.", "error")
-        return redirect(url_for("main.login"))
     return render_template("convention_select.html")
 
 
 @main_bp.route("/library/browse")
+@login_required(api=True)
 def library_browse():
     """AJAX endpoint: list libraries owned by the logged-in user."""
-    if not session.get("tte_session_id"):
-        return jsonify({"error": "Not authenticated"}), 401
-
     user_id = session.get("tte_user_id")
     if not user_id:
         return jsonify({"error": "No user ID available"}), 400
@@ -38,12 +34,9 @@ def library_browse():
 
 
 @main_bp.route("/library/select", methods=["POST"])
+@login_required
 def library_select_route():
     """Fetch library details and store in session (no convention)."""
-    if not session.get("tte_session_id"):
-        flash("Please log in first.", "error")
-        return redirect(url_for("main.login"))
-
     library_id = request.form.get("library_id", "").strip()
     if not library_id:
         flash("Please enter or select a library.", "error")
@@ -67,11 +60,9 @@ def library_select_route():
 
 
 @main_bp.route("/library/confirm")
+@login_required
 def library_confirm():
     """Show library confirmation page (GET-safe after PRG redirect)."""
-    if not session.get("tte_session_id"):
-        flash("Please log in first.", "error")
-        return redirect(url_for("main.login"))
     library_name = session.get("library_name")
     if not library_name:
         flash("Please select a library.", "error")
@@ -80,11 +71,9 @@ def library_confirm():
 
 
 @main_bp.route("/convention/search")
+@login_required(api=True)
 def convention_search():
     """AJAX endpoint: search conventions by name."""
-    if not session.get("tte_session_id"):
-        return jsonify({"error": "Not authenticated"}), 401
-
     query = request.args.get("q", "").strip()
     if len(query) < 2:
         return jsonify({"results": []})
@@ -103,12 +92,9 @@ def convention_search():
 
 
 @main_bp.route("/convention/select", methods=["POST"])
+@login_required
 def convention_select_route():
     """Fetch convention details and store selection in session."""
-    if not session.get("tte_session_id"):
-        flash("Please log in first.", "error")
-        return redirect(url_for("main.login"))
-
     convention_id = request.form.get("convention_id", "").strip()
     if not convention_id:
         flash("Please enter or select a convention.", "error")
@@ -139,11 +125,9 @@ def convention_select_route():
 
 
 @main_bp.route("/convention/confirm")
+@login_required
 def convention_confirm():
     """Show convention confirmation page (GET-safe after PRG redirect)."""
-    if not session.get("tte_session_id"):
-        flash("Please log in first.", "error")
-        return redirect(url_for("main.login"))
     convention_name = session.get("convention_name")
     library_name = session.get("library_name")
     if not convention_name or not library_name:
