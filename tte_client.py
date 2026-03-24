@@ -3,7 +3,7 @@
 import time
 
 import requests
-from flask import current_app
+from flask import current_app, has_request_context, session as flask_session
 
 
 class TTEAPIError(Exception):
@@ -41,11 +41,24 @@ class TTEClient:
     # ── Rate limiting ──────────────────────────────────────────────────
 
     def _throttle(self):
-        """Enforce minimum 1-second gap between requests."""
-        elapsed = time.monotonic() - self._last_request_time
-        if elapsed < 1.0:
-            time.sleep(1.0 - elapsed)
-        self._last_request_time = time.monotonic()
+        """Enforce minimum 1-second gap between requests.
+
+        When called inside a Flask request, stores the timestamp in the
+        Flask session so the throttle persists across TTEClient instances.
+        Falls back to instance-level tracking outside a request context.
+        Uses time.time() (wall-clock) for cross-process compatibility.
+        """
+        if has_request_context():
+            last = flask_session.get("_tte_last_request", 0.0)
+            elapsed = time.time() - last
+            if elapsed < 1.0:
+                time.sleep(1.0 - elapsed)
+            flask_session["_tte_last_request"] = time.time()
+        else:
+            elapsed = time.time() - self._last_request_time
+            if elapsed < 1.0:
+                time.sleep(1.0 - elapsed)
+            self._last_request_time = time.time()
 
     # ── Low-level request ──────────────────────────────────────────────
 
