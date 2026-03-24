@@ -52,6 +52,28 @@
     .btn-login:hover {
         background: #34495e;
     }
+    .password-wrapper {
+        position: relative;
+    }
+    .password-wrapper input {
+        padding-right: 2.5rem;
+    }
+    .toggle-visibility {
+        position: absolute;
+        right: 0.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #888;
+        font-size: 1.1rem;
+        padding: 0.2rem;
+        line-height: 1;
+    }
+    .toggle-visibility:hover {
+        color: #2c3e50;
+    }
 </style>
 {% endblock %}
 
@@ -66,16 +88,38 @@
         </div>
         <div class="form-group">
             <label for="password">Password</label>
-            <input type="password" id="password" name="password" required
-                   autocomplete="current-password">
+            <div class="password-wrapper">
+                <input type="password" id="password" name="password" required
+                       autocomplete="current-password">
+                <button type="button" class="toggle-visibility" aria-label="Show password"
+                        onclick="toggleVisibility('password', this)">👁</button>
+            </div>
         </div>
         <div class="form-group">
             <label for="api_key">API Key</label>
-            <input type="password" id="api_key" name="api_key" required
-                   autocomplete="off"
-                   placeholder="From your tabletop.events account">
+            <div class="password-wrapper">
+                <input type="password" id="api_key" name="api_key" required
+                       autocomplete="off"
+                       placeholder="From your tabletop.events account">
+                <button type="button" class="toggle-visibility" aria-label="Show API key"
+                        onclick="toggleVisibility('api_key', this)">👁</button>
+            </div>
         </div>
         <button type="submit" class="btn-login">Log In</button>
     </form>
 </div>
+<script>
+function toggleVisibility(fieldId, btn) {
+    const input = document.getElementById(fieldId);
+    if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = '🔒';
+        btn.setAttribute('aria-label', btn.getAttribute('aria-label').replace('Show', 'Hide'));
+    } else {
+        input.type = 'password';
+        btn.textContent = '👁';
+        btn.setAttribute('aria-label', btn.getAttribute('aria-label').replace('Hide', 'Show'));
+    }
+}
+</script>
 {% endblock %}
