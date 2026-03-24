@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 from cachelib import FileSystemCache
 from dotenv import load_dotenv
@@ -19,3 +20,5 @@ class Config:
     TTE_BASE_URL = "https://tabletop.events/api"
     SESSION_TYPE = "cachelib"
     SESSION_CACHELIB = FileSystemCache(cache_dir=_session_dir, threshold=0)
+    SESSION_PERMANENT = True
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
