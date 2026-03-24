@@ -1,8 +1,11 @@
 """TTE (tabletop.events) API client with session management, rate limiting, and pagination."""
 
+import logging
 import time
 
 import requests
+
+logger = logging.getLogger(__name__)
 from flask import current_app, has_request_context, session as flask_session
 
 
@@ -156,8 +159,8 @@ class TTEClient:
             return
         try:
             self._request("DELETE", f"/session/{self.session_id}")
-        except TTEAPIError:
-            pass  # Best-effort logout
+        except TTEAPIError as exc:
+            logger.warning("Logout failed for session %s: %s", self.session_id, exc)
         finally:
             self.session_id = None
 
