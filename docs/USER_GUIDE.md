@@ -12,8 +12,9 @@ The app is available at:
 
 ### 1. Log in
 
-Navigate to the app and log in with your tabletop.events username, password,
-and API key. Each user must provide their own API key from their TTE account.
+Navigate to the app and log in with your tabletop.events username (or email
+address), password, and API key. Each user must provide their own API key from
+their TTE account.
 
 ### 2. Select a source
 
