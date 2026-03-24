@@ -6,6 +6,7 @@ from data_processing import apply_ejections, group_entries_by_game
 from drawing import (
     advance_winner,
     apply_resolution,
+    build_conflict_info,
     detect_conflicts,
     get_current_winners,
     run_drawing,
@@ -167,28 +168,9 @@ def resolve_conflicts():
     conflicts_out = list(remaining_conflicts)
     if new_conflicts:
         existing_badge_ids = {c["badge_id"] for c in conflicts_out}
-        winners = get_current_winners(drawing_state)
-        game_name_map = {
-            item["game"]["id"]: item["game"].get("name", "Unknown")
-            for item in drawing_state
-        }
-        for badge_id, game_ids in new_conflicts.items():
-            if badge_id in existing_badge_ids:
-                continue
-            premium_wins = [gid for gid in game_ids if gid in premium_games]
-            winner_name = "Unknown"
-            for gid in game_ids:
-                w = winners.get(gid)
-                if w and w.get("name"):
-                    winner_name = w["name"]
-                    break
-            conflicts_out.append({
-                "badge_id": badge_id,
-                "winner_name": winner_name,
-                "game_ids": game_ids,
-                "game_names": {gid: game_name_map.get(gid, "Unknown") for gid in game_ids},
-                "is_premium_conflict": len(premium_wins) > 1,
-            })
+        new_only = {bid: gids for bid, gids in new_conflicts.items()
+                    if bid not in existing_badge_ids}
+        conflicts_out.extend(build_conflict_info(drawing_state, new_only, premium_games))
 
     session["drawing_conflicts"] = conflicts_out
 
@@ -267,29 +249,10 @@ def dismiss_conflict_game():
     new_conflicts = detect_conflicts(drawing_state)
     if new_conflicts:
         existing_badge_ids = {c["badge_id"] for c in updated_conflicts}
-        winners = get_current_winners(drawing_state)
-        game_name_map = {
-            item["game"]["id"]: item["game"].get("name", "Unknown")
-            for item in drawing_state
-        }
-        premium_games = set(session.get("premium_games", []))
-        for cbid, game_ids in new_conflicts.items():
-            if cbid in existing_badge_ids:
-                continue
-            premium_wins = [gid for gid in game_ids if gid in premium_games]
-            winner_name = "Unknown"
-            for gid in game_ids:
-                w = winners.get(gid)
-                if w and w.get("name"):
-                    winner_name = w["name"]
-                    break
-            updated_conflicts.append({
-                "badge_id": cbid,
-                "winner_name": winner_name,
-                "game_ids": game_ids,
-                "game_names": {gid: game_name_map.get(gid, "Unknown") for gid in game_ids},
-                "is_premium_conflict": len(premium_wins) > 1,
-            })
+        new_only = {bid: gids for bid, gids in new_conflicts.items()
+                    if bid not in existing_badge_ids}
+        updated_conflicts.extend(build_conflict_info(drawing_state, new_only,
+                                                     set(session.get("premium_games", []))))
 
     session["drawing_conflicts"] = updated_conflicts
 
