@@ -16,6 +16,12 @@ Navigate to the app and log in with your tabletop.events username (or email
 address), password, and API key. Each user must provide their own API key from
 their TTE account.
 
+**To get your API key:** Log in to [tabletop.events](https://tabletop.events),
+click your username in the upper-right corner, then click **API Keys**. If you
+already have a key, you can use it. Otherwise, click **Create**, fill in a name
+(and optionally a URL and reason), and copy the generated key to enter into
+PawDrawing.
+
 ### 2. Select a source
 
 The source selection page has two tabs:
