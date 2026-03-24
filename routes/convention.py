@@ -1,3 +1,5 @@
+import logging
+
 from flask import flash, jsonify, redirect, render_template, request, session, url_for
 
 from session_keys import SK
@@ -5,6 +7,8 @@ from tte_client import TTEAPIError
 
 from . import main_bp
 from .helpers import _get_client, _handle_api_error, is_valid_tte_id, login_required
+
+logger = logging.getLogger(__name__)
 
 _LIBRARY_SCOPED_KEYS = (
     SK.CACHED_GAMES, SK.CACHED_ENTRIES,
@@ -50,6 +54,7 @@ def library_select_route():
         flash("Please enter or select a library.", "error")
         return redirect(url_for("main.convention_select"))
     if not is_valid_tte_id(library_id):
+        logger.warning("Invalid library ID rejected: %s", library_id)
         flash("Invalid library ID format.", "error")
         return redirect(url_for("main.convention_select"))
 
@@ -68,6 +73,7 @@ def library_select_route():
     for key in _LIBRARY_SCOPED_KEYS:
         session.pop(key, None)
 
+    logger.info("Library selected: %s (%s)", library_name, library_id)
     return redirect(url_for("main.library_confirm"))
 
 
@@ -112,6 +118,7 @@ def convention_select_route():
         flash("Please enter or select a convention.", "error")
         return redirect(url_for("main.convention_select"))
     if not is_valid_tte_id(convention_id):
+        logger.warning("Invalid convention ID rejected: %s", convention_id)
         flash("Invalid convention ID format.", "error")
         return redirect(url_for("main.convention_select"))
 
@@ -124,6 +131,7 @@ def convention_select_route():
     convention_name = convention.get("name", "Unknown")
     library = convention.get("library")
     if not library:
+        logger.warning("Convention %s has no associated library", convention_id)
         flash("No library found for this convention.", "error")
         return redirect(url_for("main.convention_select"))
 
@@ -137,6 +145,7 @@ def convention_select_route():
     for key in _LIBRARY_SCOPED_KEYS:
         session.pop(key, None)
 
+    logger.info("Convention selected: %s (convention=%s, library=%s)", convention_name, convention_id, library_id)
     return redirect(url_for("main.convention_confirm"))
 
 

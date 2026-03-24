@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from flask import flash, jsonify, redirect, render_template, request, session, url_for
@@ -16,6 +17,8 @@ from session_keys import SK
 
 from . import main_bp
 from .helpers import is_valid_badge_id, is_valid_tte_id, login_required
+
+logger = logging.getLogger(__name__)
 
 
 def _build_results_from_session():
@@ -72,6 +75,9 @@ def run_drawing_route():
     premium_games = session.get(SK.PREMIUM_GAMES, [])
 
     drawing_state, conflicts, auto_resolved = run_drawing(game_data, premium_games)
+
+    logger.info("Drawing executed for library %s: %d games, %d conflicts, %d auto-resolved",
+                library_id, len(drawing_state), len(conflicts), len(auto_resolved))
 
     # Store drawing state in session for conflict resolution
     session[SK.DRAWING_STATE] = drawing_state
@@ -144,6 +150,7 @@ def resolve_conflicts():
         if not badge_id or not keep_game_id:
             continue
         if not is_valid_badge_id(badge_id) or not is_valid_tte_id(keep_game_id):
+            logger.warning("Invalid ID format in conflict resolution payload")
             return jsonify({"error": "Invalid ID format in resolutions"}), 400
         keep_map[badge_id] = keep_game_id
 
@@ -179,6 +186,9 @@ def resolve_conflicts():
 
     session[SK.DRAWING_CONFLICTS] = conflicts_out
 
+    logger.info("Conflict resolution applied: %d badges resolved, %d remaining conflicts",
+                len(keep_map), len(conflicts_out))
+
     results = _build_results_from_session()
 
     return jsonify({
@@ -208,8 +218,10 @@ def dismiss_conflict_game():
     badge_id = data["badge_id"]
     game_id = data["game_id"]
     if not is_valid_badge_id(badge_id):
+        logger.warning("Invalid badge ID in dismiss request: %s", badge_id)
         return jsonify({"error": "Invalid badge ID format"}), 400
     if not is_valid_tte_id(game_id):
+        logger.warning("Invalid game ID in dismiss request: %s", game_id)
         return jsonify({"error": "Invalid game ID format"}), 400
 
     # Find how many entrants this game has
@@ -264,6 +276,9 @@ def dismiss_conflict_game():
                                                      set(session.get(SK.PREMIUM_GAMES, []))))
 
     session[SK.DRAWING_CONFLICTS] = updated_conflicts
+
+    logger.info("Game %s dismissed from conflict for badge %s (exhausted=%s)",
+                game_id, badge_id, not found)
 
     results = _build_results_from_session()
 

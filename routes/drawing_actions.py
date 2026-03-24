@@ -1,5 +1,6 @@
 import csv
 import io
+import logging
 from datetime import date
 
 from flask import Response, flash, jsonify, redirect, request, session, url_for
@@ -11,6 +12,8 @@ from tte_client import TTEAPIError
 from . import main_bp
 from .drawing import _build_results_from_session
 from .helpers import _get_client, is_valid_badge_id, is_valid_tte_id, login_required
+
+logger = logging.getLogger(__name__)
 
 
 @main_bp.route("/drawing/pickup", methods=["POST"])
@@ -135,6 +138,8 @@ def mark_not_here():
     not_here.append(badge_id)
     session[SK.NOT_HERE] = not_here
 
+    logger.info("Badge %s marked not-here", badge_id)
+
     # Dismiss warning if requested
     if data.get("dismiss_warning"):
         session[SK.NOT_HERE_WARNING_DISMISSED] = True
@@ -197,6 +202,8 @@ def redraw_all_unclaimed():
     if not unclaimed_ids:
         return jsonify({"error": "No unclaimed games to redraw"}), 400
 
+    logger.info("Redrawing %d unclaimed games (same_rules=%s)", len(unclaimed_ids), same_rules)
+
     conflicts, auto_resolved = redraw_unclaimed(
         drawing_state, unclaimed_ids, not_here_set, original_winner_badges,
         same_rules=same_rules, premium_game_ids=premium_games,
@@ -253,6 +260,7 @@ def push_to_tte():
                 "game_id": game_id,
             })
 
+    logger.info("Pushing %d winners to TTE", len(entries_to_update))
     client = _get_client()
     successes = []
     failures = []
@@ -263,12 +271,17 @@ def push_to_tte():
             successes.append(entry["game_id"])
         except TTEAPIError as exc:
             if getattr(exc, 'status_code', None) in (401, 403):
+                logger.warning("Session expired during TTE push after %d/%d updates",
+                               len(successes), len(entries_to_update))
                 session.clear()
-                return jsonify({"error": "Session expired — please log in again."}), 401
+                return jsonify({"error": "Session expired \u2014 please log in again."}), 401
+            logger.error("Failed to push win for game %s: %s", entry["game_id"], exc)
             failures.append({
                 "game_id": entry["game_id"],
                 "error": str(exc),
             })
+
+    logger.info("TTE push complete: %d succeeded, %d failed", len(successes), len(failures))
 
     return jsonify({
         "ok": True,

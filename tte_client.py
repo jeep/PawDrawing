@@ -89,15 +89,19 @@ class TTEClient:
                 timeout=30,
             )
         except requests.Timeout as exc:
+            logger.warning("Request timed out: %s %s", method, url)
             raise TTETimeoutError() from exc
         except requests.RequestException as exc:
+            logger.error("Network error on %s %s: %s", method, url, exc)
             raise TTEAPIError(f"Network error: {exc}") from exc
 
         if resp.status_code in (401, 403):
+            logger.warning("API auth failure on %s %s (status=%d)", method, url, resp.status_code)
             self.session_id = None
             raise TTEAPIError("Session expired or unauthorized. Please log in again.", resp.status_code)
 
         if not resp.ok:
+            logger.error("API error %d on %s %s: %s", resp.status_code, method, url, resp.text[:200])
             raise TTEAPIError(
                 f"API error {resp.status_code}: {resp.text[:200]}",
                 resp.status_code,
@@ -149,8 +153,10 @@ class TTEClient:
         })
         self.session_id = result.get("id")
         if not self.session_id:
+            logger.error("TTE login returned no session ID")
             raise TTEAPIError("Login succeeded but no session ID returned")
         self.user_id = result.get("user_id")
+        logger.info("TTE login successful (user_id=%s)", self.user_id)
         return result
 
     def logout(self):

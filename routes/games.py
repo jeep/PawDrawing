@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from flask import flash, jsonify, redirect, render_template, request, session, url_for
@@ -14,6 +15,8 @@ from .helpers import (
     is_valid_tte_id,
     login_required,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @main_bp.route("/games")
@@ -51,6 +54,8 @@ def games():
         # Cache games and entries in session for reuse
         session[SK.CACHED_GAMES] = all_games
         session[SK.CACHED_ENTRIES] = entries
+        logger.info("Loaded %d games and %d entries for library %s",
+                    len(all_games), len(entries), library_id)
 
     ejected_entries = session.get(SK.EJECTED_ENTRIES, [])
     filtered = apply_ejections(entries, ejected_entries)
@@ -197,6 +202,7 @@ def eject_player():
 
     ejected.append([badge_id, game_id])
     session[SK.EJECTED_ENTRIES] = ejected
+    logger.info("Player %s ejected from %s", badge_id, game_id if game_id != "*" else "all games")
     return jsonify({"ok": True, "count": len(ejected)})
 
 
@@ -240,8 +246,10 @@ def get_entrants(game_id):
         raw_entries = client.get_library_game_playtowins(game_id)
     except TTEAPIError as exc:
         if getattr(exc, 'status_code', None) in (401, 403):
+            logger.warning("Session expired loading entrants for game %s", game_id)
             session.clear()
-            return jsonify({"error": "Session expired — please log in again."}), 401
+            return jsonify({"error": "Session expired \u2014 please log in again."}), 401
+        logger.error("Failed to load entrants for game %s: %s", game_id, exc)
         return jsonify({"error": str(exc)}), 502
 
     entries = process_entries(raw_entries)
