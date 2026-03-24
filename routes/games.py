@@ -12,6 +12,7 @@ from .helpers import (
     _get_client,
     _handle_api_error,
     _handle_api_json_error,
+    _parse_eject_payload,
     is_valid_badge_id,
     is_valid_tte_id,
     login_required,
@@ -177,18 +178,10 @@ def set_premium_games():
 @login_required
 def eject_player():
     """AJAX endpoint: eject a player from the drawing."""
-    data = request.get_json(silent=True)
-    if not data or "badge_id" not in data:
-        return jsonify({"error": "badge_id is required"}), 400
-
-    badge_id = str(data["badge_id"]).strip()
-    game_id = str(data.get("game_id", "*")).strip()
-    if not badge_id:
-        return jsonify({"error": "badge_id is required"}), 400
-    if not is_valid_badge_id(badge_id):
-        return jsonify({"error": "Invalid badge ID format"}), 400
-    if game_id != "*" and not is_valid_tte_id(game_id):
-        return jsonify({"error": "Invalid game ID format"}), 400
+    result = _parse_eject_payload()
+    if isinstance(result[1], int):
+        return result
+    badge_id, game_id = result
 
     ejected = session.get(SK.EJECTED_ENTRIES, [])
 
@@ -211,16 +204,10 @@ def eject_player():
 @login_required
 def uneject_player():
     """AJAX endpoint: undo an ejection."""
-    data = request.get_json(silent=True)
-    if not data or "badge_id" not in data:
-        return jsonify({"error": "badge_id is required"}), 400
-
-    badge_id = str(data["badge_id"]).strip()
-    game_id = str(data.get("game_id", "*")).strip()
-    if not is_valid_badge_id(badge_id):
-        return jsonify({"error": "Invalid badge ID format"}), 400
-    if game_id != "*" and not is_valid_tte_id(game_id):
-        return jsonify({"error": "Invalid game ID format"}), 400
+    result = _parse_eject_payload()
+    if isinstance(result[1], int):
+        return result
+    badge_id, game_id = result
 
     ejected = session.get(SK.EJECTED_ENTRIES, [])
     updated = [[b, g] for b, g in ejected if not (b == badge_id and g == game_id)]

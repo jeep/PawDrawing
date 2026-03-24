@@ -66,6 +66,28 @@ def _handle_api_error(exc, fallback_url, action="complete this request"):
     return redirect(fallback_url)
 
 
+def _parse_eject_payload():
+    """Parse and validate the badge_id/game_id payload for eject endpoints.
+
+    Returns (badge_id, game_id) on success or a (jsonify-response, status)
+    tuple on validation failure.
+    """
+    data = request.get_json(silent=True)
+    if not data or "badge_id" not in data:
+        return jsonify({"error": "badge_id is required"}), 400
+
+    badge_id = str(data["badge_id"]).strip()
+    game_id = str(data.get("game_id", "*")).strip()
+    if not badge_id:
+        return jsonify({"error": "badge_id is required"}), 400
+    if not is_valid_badge_id(badge_id):
+        return jsonify({"error": "Invalid badge ID format"}), 400
+    if game_id != "*" and not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID format"}), 400
+
+    return badge_id, game_id
+
+
 def _handle_api_json_error(exc, action="complete this request"):
     """Handle TTEAPIError for JSON/AJAX endpoints.
 
