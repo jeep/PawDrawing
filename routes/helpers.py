@@ -64,3 +64,18 @@ def _handle_api_error(exc, fallback_url, action="complete this request"):
     logger.error("API error during '%s': %s", action, exc)
     flash(f"Could not {action}: {exc}", "error")
     return redirect(fallback_url)
+
+
+def _handle_api_json_error(exc, action="complete this request"):
+    """Handle TTEAPIError for JSON/AJAX endpoints.
+
+    Returns a JSON error response.  Clears the Flask session on auth
+    errors (401/403) so subsequent requests prompt a fresh login.
+    """
+    if getattr(exc, "status_code", None) in (401, 403):
+        logger.warning("API auth error during '%s': session cleared", action)
+        session.clear()
+        return jsonify({"error": "Session expired \u2014 please log in again."}), 401
+
+    logger.error("API error during '%s': %s", action, exc)
+    return jsonify({"error": str(exc)}), 502

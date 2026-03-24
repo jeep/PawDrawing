@@ -11,7 +11,13 @@ from tte_client import TTEAPIError
 
 from . import main_bp
 from .drawing import _build_results_from_session
-from .helpers import _get_client, is_valid_badge_id, is_valid_tte_id, login_required
+from .helpers import (
+    _get_client,
+    _handle_api_json_error,
+    is_valid_badge_id,
+    is_valid_tte_id,
+    login_required,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -271,10 +277,7 @@ def push_to_tte():
             successes.append(entry["game_id"])
         except TTEAPIError as exc:
             if getattr(exc, 'status_code', None) in (401, 403):
-                logger.warning("Session expired during TTE push after %d/%d updates",
-                               len(successes), len(entries_to_update))
-                session.clear()
-                return jsonify({"error": "Session expired \u2014 please log in again."}), 401
+                return _handle_api_json_error(exc, "push wins to TTE")
             logger.error("Failed to push win for game %s: %s", entry["game_id"], exc)
             failures.append({
                 "game_id": entry["game_id"],

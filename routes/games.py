@@ -11,6 +11,7 @@ from . import main_bp
 from .helpers import (
     _get_client,
     _handle_api_error,
+    _handle_api_json_error,
     is_valid_badge_id,
     is_valid_tte_id,
     login_required,
@@ -245,12 +246,7 @@ def get_entrants(game_id):
     try:
         raw_entries = client.get_library_game_playtowins(game_id)
     except TTEAPIError as exc:
-        if getattr(exc, 'status_code', None) in (401, 403):
-            logger.warning("Session expired loading entrants for game %s", game_id)
-            session.clear()
-            return jsonify({"error": "Session expired \u2014 please log in again."}), 401
-        logger.error("Failed to load entrants for game %s: %s", game_id, exc)
-        return jsonify({"error": str(exc)}), 502
+        return _handle_api_json_error(exc, "load entrants")
 
     entries = process_entries(raw_entries)
     ejected_entries = session.get(SK.EJECTED_ENTRIES, [])

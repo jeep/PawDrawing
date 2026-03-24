@@ -6,7 +6,13 @@ from session_keys import SK
 from tte_client import TTEAPIError
 
 from . import main_bp
-from .helpers import _get_client, _handle_api_error, is_valid_tte_id, login_required
+from .helpers import (
+    _get_client,
+    _handle_api_error,
+    _handle_api_json_error,
+    is_valid_tte_id,
+    login_required,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +42,7 @@ def library_browse():
     try:
         libraries = client.get_user_libraries(user_id)
     except TTEAPIError as exc:
-        if getattr(exc, 'status_code', None) in (401, 403):
-            session.clear()
-            return jsonify({"error": "Session expired \u2014 please log in again."}), 401
-        return jsonify({"error": str(exc)}), 502
+        return _handle_api_json_error(exc, "browse libraries")
 
     results = [{"id": lib.get("id"), "name": lib.get("name", "Unnamed")} for lib in libraries]
     return jsonify({"results": results})
@@ -100,10 +103,7 @@ def convention_search():
     try:
         conventions = client.search_conventions(query)
     except TTEAPIError as exc:
-        if getattr(exc, 'status_code', None) in (401, 403):
-            session.clear()
-            return jsonify({"error": "Session expired — please log in again."}), 401
-        return jsonify({"error": str(exc)}), 502
+        return _handle_api_json_error(exc, "search conventions")
 
     results = [{"id": c.get("id"), "name": c.get("name", "Unnamed")} for c in conventions]
     return jsonify({"results": results})
