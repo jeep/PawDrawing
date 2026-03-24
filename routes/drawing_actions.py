@@ -14,6 +14,7 @@ from .drawing import _build_results_from_session
 from .helpers import (
     _get_client,
     _handle_api_json_error,
+    _require_active_drawing,
     is_valid_badge_id,
     is_valid_tte_id,
     login_required,
@@ -26,8 +27,9 @@ logger = logging.getLogger(__name__)
 @login_required
 def toggle_pickup():
     """Toggle the picked-up status of a game."""
-    if not session.get(SK.DRAWING_STATE):
-        return jsonify({"error": "No active drawing"}), 400
+    result = _require_active_drawing()
+    if isinstance(result, tuple):
+        return result
 
     data = request.get_json(silent=True)
     if not data or "game_id" not in data:
@@ -59,9 +61,9 @@ def toggle_pickup():
 @login_required
 def award_next():
     """Advance a game to the next entrant in the shuffled list."""
-    drawing_state = session.get(SK.DRAWING_STATE)
-    if not drawing_state:
-        return jsonify({"error": "No active drawing"}), 400
+    drawing_state = _require_active_drawing()
+    if isinstance(drawing_state, tuple):
+        return drawing_state
 
     data = request.get_json(silent=True)
     if not data or "game_id" not in data:
@@ -125,9 +127,9 @@ def drawing_entrants(game_id):
 @login_required
 def mark_not_here():
     """Mark a person as 'not here' — permanently absent for this drawing."""
-    drawing_state = session.get(SK.DRAWING_STATE)
-    if not drawing_state:
-        return jsonify({"error": "No active drawing"}), 400
+    drawing_state = _require_active_drawing()
+    if isinstance(drawing_state, tuple):
+        return drawing_state
 
     data = request.get_json(silent=True)
     if not data or "badge_id" not in data:

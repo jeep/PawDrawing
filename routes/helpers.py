@@ -66,6 +66,14 @@ def _handle_api_error(exc, fallback_url, action="complete this request"):
     return redirect(fallback_url)
 
 
+def _require_active_drawing():
+    """Return drawing_state or a JSON 400 response if no drawing is active."""
+    drawing_state = session.get(SK.DRAWING_STATE)
+    if not drawing_state:
+        return jsonify({"error": "No active drawing"}), 400
+    return drawing_state
+
+
 def _parse_eject_payload():
     """Parse and validate the badge_id/game_id payload for eject endpoints.
 

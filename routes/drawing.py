@@ -16,7 +16,7 @@ from drawing import (
 from session_keys import SK
 
 from . import main_bp
-from .helpers import is_valid_badge_id, is_valid_tte_id, login_required
+from .helpers import _require_active_drawing, is_valid_badge_id, is_valid_tte_id, login_required
 
 logger = logging.getLogger(__name__)
 
@@ -134,9 +134,9 @@ def drawing_results():
 @login_required
 def resolve_conflicts():
     """Apply admin conflict resolution choices."""
-    drawing_state = session.get(SK.DRAWING_STATE)
-    if not drawing_state:
-        return jsonify({"error": "No active drawing"}), 400
+    drawing_state = _require_active_drawing()
+    if isinstance(drawing_state, tuple):
+        return drawing_state
 
     data = request.get_json(silent=True)
     if not data or "resolutions" not in data:
@@ -207,9 +207,9 @@ def dismiss_conflict_game():
     for that person, auto-resolves the conflict. Tracks single-entrant
     dismissed games so they aren't shown as "To the box".
     """
-    drawing_state = session.get(SK.DRAWING_STATE)
-    if not drawing_state:
-        return jsonify({"error": "No active drawing"}), 400
+    drawing_state = _require_active_drawing()
+    if isinstance(drawing_state, tuple):
+        return drawing_state
 
     data = request.get_json(silent=True)
     if not data or "badge_id" not in data or "game_id" not in data:
