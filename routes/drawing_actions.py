@@ -5,6 +5,7 @@ from datetime import date
 from flask import Response, flash, jsonify, redirect, request, session, url_for
 
 from drawing import advance_winner, get_current_winners, redraw_unclaimed
+from session_keys import SK
 from tte_client import TTEAPIError
 
 from . import main_bp
@@ -16,7 +17,7 @@ from .helpers import _get_client, login_required
 @login_required
 def toggle_pickup():
     """Toggle the picked-up status of a game."""
-    if not session.get("drawing_state"):
+    if not session.get(SK.DRAWING_STATE):
         return jsonify({"error": "No active drawing"}), 400
 
     data = request.get_json(silent=True)
@@ -24,7 +25,7 @@ def toggle_pickup():
         return jsonify({"error": "Invalid request"}), 400
 
     game_id = data["game_id"]
-    picked_up = session.get("picked_up", [])
+    picked_up = session.get(SK.PICKED_UP, [])
 
     if game_id in picked_up:
         picked_up.remove(game_id)
@@ -33,7 +34,7 @@ def toggle_pickup():
         picked_up.append(game_id)
         is_picked_up = True
 
-    session["picked_up"] = picked_up
+    session[SK.PICKED_UP] = picked_up
 
     return jsonify({
         "ok": True,
@@ -47,7 +48,7 @@ def toggle_pickup():
 @login_required
 def award_next():
     """Advance a game to the next entrant in the shuffled list."""
-    drawing_state = session.get("drawing_state")
+    drawing_state = session.get(SK.DRAWING_STATE)
     if not drawing_state:
         return jsonify({"error": "No active drawing"}), 400
 
@@ -56,10 +57,10 @@ def award_next():
         return jsonify({"error": "Invalid request"}), 400
 
     game_id = data["game_id"]
-    not_here = set(session.get("not_here", []))
+    not_here = set(session.get(SK.NOT_HERE, []))
 
     found = advance_winner(drawing_state, game_id, not_here=not_here)
-    session["drawing_state"] = drawing_state
+    session[SK.DRAWING_STATE] = drawing_state
 
     winners = get_current_winners(drawing_state)
     winner = winners.get(game_id)
@@ -85,8 +86,8 @@ def award_next():
 @login_required(api=True)
 def drawing_entrants(game_id):
     """AJAX endpoint: return the shuffled entrant list for a game from drawing state."""
-    drawing_state = session.get("drawing_state", [])
-    not_here = set(session.get("not_here", []))
+    drawing_state = session.get(SK.DRAWING_STATE, [])
+    not_here = set(session.get(SK.NOT_HERE, []))
 
     for item in drawing_state:
         if item["game"]["id"] == game_id:
@@ -109,7 +110,7 @@ def drawing_entrants(game_id):
 @login_required
 def mark_not_here():
     """Mark a person as 'not here' — permanently absent for this drawing."""
-    drawing_state = session.get("drawing_state")
+    drawing_state = session.get(SK.DRAWING_STATE)
     if not drawing_state:
         return jsonify({"error": "No active drawing"}), 400
 
@@ -118,20 +119,20 @@ def mark_not_here():
         return jsonify({"error": "Invalid request"}), 400
 
     badge_id = data["badge_id"]
-    not_here = session.get("not_here", [])
+    not_here = session.get(SK.NOT_HERE, [])
 
     if badge_id in not_here:
         return jsonify({"error": "Already marked as not here"}), 400
 
     not_here.append(badge_id)
-    session["not_here"] = not_here
+    session[SK.NOT_HERE] = not_here
 
     # Dismiss warning if requested
     if data.get("dismiss_warning"):
-        session["not_here_warning_dismissed"] = True
+        session[SK.NOT_HERE_WARNING_DISMISSED] = True
 
     # Auto-advance all unpicked-up games won by this person
-    picked_up = set(session.get("picked_up", []))
+    picked_up = set(session.get(SK.PICKED_UP, []))
     not_here_set = set(not_here)
     winners = get_current_winners(drawing_state)
     advanced_games = []
@@ -147,7 +148,7 @@ def mark_not_here():
                 "has_winner": new_winner is not None,
             })
 
-    session["drawing_state"] = drawing_state
+    session[SK.DRAWING_STATE] = drawing_state
 
     return jsonify({
         "ok": True,
@@ -160,16 +161,16 @@ def mark_not_here():
 @login_required
 def redraw_all_unclaimed():
     """Redraw all unclaimed games with fresh shuffle."""
-    drawing_state = session.get("drawing_state")
+    drawing_state = session.get(SK.DRAWING_STATE)
     if not drawing_state:
         return jsonify({"error": "No active drawing"}), 400
 
     data = request.get_json(silent=True) or {}
     same_rules = data.get("same_rules", False)
 
-    picked_up = set(session.get("picked_up", []))
-    not_here_set = set(session.get("not_here", []))
-    premium_games = session.get("premium_games", [])
+    picked_up = set(session.get(SK.PICKED_UP, []))
+    not_here_set = set(session.get(SK.NOT_HERE, []))
+    premium_games = session.get(SK.PREMIUM_GAMES, [])
 
     # Determine unclaimed game IDs (have a winner or had one, not picked up)
     winners = get_current_winners(drawing_state)
@@ -193,16 +194,16 @@ def redraw_all_unclaimed():
         same_rules=same_rules, premium_game_ids=premium_games,
     )
 
-    session["drawing_state"] = drawing_state
-    session["solo_dismissed_games"] = []
+    session[SK.DRAWING_STATE] = drawing_state
+    session[SK.SOLO_DISMISSED_GAMES] = []
     if conflicts:
-        session["drawing_conflicts"] = conflicts
+        session[SK.DRAWING_CONFLICTS] = conflicts
     else:
-        session["drawing_conflicts"] = []
+        session[SK.DRAWING_CONFLICTS] = []
     if auto_resolved:
-        session["auto_resolved"] = auto_resolved
+        session[SK.AUTO_RESOLVED] = auto_resolved
     else:
-        session["auto_resolved"] = []
+        session[SK.AUTO_RESOLVED] = []
 
     # Build fresh results
     results = _build_results_from_session()
@@ -224,11 +225,11 @@ def redraw_all_unclaimed():
 @login_required
 def push_to_tte():
     """Push win flags to TTE for all picked-up games."""
-    drawing_state = session.get("drawing_state")
+    drawing_state = session.get(SK.DRAWING_STATE)
     if not drawing_state:
         return jsonify({"error": "No active drawing"}), 400
 
-    picked_up = set(session.get("picked_up", []))
+    picked_up = set(session.get(SK.PICKED_UP, []))
     if not picked_up:
         return jsonify({"error": "No games marked as picked up"}), 400
 
@@ -273,7 +274,7 @@ def push_to_tte():
 @login_required
 def export_csv():
     """Export drawing results as a CSV file."""
-    drawing_state = session.get("drawing_state")
+    drawing_state = session.get(SK.DRAWING_STATE)
     if not drawing_state:
         flash("No active drawing to export.", "error")
         return redirect(url_for("main.games"))
@@ -305,7 +306,7 @@ def export_csv():
             row["winner_badge"],
         ])
 
-    convention_name = session.get("convention_name", "Drawing")
+    convention_name = session.get(SK.CONVENTION_NAME, "Drawing")
     safe_name = "".join(c if c.isalnum() or c in " -_" else "" for c in convention_name).strip().replace(" ", "_")
     filename = f"PawDrawing_{safe_name}_{date.today().isoformat()}.csv"
 

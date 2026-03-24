@@ -12,16 +12,18 @@ from drawing import (
     run_drawing,
 )
 
+from session_keys import SK
+
 from . import main_bp
 from .helpers import login_required
 
 
 def _build_results_from_session():
     """Build display-friendly results list from session drawing_state."""
-    drawing_state = session.get("drawing_state", [])
-    premium_games = session.get("premium_games", [])
-    picked_up = set(session.get("picked_up", []))
-    solo_dismissed = set(session.get("solo_dismissed_games", []))
+    drawing_state = session.get(SK.DRAWING_STATE, [])
+    premium_games = session.get(SK.PREMIUM_GAMES, [])
+    picked_up = set(session.get(SK.PICKED_UP, []))
+    solo_dismissed = set(session.get(SK.SOLO_DISMISSED_GAMES, []))
     winners = get_current_winners(drawing_state)
 
     results = []
@@ -51,35 +53,35 @@ def _build_results_from_session():
 @login_required
 def run_drawing_route():
     """Execute the drawing algorithm and redirect to results."""
-    library_id = session.get("library_id")
+    library_id = session.get(SK.LIBRARY_ID)
     if not library_id:
         flash("Please select a convention first.", "error")
         return redirect(url_for("main.convention_select"))
 
     # Use cached data from the games page to avoid redundant API calls
-    all_games = session.get("cached_games")
-    entries = session.get("cached_entries")
+    all_games = session.get(SK.CACHED_GAMES)
+    entries = session.get(SK.CACHED_ENTRIES)
 
     if all_games is None or entries is None:
         flash("Please load the games page first.", "info")
         return redirect(url_for("main.games"))
 
-    ejected_entries = session.get("ejected_entries", [])
+    ejected_entries = session.get(SK.EJECTED_ENTRIES, [])
     filtered = apply_ejections(entries, ejected_entries)
     game_data = group_entries_by_game(filtered, all_games)
-    premium_games = session.get("premium_games", [])
+    premium_games = session.get(SK.PREMIUM_GAMES, [])
 
     drawing_state, conflicts, auto_resolved = run_drawing(game_data, premium_games)
 
     # Store drawing state in session for conflict resolution
-    session["drawing_state"] = drawing_state
-    session["drawing_conflicts"] = conflicts
-    session["auto_resolved"] = auto_resolved
-    session["picked_up"] = []
-    session["not_here"] = []
-    session["not_here_warning_dismissed"] = False
-    session["solo_dismissed_games"] = []
-    session["drawing_timestamp"] = datetime.now().strftime("%-I:%M %p")
+    session[SK.DRAWING_STATE] = drawing_state
+    session[SK.DRAWING_CONFLICTS] = conflicts
+    session[SK.AUTO_RESOLVED] = auto_resolved
+    session[SK.PICKED_UP] = []
+    session[SK.NOT_HERE] = []
+    session[SK.NOT_HERE_WARNING_DISMISSED] = False
+    session[SK.SOLO_DISMISSED_GAMES] = []
+    session[SK.DRAWING_TIMESTAMP] = datetime.now().strftime("%-I:%M %p")
 
     return redirect(url_for("main.drawing_results"))
 
@@ -88,13 +90,13 @@ def run_drawing_route():
 @login_required
 def drawing_results():
     """Display drawing results from session state."""
-    drawing_state = session.get("drawing_state")
+    drawing_state = session.get(SK.DRAWING_STATE)
     if drawing_state is None:
         flash("No drawing results to display.", "error")
         return redirect(url_for("main.games"))
 
     results = _build_results_from_session()
-    conflicts = session.get("drawing_conflicts", [])
+    conflicts = session.get(SK.DRAWING_CONFLICTS, [])
 
     conflicted_game_ids = set()
     for conflict in conflicts:
@@ -112,13 +114,13 @@ def drawing_results():
         picked_up_list=picked_up_list,
         no_entries=no_entries,
         conflicts=conflicts,
-        auto_resolved=session.get("auto_resolved", []),
+        auto_resolved=session.get(SK.AUTO_RESOLVED, []),
         conflicted_game_ids=conflicted_game_ids,
-        convention_name=session.get("convention_name") or session.get("library_name", ""),
-        picked_up=set(session.get("picked_up", [])),
-        not_here=session.get("not_here", []),
-        not_here_warning_dismissed=session.get("not_here_warning_dismissed", False),
-        drawing_timestamp=session.get("drawing_timestamp", ""),
+        convention_name=session.get(SK.CONVENTION_NAME) or session.get(SK.LIBRARY_NAME, ""),
+        picked_up=set(session.get(SK.PICKED_UP, [])),
+        not_here=session.get(SK.NOT_HERE, []),
+        not_here_warning_dismissed=session.get(SK.NOT_HERE_WARNING_DISMISSED, False),
+        drawing_timestamp=session.get(SK.DRAWING_TIMESTAMP, ""),
     )
 
 
@@ -126,7 +128,7 @@ def drawing_results():
 @login_required
 def resolve_conflicts():
     """Apply admin conflict resolution choices."""
-    drawing_state = session.get("drawing_state")
+    drawing_state = session.get(SK.DRAWING_STATE)
     if not drawing_state:
         return jsonify({"error": "No active drawing"}), 400
 
@@ -142,25 +144,25 @@ def resolve_conflicts():
         if badge_id and keep_game_id:
             keep_map[badge_id] = keep_game_id
 
-    premium_games = set(session.get("premium_games", []))
+    premium_games = set(session.get(SK.PREMIUM_GAMES, []))
     advanced = apply_resolution(drawing_state, keep_map, premium_games)
 
     # Track any games that exhausted their entrant list during resolution
     winners = get_current_winners(drawing_state)
-    solo_dismissed = session.get("solo_dismissed_games", [])
+    solo_dismissed = session.get(SK.SOLO_DISMISSED_GAMES, [])
     for game_id in advanced:
         if winners.get(game_id) is None and game_id not in solo_dismissed:
             solo_dismissed.append(game_id)
-    session["solo_dismissed_games"] = solo_dismissed
+    session[SK.SOLO_DISMISSED_GAMES] = solo_dismissed
 
     # Check for new conflicts from cascading
     new_conflicts = detect_conflicts(drawing_state)
 
-    session["drawing_state"] = drawing_state
+    session[SK.DRAWING_STATE] = drawing_state
 
     # Remove resolved badges from stored conflicts, add any new cascading ones
     remaining_conflicts = [
-        c for c in session.get("drawing_conflicts", [])
+        c for c in session.get(SK.DRAWING_CONFLICTS, [])
         if c["badge_id"] not in keep_map
     ]
 
@@ -172,7 +174,7 @@ def resolve_conflicts():
                     if bid not in existing_badge_ids}
         conflicts_out.extend(build_conflict_info(drawing_state, new_only, premium_games))
 
-    session["drawing_conflicts"] = conflicts_out
+    session[SK.DRAWING_CONFLICTS] = conflicts_out
 
     results = _build_results_from_session()
 
@@ -192,7 +194,7 @@ def dismiss_conflict_game():
     for that person, auto-resolves the conflict. Tracks single-entrant
     dismissed games so they aren't shown as "To the box".
     """
-    drawing_state = session.get("drawing_state")
+    drawing_state = session.get(SK.DRAWING_STATE)
     if not drawing_state:
         return jsonify({"error": "No active drawing"}), 400
 
@@ -210,21 +212,21 @@ def dismiss_conflict_game():
             total_entrants = len(item["shuffled"])
             break
 
-    not_here = set(session.get("not_here", []))
+    not_here = set(session.get(SK.NOT_HERE, []))
     found = advance_winner(drawing_state, game_id, not_here=not_here)
 
     # If the game is now exhausted (no more candidates), track it so it
     # shows as "No winner (redraw eligible)" instead of "To the box!"
     if not found:
-        solo_dismissed = session.get("solo_dismissed_games", [])
+        solo_dismissed = session.get(SK.SOLO_DISMISSED_GAMES, [])
         if game_id not in solo_dismissed:
             solo_dismissed.append(game_id)
-        session["solo_dismissed_games"] = solo_dismissed
+        session[SK.SOLO_DISMISSED_GAMES] = solo_dismissed
 
-    session["drawing_state"] = drawing_state
+    session[SK.DRAWING_STATE] = drawing_state
 
     # Update conflicts: remove the dismissed game from the badge's conflict
-    conflicts = session.get("drawing_conflicts", [])
+    conflicts = session.get(SK.DRAWING_CONFLICTS, [])
     updated_conflicts = []
     for c in conflicts:
         if c["badge_id"] == badge_id:
@@ -232,7 +234,7 @@ def dismiss_conflict_game():
             remaining_names = {gid: c["game_names"][gid] for gid in remaining_games}
             if len(remaining_games) > 1:
                 # Still a conflict — update in place
-                premium_games = set(session.get("premium_games", []))
+                premium_games = set(session.get(SK.PREMIUM_GAMES, []))
                 premium_wins = [gid for gid in remaining_games if gid in premium_games]
                 updated_conflicts.append({
                     "badge_id": c["badge_id"],
@@ -252,9 +254,9 @@ def dismiss_conflict_game():
         new_only = {bid: gids for bid, gids in new_conflicts.items()
                     if bid not in existing_badge_ids}
         updated_conflicts.extend(build_conflict_info(drawing_state, new_only,
-                                                     set(session.get("premium_games", []))))
+                                                     set(session.get(SK.PREMIUM_GAMES, []))))
 
-    session["drawing_conflicts"] = updated_conflicts
+    session[SK.DRAWING_CONFLICTS] = updated_conflicts
 
     results = _build_results_from_session()
 

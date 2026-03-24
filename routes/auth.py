@@ -1,5 +1,6 @@
 from flask import flash, jsonify, redirect, render_template, request, session, url_for
 
+from session_keys import SK
 from tte_client import TTEAPIError
 
 from . import main_bp
@@ -13,7 +14,7 @@ def health():
 
 @main_bp.route("/")
 def index():
-    if session.get("tte_session_id"):
+    if session.get(SK.TTE_SESSION_ID):
         return redirect(url_for("main.convention_select"))
     return redirect(url_for("main.login"))
 
@@ -36,10 +37,10 @@ def login():
             flash(f"Login failed: {exc}", "error")
             return render_template("login.html"), 401
 
-        session["tte_session_id"] = client.session_id
-        session["tte_username"] = username
-        session["tte_user_id"] = client.user_id
-        session["tte_api_key"] = api_key
+        session[SK.TTE_SESSION_ID] = client.session_id
+        session[SK.TTE_USERNAME] = username
+        session[SK.TTE_USER_ID] = client.user_id
+        session[SK.TTE_API_KEY] = api_key
         return redirect(url_for("main.convention_select"))
 
     return render_template("login.html")
@@ -47,9 +48,9 @@ def login():
 
 @main_bp.route("/logout", methods=["POST"])
 def logout():
-    tte_session_id = session.pop("tte_session_id", None)
-    tte_api_key = session.pop("tte_api_key", None)
-    session.pop("tte_username", None)
+    tte_session_id = session.pop(SK.TTE_SESSION_ID, None)
+    tte_api_key = session.pop(SK.TTE_API_KEY, None)
+    session.pop(SK.TTE_USERNAME, None)
 
     if tte_session_id:
         client = TTEClient(api_key_id=tte_api_key)

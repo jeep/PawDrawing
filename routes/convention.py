@@ -1,5 +1,6 @@
 from flask import flash, jsonify, redirect, render_template, request, session, url_for
 
+from session_keys import SK
 from tte_client import TTEAPIError
 
 from . import main_bp
@@ -16,7 +17,7 @@ def convention_select():
 @login_required(api=True)
 def library_browse():
     """AJAX endpoint: list libraries owned by the logged-in user."""
-    user_id = session.get("tte_user_id")
+    user_id = session.get(SK.TTE_USER_ID)
     if not user_id:
         return jsonify({"error": "No user ID available"}), 400
 
@@ -50,11 +51,11 @@ def library_select_route():
 
     library_name = library.get("name", "Unknown")
 
-    session.pop("convention_id", None)
-    session.pop("convention_name", None)
-    session["library_id"] = library_id
-    session["library_name"] = library_name
-    session.pop("ejected_entries", None)
+    session.pop(SK.CONVENTION_ID, None)
+    session.pop(SK.CONVENTION_NAME, None)
+    session[SK.LIBRARY_ID] = library_id
+    session[SK.LIBRARY_NAME] = library_name
+    session.pop(SK.EJECTED_ENTRIES, None)
 
     return redirect(url_for("main.library_confirm"))
 
@@ -63,7 +64,7 @@ def library_select_route():
 @login_required
 def library_confirm():
     """Show library confirmation page (GET-safe after PRG redirect)."""
-    library_name = session.get("library_name")
+    library_name = session.get(SK.LIBRARY_NAME)
     if not library_name:
         flash("Please select a library.", "error")
         return redirect(url_for("main.convention_select"))
@@ -115,11 +116,11 @@ def convention_select_route():
     library_id = library.get("id")
     library_name = library.get("name", "Unknown")
 
-    session["convention_id"] = convention_id
-    session["convention_name"] = convention_name
-    session["library_id"] = library_id
-    session["library_name"] = library_name
-    session.pop("ejected_entries", None)
+    session[SK.CONVENTION_ID] = convention_id
+    session[SK.CONVENTION_NAME] = convention_name
+    session[SK.LIBRARY_ID] = library_id
+    session[SK.LIBRARY_NAME] = library_name
+    session.pop(SK.EJECTED_ENTRIES, None)
 
     return redirect(url_for("main.convention_confirm"))
 
@@ -128,8 +129,8 @@ def convention_select_route():
 @login_required
 def convention_confirm():
     """Show convention confirmation page (GET-safe after PRG redirect)."""
-    convention_name = session.get("convention_name")
-    library_name = session.get("library_name")
+    convention_name = session.get(SK.CONVENTION_NAME)
+    library_name = session.get(SK.LIBRARY_NAME)
     if not convention_name or not library_name:
         flash("Please select a convention.", "error")
         return redirect(url_for("main.convention_select"))

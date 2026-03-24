@@ -3,6 +3,7 @@ from datetime import datetime
 from flask import flash, jsonify, redirect, render_template, request, session, url_for
 
 from data_processing import apply_ejections, group_entries_by_game, process_entries
+from session_keys import SK
 from tte_client import TTEAPIError
 
 from . import main_bp
@@ -13,15 +14,15 @@ from .helpers import _get_client, _handle_api_error, login_required
 @login_required
 def games():
     """Load P2W games and entries, process, and display."""
-    library_id = session.get("library_id")
-    convention_id = session.get("convention_id")
+    library_id = session.get(SK.LIBRARY_ID)
+    convention_id = session.get(SK.CONVENTION_ID)
     if not library_id:
         flash("Please select a convention first.", "error")
         return redirect(url_for("main.convention_select"))
 
     refresh = request.args.get("refresh") == "1"
-    all_games = session.get("cached_games")
-    entries = session.get("cached_entries")
+    all_games = session.get(SK.CACHED_GAMES)
+    entries = session.get(SK.CACHED_ENTRIES)
 
     if refresh or all_games is None or entries is None:
         client = _get_client()
@@ -42,10 +43,10 @@ def games():
         entries = process_entries(raw_entries)
 
         # Cache games and entries in session for reuse
-        session["cached_games"] = all_games
-        session["cached_entries"] = entries
+        session[SK.CACHED_GAMES] = all_games
+        session[SK.CACHED_ENTRIES] = entries
 
-    ejected_entries = session.get("ejected_entries", [])
+    ejected_entries = session.get(SK.EJECTED_ENTRIES, [])
     filtered = apply_ejections(entries, ejected_entries)
     game_data = group_entries_by_game(filtered, all_games)
     game_data.sort(key=lambda g: g["game"].get("name", ""))
@@ -62,7 +63,7 @@ def games():
         if game_id != "*":
             ejected_per_game.setdefault(game_id, set()).add(badge_id)
 
-    premium_games = session.get("premium_games", [])
+    premium_games = session.get(SK.PREMIUM_GAMES, [])
 
     data_loaded_at = datetime.now().strftime("%-I:%M %p")
 
@@ -71,7 +72,7 @@ def games():
         game_data=game_data,
         total_games=len(all_games),
         total_entries=len(filtered),
-        convention_name=session.get("convention_name") or session.get("library_name", ""),
+        convention_name=session.get(SK.CONVENTION_NAME) or session.get(SK.LIBRARY_NAME, ""),
         premium_games=premium_games,
         ejected_entries=ejected_entries,
         ejected_badges=ejected_badges,
@@ -84,14 +85,14 @@ def games():
 @login_required
 def players():
     """Player management page — lists all players with game counts and removal controls."""
-    library_id = session.get("library_id")
+    library_id = session.get(SK.LIBRARY_ID)
     if not library_id:
         flash("Please select a convention first.", "error")
         return redirect(url_for("main.convention_select"))
 
     # Use cached data from the games page to avoid redundant API calls
-    all_games = session.get("cached_games")
-    entries = session.get("cached_entries")
+    all_games = session.get(SK.CACHED_GAMES)
+    entries = session.get(SK.CACHED_ENTRIES)
 
     if all_games is None or entries is None:
         flash("Please load the games page first.", "info")
@@ -121,7 +122,7 @@ def players():
     player_list = sorted(players_map.values(), key=lambda p: p["name"].lower())
 
     # Build removed set from session
-    ejected_entries = session.get("ejected_entries", [])
+    ejected_entries = session.get(SK.EJECTED_ENTRIES, [])
     removed_all = set()
     removed_per_game = {}
     for badge_id, game_id in ejected_entries:
@@ -136,7 +137,7 @@ def players():
         total_players=len(player_list),
         total_entries=len(entries),
         total_games=len(all_games),
-        convention_name=session.get("convention_name") or session.get("library_name", ""),
+        convention_name=session.get(SK.CONVENTION_NAME) or session.get(SK.LIBRARY_NAME, ""),
         removed_all=removed_all,
         removed_per_game=removed_per_game,
     )
@@ -154,7 +155,7 @@ def set_premium_games():
     if not isinstance(game_ids, list):
         return jsonify({"error": "premium_games must be a list"}), 400
 
-    session["premium_games"] = game_ids
+    session[SK.PREMIUM_GAMES] = game_ids
     return jsonify({"ok": True, "count": len(game_ids)})
 
 
@@ -171,7 +172,7 @@ def eject_player():
     if not badge_id:
         return jsonify({"error": "badge_id is required"}), 400
 
-    ejected = session.get("ejected_entries", [])
+    ejected = session.get(SK.EJECTED_ENTRIES, [])
 
     # Check for duplicates
     for b, g in ejected:
@@ -183,7 +184,7 @@ def eject_player():
         ejected = [[b, g] for b, g in ejected if b != badge_id]
 
     ejected.append([badge_id, game_id])
-    session["ejected_entries"] = ejected
+    session[SK.EJECTED_ENTRIES] = ejected
     return jsonify({"ok": True, "count": len(ejected)})
 
 
@@ -198,13 +199,13 @@ def uneject_player():
     badge_id = str(data["badge_id"]).strip()
     game_id = str(data.get("game_id", "*")).strip()
 
-    ejected = session.get("ejected_entries", [])
+    ejected = session.get(SK.EJECTED_ENTRIES, [])
     updated = [[b, g] for b, g in ejected if not (b == badge_id and g == game_id)]
 
     if len(updated) == len(ejected):
         return jsonify({"error": "Ejection not found"}), 404
 
-    session["ejected_entries"] = updated
+    session[SK.EJECTED_ENTRIES] = updated
     return jsonify({"ok": True, "count": len(updated)})
 
 
@@ -212,7 +213,7 @@ def uneject_player():
 @login_required(api=True)
 def get_entrants(game_id):
     """AJAX endpoint: return entrants for a specific game."""
-    library_id = session.get("library_id")
+    library_id = session.get(SK.LIBRARY_ID)
     if not library_id:
         return jsonify({"error": "No library selected"}), 400
 
@@ -226,7 +227,7 @@ def get_entrants(game_id):
         return jsonify({"error": str(exc)}), 502
 
     entries = process_entries(raw_entries)
-    ejected_entries = session.get("ejected_entries", [])
+    ejected_entries = session.get(SK.EJECTED_ENTRIES, [])
 
     # Build ejection lookup for this game
     ejected_set = set()
