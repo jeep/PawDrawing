@@ -27,7 +27,7 @@ class TTEClientTestBase(unittest.TestCase):
 
 class TestRateLimiting(TTEClientTestBase):
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     @patch("tte_client.time.sleep")
     def test_throttle_enforces_one_second_gap(self, mock_sleep, mock_request):
         mock_resp = MagicMock()
@@ -49,7 +49,7 @@ class TestRateLimiting(TTEClientTestBase):
 
 class TestAuthentication(TTEClientTestBase):
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_login_stores_session_id(self, mock_request):
         mock_resp = MagicMock()
         mock_resp.ok = True
@@ -68,7 +68,7 @@ class TestAuthentication(TTEClientTestBase):
         self.assertEqual(call_kwargs.kwargs["json"]["password"], "pass")
         self.assertEqual(call_kwargs.kwargs["json"]["api_key_id"], "test-api-key")
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_login_missing_session_id_raises(self, mock_request):
         mock_resp = MagicMock()
         mock_resp.ok = True
@@ -80,7 +80,7 @@ class TestAuthentication(TTEClientTestBase):
             self.client.login("user", "pass")
         self.assertIn("no session ID", str(ctx.exception))
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_logout_clears_session_id(self, mock_request):
         mock_resp = MagicMock()
         mock_resp.ok = True
@@ -99,7 +99,7 @@ class TestAuthentication(TTEClientTestBase):
         self.client.logout()  # Should not raise
         self.assertIsNone(self.client.session_id)
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_session_id_sent_as_query_param(self, mock_request):
         mock_resp = MagicMock()
         mock_resp.ok = True
@@ -117,7 +117,7 @@ class TestAuthentication(TTEClientTestBase):
 
 class TestErrorHandling(TTEClientTestBase):
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_401_clears_session_and_raises(self, mock_request):
         mock_resp = MagicMock()
         mock_resp.ok = False
@@ -131,7 +131,7 @@ class TestErrorHandling(TTEClientTestBase):
         self.assertIn("expired", str(ctx.exception).lower())
         self.assertIsNone(self.client.session_id)
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_403_clears_session_and_raises(self, mock_request):
         mock_resp = MagicMock()
         mock_resp.ok = False
@@ -144,7 +144,7 @@ class TestErrorHandling(TTEClientTestBase):
             self.client._request("GET", "/test")
         self.assertIsNone(self.client.session_id)
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_500_raises_api_error(self, mock_request):
         mock_resp = MagicMock()
         mock_resp.ok = False
@@ -156,7 +156,7 @@ class TestErrorHandling(TTEClientTestBase):
             self.client._request("GET", "/test")
         self.assertEqual(ctx.exception.status_code, 500)
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_invalid_json_raises(self, mock_request):
         mock_resp = MagicMock()
         mock_resp.ok = True
@@ -168,7 +168,7 @@ class TestErrorHandling(TTEClientTestBase):
             self.client._request("GET", "/test")
         self.assertIn("Invalid JSON", str(ctx.exception))
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_missing_result_key_raises(self, mock_request):
         mock_resp = MagicMock()
         mock_resp.ok = True
@@ -180,19 +180,19 @@ class TestErrorHandling(TTEClientTestBase):
             self.client._request("GET", "/test")
         self.assertIn("missing 'result'", str(ctx.exception))
 
-    @patch("tte_client.requests.request", side_effect=requests.ConnectionError("Connection refused"))
+    @patch("tte_client.requests.Session.request", side_effect=requests.ConnectionError("Connection refused"))
     def test_network_error_raises(self, mock_request):
         with self.assertRaises(TTEAPIError) as ctx:
             self.client._request("GET", "/test")
         self.assertIn("Network error", str(ctx.exception))
 
-    @patch("tte_client.requests.request", side_effect=requests.Timeout("timed out"))
+    @patch("tte_client.requests.Session.request", side_effect=requests.Timeout("timed out"))
     def test_timeout_raises_timeout_error(self, mock_request):
         with self.assertRaises(TTETimeoutError) as ctx:
             self.client._request("GET", "/test")
         self.assertIn("timed out", str(ctx.exception).lower())
 
-    @patch("tte_client.requests.request", side_effect=requests.Timeout("timed out"))
+    @patch("tte_client.requests.Session.request", side_effect=requests.Timeout("timed out"))
     def test_timeout_error_is_subclass_of_api_error(self, mock_request):
         with self.assertRaises(TTEAPIError):
             self.client._request("GET", "/test")
@@ -200,7 +200,7 @@ class TestErrorHandling(TTEClientTestBase):
 
 class TestPagination(TTEClientTestBase):
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_single_page(self, mock_request):
         mock_resp = MagicMock()
         mock_resp.ok = True
@@ -218,7 +218,7 @@ class TestPagination(TTEClientTestBase):
         self.assertEqual(len(items), 2)
         self.assertEqual(mock_request.call_count, 1)
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_multiple_pages(self, mock_request):
         page1_resp = MagicMock()
         page1_resp.ok = True
@@ -254,7 +254,7 @@ class TestPagination(TTEClientTestBase):
         self.assertEqual(len(items), 5)
         self.assertEqual(mock_request.call_count, 3)
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_empty_result(self, mock_request):
         mock_resp = MagicMock()
         mock_resp.ok = True
@@ -273,7 +273,7 @@ class TestPagination(TTEClientTestBase):
 
 class TestEndpoints(TTEClientTestBase):
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_get_convention(self, mock_request):
         mock_resp = MagicMock()
         mock_resp.ok = True
@@ -284,7 +284,7 @@ class TestEndpoints(TTEClientTestBase):
         result = self.client.get_convention("conv-1")
         self.assertEqual(result["name"], "ConFest")
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_get_convention_with_library(self, mock_request):
         mock_resp = MagicMock()
         mock_resp.ok = True
@@ -296,7 +296,7 @@ class TestEndpoints(TTEClientTestBase):
         call_kwargs = mock_request.call_args
         self.assertEqual(call_kwargs.kwargs["params"]["_include_related_objects"], "library")
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_update_playtowin_win(self, mock_request):
         mock_resp = MagicMock()
         mock_resp.ok = True
@@ -310,7 +310,7 @@ class TestEndpoints(TTEClientTestBase):
         call_args = mock_request.call_args
         self.assertEqual(call_args[0][0], "PUT")
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_get_user_libraries(self, mock_request):
         mock_resp = MagicMock()
         mock_resp.ok = True
@@ -329,7 +329,7 @@ class TestEndpoints(TTEClientTestBase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["name"], "My Library")
 
-    @patch("tte_client.requests.request")
+    @patch("tte_client.requests.Session.request")
     def test_login_stores_user_id(self, mock_request):
         mock_resp = MagicMock()
         mock_resp.ok = True

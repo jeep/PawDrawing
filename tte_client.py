@@ -36,6 +36,7 @@ class TTEClient:
         self.session_id = None
         self.user_id = None
         self._last_request_time = 0.0
+        self._http = requests.Session()
 
     # ── Rate limiting ──────────────────────────────────────────────────
 
@@ -64,7 +65,7 @@ class TTEClient:
             params["session_id"] = self.session_id
 
         try:
-            resp = requests.request(
+            resp = self._http.request(
                 method,
                 url,
                 params=params,
