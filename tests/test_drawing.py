@@ -339,7 +339,7 @@ class TestApplyResolution:
             {"game": {"id": "G2"}, "shuffled": [_make_entry("B1", "G2"), _make_entry("B3", "G2")], "winner_index": 0},
         ]
 
-        advanced = apply_resolution(state, {"B1": "G1"}, set())
+        advanced = apply_resolution(state, {"B1": "G1"})
 
         assert "G2" in advanced
         assert state[0]["winner_index"] == 0  # Kept
@@ -352,7 +352,7 @@ class TestApplyResolution:
             {"game": {"id": "G3"}, "shuffled": [_make_entry("B1", "G3"), _make_entry("B4", "G3")], "winner_index": 0},
         ]
 
-        apply_resolution(state, {"B1": "G2"}, set())
+        apply_resolution(state, {"B1": "G2"})
 
         assert state[0]["winner_index"] == 1  # G1 advanced
         assert state[1]["winner_index"] == 0  # G2 kept

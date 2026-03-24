@@ -60,10 +60,11 @@ def detect_conflicts(drawing_state):
     badge_games = defaultdict(list)
 
     for game_id, entry in winners.items():
-        if entry is not None:
-            badge_id = entry.get("badge_id")
-            if badge_id:
-                badge_games[badge_id].append(game_id)
+        if entry is None:
+            continue
+        badge_id = entry.get("badge_id")
+        if badge_id:
+            badge_games[badge_id].append(game_id)
 
     return {bid: gids for bid, gids in badge_games.items() if len(gids) > 1}
 
@@ -100,18 +101,19 @@ def advance_winner(drawing_state, game_id, not_here=None):
     if not_here is None:
         not_here = set()
     for item in drawing_state:
-        if item["game"]["id"] == game_id:
-            while True:
-                item["winner_index"] += 1
-                if item["winner_index"] >= len(item["shuffled"]):
-                    return False
-                candidate = item["shuffled"][item["winner_index"]]
-                if candidate.get("badge_id") not in not_here:
-                    return True
+        if item["game"]["id"] != game_id:
+            continue
+        while True:
+            item["winner_index"] += 1
+            if item["winner_index"] >= len(item["shuffled"]):
+                return False
+            candidate = item["shuffled"][item["winner_index"]]
+            if candidate.get("badge_id") not in not_here:
+                return True
     return False
 
 
-def apply_resolution(drawing_state, keep_map, premium_game_ids):
+def apply_resolution(drawing_state, keep_map):
     """Apply conflict resolutions: for each resolved badge_id, advance winners
     on all their games except the one they keep.
 
@@ -129,9 +131,10 @@ def apply_resolution(drawing_state, keep_map, premium_game_ids):
             if entry and entry.get("badge_id") == badge_id
         ]
         for game_id in their_games:
-            if game_id != keep_game_id:
-                advance_winner(drawing_state, game_id)
-                advanced.append(game_id)
+            if game_id == keep_game_id:
+                continue
+            advance_winner(drawing_state, game_id)
+            advanced.append(game_id)
 
     return advanced
 
@@ -156,18 +159,39 @@ def build_conflict_info(drawing_state, conflicts_dict, premium_games):
     result = []
     for badge_id, game_ids in conflicts_dict.items():
         premium_wins = [gid for gid in game_ids if gid in premium_games]
-        winner_name = "Unknown"
-        for gid in game_ids:
-            w = winners.get(gid)
-            if w and w.get("name"):
-                winner_name = w["name"]
-                break
+        winner_name = next(
+            (winners[gid].get("name") for gid in game_ids
+             if winners.get(gid) and winners[gid].get("name")),
+            "Unknown",
+        )
         result.append({
             "badge_id": badge_id,
             "winner_name": winner_name,
             "game_ids": game_ids,
             "game_names": {gid: game_name_map.get(gid, "Unknown") for gid in game_ids},
             "is_premium_conflict": len(premium_wins) > 1,
+        })
+    return result
+
+
+def _build_auto_resolved_info(state, conflicts, resolved):
+    """Build display-friendly records for auto-resolved premium assignments."""
+    winners = get_current_winners(state)
+    game_name_map = {
+        item["game"]["id"]: item["game"].get("name", "Unknown")
+        for item in state
+    }
+    result = []
+    for badge_id, kept_game_id in resolved.items():
+        relinquished = [gid for gid in conflicts[badge_id] if gid != kept_game_id]
+        w = winners.get(kept_game_id)
+        result.append({
+            "badge_id": badge_id,
+            "winner_name": w.get("name", "Unknown") if w else "Unknown",
+            "kept_game_id": kept_game_id,
+            "kept_game_name": game_name_map.get(kept_game_id, "Unknown"),
+            "relinquished": relinquished,
+            "relinquished_names": [game_name_map.get(gid, "Unknown") for gid in relinquished],
         })
     return result
 
@@ -189,32 +213,13 @@ def _resolve_conflicts_loop(state, premium_set):
 
         resolved, remaining = resolve_premium_auto(conflicts, premium_set)
 
-        if resolved:
-            winners = get_current_winners(state)
-            game_name_map = {
-                item["game"]["id"]: item["game"].get("name", "Unknown")
-                for item in state
-            }
-            for badge_id, kept_game_id in resolved.items():
-                their_games = conflicts[badge_id]
-                relinquished = [gid for gid in their_games if gid != kept_game_id]
-                winner_name = "Unknown"
-                w = winners.get(kept_game_id)
-                if w and w.get("name"):
-                    winner_name = w["name"]
-                auto_resolved.append({
-                    "badge_id": badge_id,
-                    "winner_name": winner_name,
-                    "kept_game_id": kept_game_id,
-                    "kept_game_name": game_name_map.get(kept_game_id, "Unknown"),
-                    "relinquished": relinquished,
-                    "relinquished_names": [game_name_map.get(gid, "Unknown") for gid in relinquished],
-                })
-            apply_resolution(state, resolved, premium_set)
-            continue
-
-        if remaining:
+        if not resolved and remaining:
             return build_conflict_info(state, remaining, premium_set), auto_resolved
+        if not resolved:
+            break
+
+        auto_resolved.extend(_build_auto_resolved_info(state, conflicts, resolved))
+        apply_resolution(state, resolved)
 
     return [], auto_resolved
 

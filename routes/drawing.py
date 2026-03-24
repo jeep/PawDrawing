@@ -155,7 +155,7 @@ def resolve_conflicts():
         keep_map[badge_id] = keep_game_id
 
     premium_games = set(session.get(SK.PREMIUM_GAMES, []))
-    advanced = apply_resolution(drawing_state, keep_map, premium_games)
+    advanced = apply_resolution(drawing_state, keep_map)
 
     # Track any games that exhausted their entrant list during resolution
     winners = get_current_winners(drawing_state)

@@ -200,7 +200,7 @@ Core drawing algorithm. Pure functions operating on data structures (no I/O).
 - `detect_conflicts(drawing_state)` — finds badge IDs that won multiple games.
 - `resolve_premium_auto(conflicts, premium_ids)` — auto-resolves when a person won exactly one premium game (they keep the premium game).
 - `advance_winner(drawing_state, game_id, not_here)` — moves to the next person in the shuffled list, skipping badge IDs in the `not_here` set.
-- `apply_resolution(drawing_state, keep_map, premium_ids)` — applies admin choices, advancing winners on relinquished games.
+- `apply_resolution(drawing_state, keep_map)` — applies admin choices, advancing winners on relinquished games.
 - `_resolve_conflicts_loop(state, premium_set)` — runs the conflict detection / premium auto-resolution loop. Returns unresolved conflicts and auto-resolved assignments.
 - `run_drawing(game_data, premium_ids, rng)` — orchestrates the full algorithm (see Drawing Algorithm below).
 - `redraw_unclaimed(drawing_state, unclaimed_game_ids, not_here, original_winners, same_rules, premium_game_ids, rng)` — re-shuffles unclaimed games excluding absent and original-draw winners.
