@@ -2681,6 +2681,14 @@ class TestEjectPlayerRoute(unittest.TestCase):
             # Per-game ejections replaced with wildcard
             self.assertEqual(sess["ejected_entries"], [["B1", "*"]])
 
+    def test_eject_name_with_spaces(self):
+        """Badge IDs can be player names (fallback in process_entries)."""
+        self._auth()
+        resp = self.client.post("/games/eject", json={"badge_id": "John Smith"})
+        self.assertEqual(resp.status_code, 200)
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["ejected_entries"], [["John Smith", "*"]])
+
 
 class TestUnejectPlayerRoute(unittest.TestCase):
 
@@ -3089,13 +3097,16 @@ class TestIDValidationHelpers(unittest.TestCase):
         self.assertTrue(is_valid_badge_id("B1"))
         self.assertTrue(is_valid_badge_id("badge-123"))
         self.assertTrue(is_valid_badge_id("badge_456"))
+        self.assertTrue(is_valid_badge_id("John Smith"))
+        self.assertTrue(is_valid_badge_id("O'Brien"))
 
     def test_invalid_badge_id(self):
         from routes.helpers import is_valid_badge_id
         self.assertFalse(is_valid_badge_id(""))
+        self.assertFalse(is_valid_badge_id("   "))
         self.assertFalse(is_valid_badge_id(None))
-        self.assertFalse(is_valid_badge_id("badge id"))
-        self.assertFalse(is_valid_badge_id("<script>"))
+        self.assertFalse(is_valid_badge_id(123))
+        self.assertFalse(is_valid_badge_id("x" * 201))
 
 
 class TestIDValidationRoutes(unittest.TestCase):

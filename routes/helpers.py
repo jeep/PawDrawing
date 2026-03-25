@@ -12,17 +12,19 @@ logger = logging.getLogger(__name__)
 _UUID_RE = re.compile(
     r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
 )
-_BADGE_RE = re.compile(r"^[A-Za-z0-9_-]+$")
-
-
 def is_valid_tte_id(value):
     """Check that a TTE entity ID matches UUID format."""
     return isinstance(value, str) and _UUID_RE.match(value) is not None
 
 
 def is_valid_badge_id(value):
-    """Check that a badge ID is a non-empty alphanumeric string."""
-    return isinstance(value, str) and _BADGE_RE.match(value) is not None
+    """Check that a badge ID is a non-empty string of reasonable length.
+
+    Badge IDs may be actual badge numbers, user IDs, or player names
+    (via the fallback in data_processing.process_entries), so the character
+    set is intentionally broad.
+    """
+    return isinstance(value, str) and 0 < len(value.strip()) <= 200
 
 
 def login_required(f=None, *, api=False):
