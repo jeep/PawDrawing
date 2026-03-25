@@ -58,23 +58,22 @@
                     tr.className = cls;
                     var actions = '';
                     if (inRedraw) {
-                        actions = ' <span class="entrant-actions">';
                         if (!ent.is_winner) {
-                            actions += '<a href="#" class="entrant-award-btn" data-game-id="' + escHtml(gameId) + '" data-badge-id="' + escHtml(ent.badge_id) + '" onclick="awardTo(this);return false;">Award to</a>';
+                            actions += '<a href="#" class="entrant-award-btn" data-game-id="' + escHtml(gameId) + '" data-badge-id="' + escHtml(ent.badge_id) + '" onclick="awardTo(this);return false;">Award to</a> ';
                         }
                         if (!ent.is_not_here) {
                             actions += '<a href="#" class="entrant-not-here-btn" data-badge-id="' + escHtml(ent.badge_id) + '" data-person-name="' + escHtml(ent.name) + '" onclick="entrantNotHere(this);return false;">Not Here</a>';
                         }
-                        actions += '</span>';
                     }
-                    tr.innerHTML = '<td colspan="' + colCount + '">' +
+                    var contentColSpan = inRedraw ? (colCount - 1) : colCount;
+                    tr.innerHTML = '<td colspan="' + contentColSpan + '">' +
                         '<span style="color:#999;font-size:0.8rem;margin-right:0.5rem;">' + ent.position + '.</span>' +
                         escHtml(ent.name) +
                         ' <span style="color:#999;font-size:0.8rem">(#' + escHtml(ent.badge_id) + ')</span>' +
                         (ent.is_winner ? ' <span style="color:#27ae60;font-size:0.75rem;font-weight:700;">★ WINNER</span>' : '') +
                         (ent.is_not_here ? ' <span style="color:#e74c3c;font-size:0.75rem;">Not Here</span>' : '') +
-                        actions +
-                        '</td>';
+                        '</td>' +
+                        (inRedraw ? '<td style="text-align:right;white-space:nowrap;" class="entrant-actions">' + actions + '</td>' : '');
                     insertAfter.after(tr);
                     insertAfter = tr;
                 });
