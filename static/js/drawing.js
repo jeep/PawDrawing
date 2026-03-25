@@ -83,8 +83,8 @@
 
     // Restore active tab after page reload
     var savedTab = sessionStorage.getItem('activeTab');
-    if (savedTab === 'by-winner') {
-        switchView('by-winner');
+    if (savedTab === 'by-game') {
+        switchView('by-game');
     }
 
     window.togglePickup = function(gameId) {

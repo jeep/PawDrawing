@@ -132,8 +132,8 @@
 </div>
 
 <div class="view-tabs">
-    <button class="view-tab active" id="tab-by-game" onclick="switchView('by-game')">By Game</button>
-    <button class="view-tab" id="tab-by-winner" onclick="switchView('by-winner')">By Winner</button>
+    <button class="view-tab" id="tab-by-game" onclick="switchView('by-game')">By Game</button>
+    <button class="view-tab active" id="tab-by-winner" onclick="switchView('by-winner')">By Winner</button>
 </div>
 
 <div class="search-bar" id="search-bar">
@@ -141,7 +141,7 @@
     <span class="search-count" id="search-count"></span>
 </div>
 
-<div class="view-panel active" id="panel-by-game">
+<div class="view-panel" id="panel-by-game">
 
 {# Awaiting Pickup #}
 <div class="section-header">
@@ -261,7 +261,7 @@
 
 </div>
 
-<div class="view-panel" id="panel-by-winner">
+<div class="view-panel active" id="panel-by-winner">
 
 {% set winners_awaiting = results | selectattr('has_winner') | rejectattr('is_picked_up') | sort(attribute='winner_name') | list %}
 {% set winners_picked = results | selectattr('has_winner') | selectattr('is_picked_up') | sort(attribute='winner_name') | list %}
