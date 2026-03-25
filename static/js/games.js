@@ -14,6 +14,18 @@
         doUneject(chip.dataset.badge, chip.dataset.game, chip);
     });
 
+    function updateEjectCounts() {
+        var count = ejectList.querySelectorAll('.eject-chip').length;
+        var stat = document.getElementById('eject-stat');
+        var statCount = document.getElementById('eject-stat-count');
+        var panelCount = document.getElementById('eject-panel-count');
+        var panelNum = document.getElementById('eject-panel-num');
+        if (stat) stat.style.display = count ? '' : 'none';
+        if (statCount) statCount.textContent = count;
+        if (panelCount) panelCount.style.display = count ? '' : 'none';
+        if (panelNum) panelNum.textContent = count;
+    }
+
     function doEject(badgeId, gameId) {
         fetch(urls.ejectPlayer, {
             method: 'POST',
@@ -30,8 +42,8 @@
             chip.innerHTML = badgeId + (gameId === '*' ? ' (all)' : ' (1 game)') +
                 ' <button class="undo-btn" title="Undo">&times;</button>';
             ejectList.appendChild(chip);
-            // Mark entrant rows if expanded
             updateEntrantRowState(badgeId, gameId, true);
+            updateEjectCounts();
         })
         .catch(function() {});
     }
@@ -46,6 +58,7 @@
         .then(function() {
             chip.remove();
             updateEntrantRowState(badgeId, gameId, false);
+            updateEjectCounts();
         })
         .catch(function() {});
     }

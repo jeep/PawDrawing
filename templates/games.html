@@ -20,9 +20,7 @@
     <h2>{{ convention_name }}</h2>
     <span class="stat"><strong>{{ total_games }}</strong> games</span>
     <span class="stat"><strong>{{ total_entries }}</strong> unique entries</span>
-    {% if ejected_entries %}
-    <span class="stat"><strong>{{ ejected_entries|length }}</strong> removed<span class="eject-count">!</span></span>
-    {% endif %}
+    <span class="stat" id="eject-stat"{% if not ejected_entries %} style="display:none"{% endif %}><strong id="eject-stat-count">{{ ejected_entries|length }}</strong> removed<span class="eject-count">!</span></span>
     <span class="stat" style="font-size:0.8rem;color:#888;">Loaded {{ data_loaded_at }}</span>
     <span class="save-status" id="save-status">Saved</span>
     <a href="{{ url_for('main.games', refresh='1') }}" class="refresh-btn" id="refresh-btn" onclick="document.getElementById('loading-overlay').classList.add('active');this.style.pointerEvents='none';this.style.opacity='0.6';">Refresh Data</a>
@@ -36,9 +34,7 @@
             <button type="submit" class="btn-drawing">Run Drawing</button>
         </form>
         <a href="{{ url_for('main.players') }}" class="btn-players">Manage Players</a>
-        {% if ejected_entries %}
-        <span style="font-size:0.85rem;color:#888;">{{ ejected_entries|length }} player(s) removed from drawing</span>
-        {% endif %}
+        <span id="eject-panel-count" style="font-size:0.85rem;color:#888;{% if not ejected_entries %}display:none{% endif %}"><span id="eject-panel-num">{{ ejected_entries|length }}</span> player(s) removed from drawing</span>
     </div>
     <div class="eject-list" id="eject-list">
         {% for badge_id, game_id in ejected_entries %}
