@@ -41,7 +41,7 @@ def _detect_non_p2w_games():
 
     names = [g.get("name", "Unknown") for g in non_p2w]
     message = f"{len(non_p2w)} game{'s' if len(non_p2w) != 1 else ''} in this library {'are' if len(non_p2w) != 1 else 'is'} not marked Play-to-Win."
-    _add_notification("non_p2w", message, details={"games": names})
+    _add_notification("non_p2w", message, details=names)
 
 
 @library_bp.route("/")
@@ -86,6 +86,18 @@ def switch_mode():
     if target == "library":
         return redirect(url_for("library.dashboard"))
     return redirect(url_for("main.convention_select"))
+
+
+@library_bp.route("/update-settings", methods=["POST"])
+@login_required
+def update_settings():
+    """Update library settings (non-P2W toggle, etc.)."""
+    data = request.get_json(silent=True) or {}
+    settings = session.get(SK.LIBRARY_SETTINGS) or {}
+    if "include_non_p2w" in data:
+        settings["include_non_p2w"] = bool(data["include_non_p2w"])
+    session[SK.LIBRARY_SETTINGS] = settings
+    return jsonify({"success": True})
 
 
 @library_bp.route("/refresh-catalog", methods=["POST"])
@@ -194,7 +206,7 @@ def check_suspicious():
         names = [f"{s['game_name']} ({s['renter_name']}, {s['elapsed_hours']}h)"
                  for s in suspicious]
         msg = f"{len(suspicious)} game{'s' if len(suspicious) != 1 else ''} checked out beyond threshold."
-        _add_notification("warning", msg, details={"games": names})
+        _add_notification("warning", msg, details=names)
 
     if patterns:
         descs = [f"{p['person_a']} → {p['person_b']} on game {p['game_id'][:8]}…"
@@ -202,7 +214,7 @@ def check_suspicious():
         _add_notification(
             "alert",
             f"{len(patterns)} suspicious partner pattern{'s' if len(patterns) != 1 else ''} detected.",
-            details={"patterns": descs},
+            details=descs,
         )
 
     if not suspicious and not patterns:

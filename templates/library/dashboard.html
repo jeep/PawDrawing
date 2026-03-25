@@ -23,7 +23,10 @@
 {% endblock %}
 
 {% block content %}
-<div id="offline-banner" class="offline-banner hidden"></div>
+<div id="offline-banner" class="offline-banner hidden">
+    <span id="offline-text"></span>
+    <button id="offline-retry-btn" class="btn btn-small" style="margin-left:0.5rem">Retry Now</button>
+</div>
 
 <h2>Library Dashboard</h2>
 <p class="subtitle">
@@ -51,9 +54,9 @@
 </div>
 
 <div class="catalog-actions">
-    <form method="post" action="{{ url_for('library.refresh_catalog') }}" class="inline-form">
+    <form method="post" action="{{ url_for('library.refresh_catalog') }}" class="inline-form" id="refresh-catalog-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-small">Refresh Catalog</button>
+        <button type="submit" class="btn btn-small" id="refresh-catalog-btn">Refresh Catalog</button>
     </form>
     {% if total_games > p2w_games %}
     <form method="post" action="{{ url_for('library.mark_all_p2w') }}" class="inline-form"
@@ -64,6 +67,10 @@
     {% endif %}
     <a href="{{ url_for('library.game_list') }}" class="btn btn-small">Game List</a>
     <a href="{{ url_for('library.component_checks') }}" class="btn btn-small">Component Checks</a>
+    <label class="settings-toggle">
+        <input type="checkbox" id="include-non-p2w" {% if session.get('library_settings', {}).get('include_non_p2w') %}checked{% endif %}>
+        Include non-P2W games
+    </label>
 </div>
 
 <div class="action-grid">

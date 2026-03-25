@@ -53,9 +53,10 @@
         if (!offlineBanner) {
             offlineBanner = document.getElementById('offline-banner');
         }
-        if (offlineBanner) {
+        var offlineText = document.getElementById('offline-text');
+        if (offlineBanner && offlineText) {
             if (q.length > 0) {
-                offlineBanner.textContent = '⚠ Offline mode: ' + q.length + ' operation(s) queued. Track manually as backup.';
+                offlineText.textContent = '\u26a0 Offline mode: ' + q.length + ' operation(s) queued. Track manually as backup.';
                 offlineBanner.classList.remove('hidden');
             } else {
                 offlineBanner.classList.add('hidden');
@@ -89,6 +90,35 @@
     document.addEventListener('DOMContentLoaded', function() {
         updateOfflineBanner();
         syncQueue();
+
+        // Offline retry button
+        var retryBtn = document.getElementById('offline-retry-btn');
+        if (retryBtn) {
+            retryBtn.addEventListener('click', function() {
+                syncQueue();
+            });
+        }
+
+        // Catalog refresh loading indicator
+        var refreshForm = document.getElementById('refresh-catalog-form');
+        if (refreshForm) {
+            refreshForm.addEventListener('submit', function() {
+                var btn = document.getElementById('refresh-catalog-btn');
+                btn.disabled = true;
+                btn.textContent = 'Refreshing\u2026';
+                btn.classList.add('btn-loading');
+            });
+        }
+
+        // Non-P2W settings toggle
+        var nonP2WToggle = document.getElementById('include-non-p2w');
+        if (nonP2WToggle) {
+            nonP2WToggle.addEventListener('change', function() {
+                apiPost('/library-mgmt/update-settings', {
+                    include_non_p2w: this.checked
+                });
+            });
+        }
     });
 
     // ── Game Search (shared between checkout and checkin) ─────────────

@@ -1209,3 +1209,60 @@ class TestCheckoutPrivilegeGate(LibraryTestBase):
         })
         # Should fail with 500 (no mock) or 400, but NOT 403
         self.assertNotEqual(resp.status_code, 403)
+
+
+class TestUpdateSettings(LibraryTestBase):
+    """Tests for the update-settings route."""
+
+    def test_update_include_non_p2w_true(self):
+        """Setting include_non_p2w to true is stored in session."""
+        self._set_session()
+        resp = self.client.post("/library-mgmt/update-settings",
+                                json={"include_non_p2w": True})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.get_json()["success"])
+
+    def test_update_include_non_p2w_false(self):
+        """Setting include_non_p2w to false is stored in session."""
+        self._set_session(**{SK.LIBRARY_SETTINGS: {"include_non_p2w": True}})
+        resp = self.client.post("/library-mgmt/update-settings",
+                                json={"include_non_p2w": False})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.get_json()["success"])
+
+    def test_update_settings_requires_login(self):
+        """Settings update requires authentication."""
+        resp = self.client.post("/library-mgmt/update-settings",
+                                json={"include_non_p2w": True})
+        self.assertIn(resp.status_code, [302, 401])
+
+
+class TestNotificationDetails(LibraryTestBase):
+    """Tests that _add_notification stores details as flat list."""
+
+    @patch("routes.library.dashboard._get_client")
+    def test_non_p2w_notification_details_flat_list(self, mock_client):
+        """Non-P2W detection stores game names as flat list, not dict."""
+        games = [
+            {"id": "g1", "name": "Chess", "is_play_to_win": False,
+             "is_in_circulation": True, "is_checked_out": False},
+            {"id": "g2", "name": "Go", "is_play_to_win": True,
+             "is_in_circulation": True, "is_checked_out": False},
+        ]
+        self._set_session(**{
+            SK.CACHED_GAMES: games,
+            SK.LIBRARY_SETTINGS: {"include_non_p2w": True},
+        })
+        mock_tte = MagicMock()
+        mock_tte.get_library_games.return_value = games
+        mock_client.return_value = mock_tte
+
+        self.client.post("/library-mgmt/refresh-catalog")
+
+        with self.client.session_transaction() as sess:
+            notifications = sess.get(SK.NOTIFICATIONS, [])
+            non_p2w_notifs = [n for n in notifications if n["type"] == "non_p2w"]
+            if non_p2w_notifs:
+                details = non_p2w_notifs[0]["details"]
+                self.assertIsInstance(details, list)
+                self.assertIn("Chess", details)
