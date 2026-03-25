@@ -263,8 +263,56 @@
     window.resolveConflictRandom = function(btn) {
         var badgeId = btn.getAttribute('data-badge-id');
         var gameIds = JSON.parse(btn.getAttribute('data-game-ids'));
-        var randomId = gameIds[Math.floor(Math.random() * gameIds.length)];
+        var randomId = pickRandomGameId(gameIds);
         window.resolveConflict(badgeId, randomId);
+    };
+
+    function pickRandomGameId(gameIds) {
+        var premiumGames = JSON.parse(cfg.premiumGames || '[]');
+        var premiumIds = gameIds.filter(function(gid) { return premiumGames.indexOf(gid) !== -1; });
+        var pool = (premiumIds.length > 0 && premiumIds.length < gameIds.length) ? premiumIds : gameIds;
+        return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    window.resolveAllRemainingRandom = function() {
+        var items = document.querySelectorAll('.conflict-item:not(.resolved):not(.resolving)');
+        if (items.length === 0) { alert('No unresolved conflicts remaining.'); return; }
+
+        var msg = 'Randomly resolve all ' + items.length + ' remaining conflict' +
+            (items.length > 1 ? 's' : '') + '?\n\n' +
+            'Each person will be assigned a game at random. ' +
+            'If a person won exactly one premium game, that game will be kept.\n\n' +
+            'This may cause new conflicts which will need to be resolved afterward.';
+        if (!confirm(msg)) return;
+
+        var resolutions = [];
+        items.forEach(function(item) {
+            var badgeId = item.getAttribute('data-badge-id');
+            var btn = item.querySelector('.conflict-random-btn');
+            var gameIds = JSON.parse(btn.getAttribute('data-game-ids'));
+            resolutions.push({badge_id: badgeId, keep_game_id: pickRandomGameId(gameIds)});
+            item.classList.add('resolving');
+        });
+
+        fetch(urls.resolveConflicts, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({resolutions: resolutions})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.ok) {
+                items.forEach(function(item) { item.classList.remove('resolving'); });
+                alert('Error: ' + (data.error || 'Unknown'));
+                return;
+            }
+            items.forEach(function(item) { item.classList.add('resolved'); });
+            setTimeout(function() { window.location.reload(); }, 400);
+        })
+        .catch(function() {
+            items.forEach(function(item) { item.classList.remove('resolving'); });
+            alert('Network error — please try again.');
+        });
     };
 
     window.dismissConflictGame = function(badgeId, gameId, btn) {

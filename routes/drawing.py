@@ -122,6 +122,7 @@ def drawing_results():
         conflicts=conflicts,
         auto_resolved=session.get(SK.AUTO_RESOLVED, []),
         conflicted_game_ids=conflicted_game_ids,
+        premium_games=session.get(SK.PREMIUM_GAMES, []),
         convention_name=session.get(SK.CONVENTION_NAME) or session.get(SK.LIBRARY_NAME, ""),
         picked_up=set(session.get(SK.PICKED_UP, [])),
         not_here=session.get(SK.NOT_HERE, []),

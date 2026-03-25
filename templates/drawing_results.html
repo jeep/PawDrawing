@@ -121,6 +121,14 @@
     {% endfor %}
 </div>
 {% endif %}
+
+{% if conflicts %}
+<div style="text-align:center;margin:1rem 0;">
+    <button type="button" class="conflict-random-btn" id="resolve-all-remaining-btn"
+            onclick="resolveAllRemainingRandom()"
+            style="font-size:1rem;padding:0.5rem 1.5rem;">&#x1f3b2; Random All Remaining</button>
+</div>
+{% endif %}
 </div>
 
 <div class="view-tabs">
@@ -398,6 +406,7 @@
          "dismissConflictGame": url_for("main.dismiss_conflict_game"),
          "pushToTte": url_for("main.push_to_tte")
      } | tojson }}'
+     data-premium-games='{{ premium_games | tojson }}'
      data-not-here='{{ not_here | tojson }}'
      data-warning-dismissed='{{ "true" if not_here_warning_dismissed else "false" }}'>
 </div>
