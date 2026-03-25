@@ -48,6 +48,7 @@
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (!data.ok) return;
+                var inRedraw = document.body.classList.contains('redraw-mode');
                 var insertAfter = row;
                 data.entrants.forEach(function(ent) {
                     var tr = document.createElement('tr');
@@ -55,12 +56,24 @@
                     if (ent.is_winner) cls += ' is-winner';
                     if (ent.is_not_here) cls += ' is-not-here';
                     tr.className = cls;
+                    var actions = '';
+                    if (inRedraw) {
+                        actions = ' <span class="entrant-actions">';
+                        if (!ent.is_winner) {
+                            actions += '<a href="#" class="entrant-award-btn" data-game-id="' + escHtml(gameId) + '" data-badge-id="' + escHtml(ent.badge_id) + '" onclick="awardTo(this);return false;">Award to</a>';
+                        }
+                        if (!ent.is_not_here) {
+                            actions += '<a href="#" class="entrant-not-here-btn" data-badge-id="' + escHtml(ent.badge_id) + '" data-person-name="' + escHtml(ent.name) + '" onclick="entrantNotHere(this);return false;">Not Here</a>';
+                        }
+                        actions += '</span>';
+                    }
                     tr.innerHTML = '<td colspan="' + colCount + '">' +
                         '<span style="color:#999;font-size:0.8rem;margin-right:0.5rem;">' + ent.position + '.</span>' +
                         escHtml(ent.name) +
                         ' <span style="color:#999;font-size:0.8rem">(#' + escHtml(ent.badge_id) + ')</span>' +
                         (ent.is_winner ? ' <span style="color:#27ae60;font-size:0.75rem;font-weight:700;">★ WINNER</span>' : '') +
                         (ent.is_not_here ? ' <span style="color:#e74c3c;font-size:0.75rem;">Not Here</span>' : '') +
+                        actions +
                         '</td>';
                     insertAfter.after(tr);
                     insertAfter = tr;
@@ -138,6 +151,39 @@
         .catch(function() {
             if (btn) { btn.disabled = false; btn.textContent = 'Error — Retry'; }
         });
+    };
+
+    window.awardTo = function(link) {
+        var gameId = link.getAttribute('data-game-id');
+        var badgeId = link.getAttribute('data-badge-id');
+        link.textContent = 'Awarding...';
+        link.style.pointerEvents = 'none';
+
+        fetch(urls.awardTo, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({game_id: gameId, badge_id: badgeId})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.ok) {
+                link.textContent = 'Award to';
+                link.style.pointerEvents = '';
+                alert(data.error || 'Unknown error');
+                return;
+            }
+            window.location.reload();
+        })
+        .catch(function() {
+            link.textContent = 'Award to';
+            link.style.pointerEvents = '';
+        });
+    };
+
+    window.entrantNotHere = function(link) {
+        var badgeId = link.getAttribute('data-badge-id');
+        var name = link.getAttribute('data-person-name');
+        confirmNotHere(badgeId, name);
     };
 
     window.confirmNotHere = function(badgeId, personName) {

@@ -433,6 +433,20 @@
         font-size: 0.85rem;
     }
 
+    .entrant-actions {
+        margin-left: 0.75rem;
+        font-size: 0.8rem;
+    }
+    .entrant-actions a {
+        margin-left: 0.5rem;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .entrant-award-btn { color: #2980b9; }
+    .entrant-award-btn:hover { text-decoration: underline; }
+    .entrant-not-here-btn { color: #e74c3c; }
+    .entrant-not-here-btn:hover { text-decoration: underline; }
+
     .picked-up-section .results-table tr td { background: #d4edda; }
     .picked-up-section .results-table tr:hover td { background: #c3e6cb; }
     .no-entries-section .results-table tr td { color: #999; font-style: italic; }

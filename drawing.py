@@ -113,6 +113,22 @@ def advance_winner(drawing_state, game_id, not_here=None):
     return False
 
 
+def set_winner(drawing_state, game_id, badge_id):
+    """Set the winner of a game to a specific entrant by badge_id.
+
+    Returns True if the entrant was found and set as winner, False otherwise.
+    """
+    for item in drawing_state:
+        if item["game"]["id"] != game_id:
+            continue
+        for i, entry in enumerate(item["shuffled"]):
+            if entry.get("badge_id") == badge_id:
+                item["winner_index"] = i
+                return True
+        return False
+    return False
+
+
 def apply_resolution(drawing_state, keep_map):
     """Apply conflict resolutions: for each resolved badge_id, advance winners
     on all their games except the one they keep.

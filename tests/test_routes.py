@@ -1685,6 +1685,8 @@ class TestAwardNextRoute(unittest.TestCase):
             sess["picked_up"] = picked_up or []
             sess["not_here"] = not_here or []
 
+    GAME_ID = "A0000001-0000-4000-A000-000000000001"
+
     def test_award_next_requires_auth(self):
         resp = self.client.post("/drawing/award-next",
                                 json={"game_id": "A0000001-0000-4000-A000-000000000001"},
@@ -1747,6 +1749,74 @@ class TestAwardNextRoute(unittest.TestCase):
         data = resp.get_json()
         self.assertTrue(data["ok"])
         self.assertFalse(data["has_winner"])
+
+
+class TestAwardToRoute(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    GAME_ID = "A0000001-0000-4000-A000-000000000001"
+
+    def _setup_drawing_state(self):
+        drawing_state = [
+            {
+                "game": {"id": self.GAME_ID, "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "librarygame_id": self.GAME_ID, "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "librarygame_id": self.GAME_ID, "id": "e2", "name": "Bob"},
+                    {"badge_id": "B3", "librarygame_id": self.GAME_ID, "id": "e3", "name": "Carol"},
+                ],
+                "winner_index": 0,
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = drawing_state
+            sess["convention_name"] = "GameFest"
+
+    def test_award_to_requires_auth(self):
+        resp = self.client.post("/drawing/award-to",
+                                json={"game_id": self.GAME_ID, "badge_id": "B2"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_award_to_requires_drawing_state(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+        resp = self.client.post("/drawing/award-to",
+                                json={"game_id": self.GAME_ID, "badge_id": "B2"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_award_to_validates_input(self):
+        self._setup_drawing_state()
+        resp = self.client.post("/drawing/award-to",
+                                json={"game_id": self.GAME_ID},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_award_to_sets_winner(self):
+        self._setup_drawing_state()
+        resp = self.client.post("/drawing/award-to",
+                                json={"game_id": self.GAME_ID, "badge_id": "B3"},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["drawing_state"][0]["winner_index"], 2)
+
+    def test_award_to_unknown_badge(self):
+        self._setup_drawing_state()
+        resp = self.client.post("/drawing/award-to",
+                                json={"game_id": self.GAME_ID, "badge_id": "UNKNOWN"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 404)
+        data = resp.get_json()
+        self.assertIn("error", data)
 
 
 class TestMarkNotHereRoute(unittest.TestCase):

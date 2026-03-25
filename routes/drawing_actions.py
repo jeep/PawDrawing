@@ -5,7 +5,7 @@ from datetime import date
 
 from flask import Response, flash, jsonify, redirect, request, session, url_for
 
-from drawing import advance_winner, get_current_winners, redraw_unclaimed
+from drawing import advance_winner, get_current_winners, redraw_unclaimed, set_winner
 from session_keys import SK
 from tte_client import TTEAPIError
 
@@ -95,6 +95,33 @@ def award_next():
         "winner_name": winner.get("name", "Unknown") if winner else None,
         "winner_badge": winner.get("badge_id", "") if winner else None,
     })
+
+
+@main_bp.route("/drawing/award-to", methods=["POST"])
+@login_required
+def award_to():
+    """Award a game to a specific entrant by badge_id."""
+    drawing_state = _require_active_drawing()
+    if isinstance(drawing_state, tuple):
+        return drawing_state
+
+    data = request.get_json(silent=True)
+    if not data or "game_id" not in data or "badge_id" not in data:
+        return jsonify({"error": "Invalid request"}), 400
+
+    game_id = data["game_id"]
+    badge_id = data["badge_id"]
+    if not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID format"}), 400
+    if not is_valid_badge_id(badge_id):
+        return jsonify({"error": "Invalid badge ID format"}), 400
+
+    found = set_winner(drawing_state, game_id, badge_id)
+    if not found:
+        return jsonify({"error": "Entrant not found for this game"}), 404
+
+    session[SK.DRAWING_STATE] = drawing_state
+    return jsonify({"ok": True})
 
 
 @main_bp.route("/drawing/entrants/<game_id>")

@@ -13,6 +13,7 @@ from drawing import (
     redraw_unclaimed,
     resolve_premium_auto,
     run_drawing,
+    set_winner,
     shuffle_entries,
 )
 
@@ -328,6 +329,40 @@ class TestAdvanceWinner:
 
         assert result is False
         assert state[0]["winner_index"] == 2  # Past end
+
+
+# --- set_winner ---
+
+class TestSetWinner:
+    def test_sets_winner_by_badge_id(self):
+        state = [
+            {"game": {"id": "G1"}, "shuffled": [_make_entry("B1", "G1"), _make_entry("B2", "G1"), _make_entry("B3", "G1")], "winner_index": 0},
+        ]
+
+        result = set_winner(state, "G1", "B3")
+
+        assert result is True
+        assert state[0]["winner_index"] == 2
+
+    def test_returns_false_for_unknown_badge(self):
+        state = [
+            {"game": {"id": "G1"}, "shuffled": [_make_entry("B1", "G1")], "winner_index": 0},
+        ]
+
+        result = set_winner(state, "G1", "UNKNOWN")
+
+        assert result is False
+        assert state[0]["winner_index"] == 0
+
+    def test_returns_false_for_unknown_game(self):
+        state = [
+            {"game": {"id": "G1"}, "shuffled": [_make_entry("B1", "G1")], "winner_index": 0},
+        ]
+
+        result = set_winner(state, "G999", "B1")
+
+        assert result is False
+        assert state[0]["winner_index"] == 0
 
 
 # --- apply_resolution ---
