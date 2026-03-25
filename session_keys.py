@@ -30,6 +30,11 @@ class SK:
 
     # ── Library Management Mode ────────────────────────────────────────
     APP_MODE = "app_mode"  # "drawing" or "library"
+    AUTH_MODE = "auth_mode"  # "owner" or "volunteer"
+
+    # Volunteer login
+    VOLUNTEER_NAME = "volunteer_name"  # display name for current volunteer
+    HAS_CHECKOUT_PRIVILEGE = "has_checkout_privilege"  # cached privilege check
 
     # Person identification
     PERSON_CACHE = "person_cache"  # {badge_number: {name, badge_id, user_id}}

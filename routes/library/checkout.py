@@ -12,6 +12,7 @@ from . import library_bp
 from routes.helpers import (
     _get_client,
     _handle_api_error,
+    check_checkout_privilege,
     is_valid_badge_id,
     is_valid_tte_id,
     login_required,
@@ -141,6 +142,10 @@ def active_checkout():
 @login_required(api=True)
 def create_checkout():
     """AJAX: create a game checkout."""
+    denied = check_checkout_privilege()
+    if denied:
+        return denied
+
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Invalid request"}), 400
@@ -216,6 +221,10 @@ def create_checkout():
 @login_required(api=True)
 def checkin():
     """AJAX: check in a game (return to library)."""
+    denied = check_checkout_privilege()
+    if denied:
+        return denied
+
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Invalid request"}), 400
@@ -364,6 +373,10 @@ def p2w_suggestions():
 @login_required(api=True)
 def reset_checkout_time():
     """AJAX: reset a checkout's timestamp (§12 Q1)."""
+    denied = check_checkout_privilege()
+    if denied:
+        return denied
+
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Invalid request"}), 400

@@ -5,6 +5,25 @@
     margin-bottom: 1.5rem;
 }
 
+/* Volunteer indicator */
+.volunteer-badge {
+    background: #27ae60;
+    color: white;
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+.nav-link-btn {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: inherit;
+    text-decoration: underline;
+    padding: 0;
+}
+
 /* Dashboard grid */
 .dashboard-grid {
     display: grid;

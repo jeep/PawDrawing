@@ -1005,3 +1005,207 @@ class TestTTEClientNewMethods(unittest.TestCase):
     def test_reset_checkout_time_method_exists(self):
         from tte_client import TTEClient
         self.assertTrue(hasattr(TTEClient, "reset_checkout_time"))
+
+
+# ---------------------------------------------------------------------------
+# Volunteer Login tests (FR-AUTH-04/05)
+# ---------------------------------------------------------------------------
+
+class TestVolunteerLogin(LibraryTestBase):
+
+    def test_volunteer_login_page_requires_library(self):
+        """Can't access volunteer login without a library selected."""
+        resp = self.client.get("/library-mgmt/volunteer-login",
+                               follow_redirects=False)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/login", resp.headers["Location"])
+
+    def test_volunteer_login_page_renders(self):
+        """Page renders when library is already selected."""
+        with self.client.session_transaction() as sess:
+            sess[SK.LIBRARY_ID] = "lib-001"
+            sess[SK.LIBRARY_NAME] = "Test Library"
+        resp = self.client.get("/library-mgmt/volunteer-login")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Volunteer Login", resp.data)
+        self.assertIn(b"Test Library", resp.data)
+
+    def test_volunteer_login_missing_credentials(self):
+        with self.client.session_transaction() as sess:
+            sess[SK.LIBRARY_ID] = "lib-001"
+            sess[SK.LIBRARY_NAME] = "Test Library"
+        resp = self.client.post("/library-mgmt/volunteer-login",
+                                data={"username": "", "password": "", "api_key": ""})
+        self.assertEqual(resp.status_code, 400)
+
+    @patch("routes.library.volunteer.TTEClient")
+    def test_volunteer_login_bad_credentials(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.login.side_effect = TTEAPIError("Invalid credentials")
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess[SK.LIBRARY_ID] = "lib-001"
+            sess[SK.LIBRARY_NAME] = "Test Library"
+
+        resp = self.client.post("/library-mgmt/volunteer-login",
+                                data={"username": "vol1", "password": "bad",
+                                      "api_key": "key1"})
+        self.assertEqual(resp.status_code, 401)
+
+    @patch("routes.library.volunteer.TTEClient")
+    def test_volunteer_login_no_privilege(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.user_id = "vol-user-001"
+        mock_instance.session_id = "vol-sess-001"
+        mock_instance.get_library_privileges.return_value = [
+            {"user_id": "vol-user-001", "checkouts": 0},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess[SK.LIBRARY_ID] = "lib-001"
+            sess[SK.LIBRARY_NAME] = "Test Library"
+
+        resp = self.client.post("/library-mgmt/volunteer-login",
+                                data={"username": "vol1", "password": "pass",
+                                      "api_key": "key1"})
+        self.assertEqual(resp.status_code, 403)
+
+    @patch("routes.library.volunteer.TTEClient")
+    def test_volunteer_login_success(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.user_id = "vol-user-001"
+        mock_instance.session_id = "vol-sess-001"
+        mock_instance.get_library_privileges.return_value = [
+            {"user_id": "vol-user-001", "checkouts": 1},
+        ]
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess[SK.LIBRARY_ID] = "lib-001"
+            sess[SK.LIBRARY_NAME] = "Test Library"
+
+        resp = self.client.post("/library-mgmt/volunteer-login",
+                                data={"username": "vol1", "password": "pass",
+                                      "api_key": "key1"},
+                                follow_redirects=False)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/library-mgmt", resp.headers["Location"])
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess[SK.AUTH_MODE], "volunteer")
+            self.assertEqual(sess[SK.VOLUNTEER_NAME], "vol1")
+            self.assertTrue(sess[SK.HAS_CHECKOUT_PRIVILEGE])
+            self.assertEqual(sess[SK.APP_MODE], "library")
+
+    @patch("routes.library.volunteer.TTEClient")
+    def test_volunteer_login_privilege_check_fails(self, MockClient):
+        """If privilege API call fails, deny login."""
+        mock_instance = MagicMock()
+        mock_instance.user_id = "vol-user-001"
+        mock_instance.session_id = "vol-sess-001"
+        mock_instance.get_library_privileges.side_effect = TTEAPIError("Server error")
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess[SK.LIBRARY_ID] = "lib-001"
+            sess[SK.LIBRARY_NAME] = "Test Library"
+
+        resp = self.client.post("/library-mgmt/volunteer-login",
+                                data={"username": "vol1", "password": "pass",
+                                      "api_key": "key1"})
+        self.assertEqual(resp.status_code, 403)
+
+
+class TestVolunteerLogout(LibraryTestBase):
+
+    def test_volunteer_logout_preserves_library(self):
+        """Logout clears volunteer session but keeps library context."""
+        self._set_session(**{
+            SK.AUTH_MODE: "volunteer",
+            SK.VOLUNTEER_NAME: "vol1",
+            SK.CACHED_GAMES: [{"id": "g1", "name": "Catan"}],
+        })
+        resp = self.client.post("/library-mgmt/volunteer-logout",
+                                follow_redirects=False)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("volunteer-login", resp.headers["Location"])
+
+        with self.client.session_transaction() as sess:
+            # Library context preserved
+            self.assertEqual(sess.get(SK.LIBRARY_ID), "lib-001")
+            self.assertEqual(sess.get(SK.LIBRARY_NAME), "Test Library")
+            self.assertIsNotNone(sess.get(SK.CACHED_GAMES))
+            # Volunteer session cleared
+            self.assertIsNone(sess.get(SK.TTE_SESSION_ID))
+            self.assertIsNone(sess.get(SK.AUTH_MODE))
+
+
+class TestCheckoutPrivilegeGate(LibraryTestBase):
+
+    def test_checkout_denied_for_unprivileged_volunteer(self):
+        """Volunteer without checkout privilege gets 403."""
+        self._set_session(**{
+            SK.AUTH_MODE: "volunteer",
+            SK.HAS_CHECKOUT_PRIVILEGE: False,
+        })
+        resp = self.client.post("/library-mgmt/checkout", json={
+            "game_id": VALID_GAME_ID, "renter_name": "Alice",
+        })
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn("privilege", resp.get_json()["error"].lower())
+
+    def test_checkin_denied_for_unprivileged_volunteer(self):
+        self._set_session(**{
+            SK.AUTH_MODE: "volunteer",
+            SK.HAS_CHECKOUT_PRIVILEGE: False,
+        })
+        resp = self.client.post("/library-mgmt/checkin", json={
+            "checkout_id": VALID_CHECKOUT_ID, "game_id": VALID_GAME_ID,
+        })
+        self.assertEqual(resp.status_code, 403)
+
+    def test_reset_time_denied_for_unprivileged_volunteer(self):
+        self._set_session(**{
+            SK.AUTH_MODE: "volunteer",
+            SK.HAS_CHECKOUT_PRIVILEGE: False,
+        })
+        resp = self.client.post("/library-mgmt/reset-checkout-time",
+                                json={"checkout_id": VALID_CHECKOUT_ID})
+        self.assertEqual(resp.status_code, 403)
+
+    @patch("routes.library.checkout._get_client")
+    def test_checkout_allowed_for_privileged_volunteer(self, mock_gc):
+        mock_client = MagicMock()
+        mock_client.get_library_game.return_value = {
+            "id": VALID_GAME_ID, "is_checked_out": 0, "is_in_circulation": 1,
+        }
+        mock_client.create_checkout.return_value = {"id": "co-001"}
+        mock_gc.return_value = mock_client
+
+        self._set_session(**{
+            SK.AUTH_MODE: "volunteer",
+            SK.HAS_CHECKOUT_PRIVILEGE: True,
+            SK.CACHED_GAMES: [
+                {"id": VALID_GAME_ID, "name": "Catan",
+                 "is_checked_out": 0, "is_play_to_win": 1},
+            ],
+        })
+        resp = self.client.post("/library-mgmt/checkout", json={
+            "game_id": VALID_GAME_ID, "renter_name": "Alice",
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.get_json()["success"])
+
+    def test_owner_mode_always_allowed(self):
+        """Owner mode (no auth_mode set) is never blocked by privilege check."""
+        # This test just verifies the privilege gate doesn't block owner mode.
+        # The checkout itself will fail because we don't mock the TTE client,
+        # but it should NOT return 403.
+        self._set_session(**{SK.CACHED_GAMES: []})
+        resp = self.client.post("/library-mgmt/checkout", json={
+            "game_id": VALID_GAME_ID, "renter_name": "Alice",
+        })
+        # Should fail with 500 (no mock) or 400, but NOT 403
+        self.assertNotEqual(resp.status_code, 403)
