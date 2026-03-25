@@ -13,16 +13,85 @@
         };
     }
 
-    function apiPost(url, body) {
-        return fetch(url, {
+    // ── Toast Notifications ───────────────────────────────────────────
+
+    function showToast(message, type, duration) {
+        type = type || 'info';
+        duration = duration || 4000;
+        var container = document.getElementById('toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            document.body.appendChild(container);
+        }
+        var toast = document.createElement('div');
+        toast.className = 'toast toast-' + type;
+        toast.textContent = message;
+        container.appendChild(toast);
+        setTimeout(function() {
+            toast.classList.add('toast-fade');
+            setTimeout(function() { toast.remove(); }, 300);
+        }, duration);
+    }
+
+    // ── Fetch with Timeout + Retry ────────────────────────────────────
+
+    var FETCH_TIMEOUT = 15000;
+    var MAX_RETRIES = 2;
+
+    function fetchWithTimeout(url, opts, timeoutMs) {
+        timeoutMs = timeoutMs || FETCH_TIMEOUT;
+        var controller = new AbortController();
+        opts = opts || {};
+        opts.signal = controller.signal;
+        var timer = setTimeout(function() { controller.abort(); }, timeoutMs);
+        return fetch(url, opts).finally(function() { clearTimeout(timer); });
+    }
+
+    function apiPost(url, body, retries) {
+        retries = (retries === undefined) ? MAX_RETRIES : retries;
+        return fetchWithTimeout(url, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(body),
-        }).then(function(r) { return r.json(); });
+        }).then(function(r) {
+            if (r.status === 429) {
+                if (retries > 0) {
+                    showToast('Rate limit reached — retrying shortly\u2026', 'warning', 3000);
+                    return new Promise(function(resolve) {
+                        setTimeout(function() { resolve(apiPost(url, body, retries - 1)); }, 2000);
+                    });
+                }
+            }
+            return r.json();
+        }).catch(function(err) {
+            if (err.name === 'AbortError' && retries > 0) {
+                showToast('Request timed out — retrying\u2026', 'warning', 3000);
+                return apiPost(url, body, retries - 1);
+            }
+            throw err;
+        });
     }
 
-    function apiGet(url) {
-        return fetch(url).then(function(r) { return r.json(); });
+    function apiGet(url, retries) {
+        retries = (retries === undefined) ? MAX_RETRIES : retries;
+        return fetchWithTimeout(url).then(function(r) {
+            if (r.status === 429) {
+                if (retries > 0) {
+                    showToast('Rate limit reached — retrying shortly\u2026', 'warning', 3000);
+                    return new Promise(function(resolve) {
+                        setTimeout(function() { resolve(apiGet(url, retries - 1)); }, 2000);
+                    });
+                }
+            }
+            return r.json();
+        }).catch(function(err) {
+            if (err.name === 'AbortError' && retries > 0) {
+                showToast('Request timed out — retrying\u2026', 'warning', 3000);
+                return apiGet(url, retries - 1);
+            }
+            throw err;
+        });
     }
 
     // ── Offline Queue (§12 Q2) ────────────────────────────────────────
@@ -188,7 +257,7 @@
     setupGameSearch('checkout-game-search', 'checkout-game-results', function(dataset) {
         if (dataset.checkedOut === '1' || dataset.checkedOut === 'true' ||
             dataset.checkedOut === 'True' || parseInt(dataset.checkedOut)) {
-            alert('This game is currently checked out.');
+            showToast('This game is currently checked out.', 'warning');
             return;
         }
         selectedCheckoutGame = { id: dataset.id, name: dataset.name, p2w: dataset.p2w };
@@ -236,7 +305,7 @@
             }).then(data => {
                 this.disabled = false;
                 if (data.error) {
-                    alert('Checkout failed: ' + data.error);
+                    showToast('Checkout failed: ' + data.error, 'error');
                     return;
                 }
 
@@ -244,7 +313,7 @@
                 if (data.is_play_to_win) {
                     showP2WModal(selectedCheckoutGame, name, badge);
                 } else {
-                    alert('Checked out: ' + selectedCheckoutGame.name);
+                    showToast('Checked out: ' + selectedCheckoutGame.name, 'success');
                     resetCheckoutForm();
                 }
             }).catch(function() {
@@ -255,7 +324,7 @@
                     body: { game_id: selectedCheckoutGame.id, renter_name: name, badge_number: badge },
                     description: 'Checkout: ' + selectedCheckoutGame.name + ' → ' + name,
                 });
-                alert('Network error — checkout queued for retry. Please also track manually.');
+                showToast('Network error — checkout queued for retry.', 'warning', 6000);
                 resetCheckoutForm();
             }.bind(this));
         });
@@ -276,7 +345,7 @@
     setupGameSearch('checkin-game-search', 'checkin-game-results', function(dataset) {
         if (!parseInt(dataset.checkedOut) && dataset.checkedOut !== '1' &&
             dataset.checkedOut !== 'true' && dataset.checkedOut !== 'True') {
-            alert('This game is not currently checked out.');
+            showToast('This game is not currently checked out.', 'warning');
             return;
         }
 
@@ -284,7 +353,7 @@
         apiGet('/library-mgmt/active-checkout?game_id=' + encodeURIComponent(dataset.id))
             .then(data => {
                 if (data.error) {
-                    alert('Could not find active checkout: ' + data.error);
+                    showToast('Could not find active checkout: ' + data.error, 'error');
                     return;
                 }
                 document.getElementById('checkin-game-name').textContent = dataset.name;
@@ -300,7 +369,7 @@
                 };
             })
             .catch(() => {
-                alert('Could not fetch checkout details. Try using the game detail page.');
+                showToast('Could not fetch checkout details.', 'error');
             });
     });
 
@@ -317,7 +386,7 @@
             }).then(data => {
                 this.disabled = false;
                 if (data.error) {
-                    alert('Check-in failed: ' + data.error);
+                    showToast('Check-in failed: ' + data.error, 'error');
                     return;
                 }
                 if (data.is_play_to_win) {
@@ -326,7 +395,7 @@
                         selectedCheckinData.renterName, ''
                     );
                 } else {
-                    alert('Checked in: ' + selectedCheckinData.gameName);
+                    showToast('Checked in: ' + selectedCheckinData.gameName, 'success');
                 }
                 resetCheckinForm();
             }).catch(function() {
@@ -338,10 +407,10 @@
                         body: { checkout_id: selectedCheckinData.checkoutId, game_id: selectedCheckinData.gameId },
                         description: 'Check-in: ' + selectedCheckinData.gameName,
                     });
-                    alert('Network error — check-in queued for retry. Please also track manually.');
+                    showToast('Network error — check-in queued for retry.', 'warning', 6000);
                     resetCheckinForm();
                 } else {
-                    alert('Check-in failed — please try again.');
+                    showToast('Check-in failed — please try again.', 'error');
                 }
             }.bind(this));
         });
@@ -435,7 +504,7 @@
             }).then(data => {
                 this.disabled = false;
                 if (data.error) {
-                    alert('P2W entry failed: ' + data.error);
+                    showToast('P2W entry failed: ' + data.error, 'error');
                     return;
                 }
                 var msg = data.created.length + ' entries created';
@@ -445,12 +514,12 @@
                 if (data.errors && data.errors.length > 0) {
                     msg += ', ' + data.errors.length + ' failed';
                 }
-                alert(msg);
+                showToast(msg, 'success', 5000);
                 closeP2WModal();
                 resetCheckoutForm();
             }).catch(() => {
                 this.disabled = false;
-                alert('P2W entry failed — please try again.');
+                showToast('P2W entry failed — please try again.', 'error');
             });
         });
     }
@@ -484,7 +553,7 @@
                 game_id: gameId,
             }).then(data => {
                 if (data.error) {
-                    alert('Check-in failed: ' + data.error);
+                    showToast('Check-in failed: ' + data.error, 'error');
                     this.disabled = false;
                     return;
                 }
@@ -492,7 +561,7 @@
                 this.textContent = 'Returned';
             }).catch(() => {
                 this.disabled = false;
-                alert('Check-in failed — please try again.');
+                showToast('Check-in failed — please try again.', 'error');
             });
         });
     });
@@ -509,7 +578,7 @@
                 checkout_id: checkoutId,
             }).then(data => {
                 if (data.error) {
-                    alert('Reset failed: ' + data.error);
+                    showToast('Reset failed: ' + data.error, 'error');
                     this.disabled = false;
                     return;
                 }
@@ -518,7 +587,7 @@
                 if (dateSpan) dateSpan.textContent = 'since just now';
             }).catch(() => {
                 this.disabled = false;
-                alert('Reset failed — please try again.');
+                showToast('Reset failed — please try again.', 'error');
             });
         });
     });

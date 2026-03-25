@@ -524,3 +524,86 @@
     gap: 0.3rem;
     cursor: pointer;
 }
+
+/* Toast notifications (FR-ERR-03) */
+#toast-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-width: 400px;
+}
+
+.toast {
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    animation: toast-in 0.3s ease;
+}
+
+.toast-fade {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.toast-success { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #2e7d32; }
+.toast-error   { background: #fdecea; color: #b71c1c; border-left: 4px solid #b71c1c; }
+.toast-warning { background: #fff3e0; color: #e65100; border-left: 4px solid #e65100; }
+.toast-info    { background: #e3f2fd; color: #1565c0; border-left: 4px solid #1565c0; }
+
+@keyframes toast-in {
+    from { opacity: 0; transform: translateX(1rem); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Touch-friendly sizing for touch devices */
+@media (hover: none), (pointer: coarse) {
+    .btn {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 0.6rem 1.2rem;
+        font-size: 1rem;
+    }
+
+    .btn-small {
+        min-height: 44px;
+        padding: 0.5rem 0.8rem;
+        font-size: 0.9rem;
+    }
+
+    .search-result-item {
+        padding: 0.75rem;
+        min-height: 44px;
+    }
+
+    .search-group input,
+    .form-row input {
+        min-height: 44px;
+        font-size: 1rem;
+    }
+
+    .detail-table td,
+    .detail-table th,
+    .component-table td,
+    .component-table th {
+        padding: 0.6rem 0.75rem;
+    }
+
+    .checkout-item {
+        padding: 0.75rem 0;
+        gap: 0.5rem;
+    }
+
+    .p2w-entrant-row {
+        padding: 0.5rem 0;
+    }
+
+    .notification-item {
+        padding: 1.25rem;
+    }
+}
