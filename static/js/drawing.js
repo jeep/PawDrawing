@@ -270,7 +270,7 @@
     function pickRandomGameId(gameIds) {
         var premiumGames = JSON.parse(cfg.premiumGames || '[]');
         var premiumIds = gameIds.filter(function(gid) { return premiumGames.indexOf(gid) !== -1; });
-        var pool = (premiumIds.length > 0 && premiumIds.length < gameIds.length) ? premiumIds : gameIds;
+        var pool = premiumIds.length > 0 ? premiumIds : gameIds;
         return pool[Math.floor(Math.random() * pool.length)];
     }
 
@@ -280,9 +280,9 @@
 
         var msg = 'Randomly resolve all ' + items.length + ' remaining conflict' +
             (items.length > 1 ? 's' : '') + '?\n\n' +
-            'Each person will be assigned a game at random. ' +
-            'If a person won exactly one premium game, that game will be kept.\n\n' +
-            'This may cause new conflicts which will need to be resolved afterward.';
+            'Each current conflict will be resolved at random. Premium games will be ' +
+            'given priority; otherwise, no consideration is made for game value.\n\n' +
+            'This may cause new conflicts which will need to be resolved.';
         if (!confirm(msg)) return;
 
         var resolutions = [];
