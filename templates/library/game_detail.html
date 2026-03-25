@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block app_title %}PawLibrary{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/library.css') }}">
+{% endblock %}
+
+{% block nav %}
+    <a href="{{ url_for('library.dashboard') }}">Dashboard</a>
+    <a href="{{ url_for('main.logout') }}">Logout</a>
+{% endblock %}
+
+{% block content %}
+<h2>{{ game.name }}</h2>
+<p class="subtitle">Catalog #{{ game.catalog_number or 'N/A' }}</p>
+
+<div class="detail-grid">
+    <div class="detail-card">
+        <h3>Status</h3>
+        {% if not game.is_in_circulation %}
+            <span class="status-badge status-unavailable">Not in Circulation</span>
+        {% elif game.is_checked_out %}
+            <span class="status-badge status-out">Checked Out</span>
+        {% else %}
+            <span class="status-badge status-available">Available</span>
+        {% endif %}
+
+        <table class="detail-table">
+            <tr><td>Play-to-Win</td><td>{{ "Yes" if game.is_play_to_win else "No" }}</td></tr>
+            <tr><td>Players</td><td>{{ game.min_players or '?' }}–{{ game.max_players or '?' }}</td></tr>
+            <tr><td>Publisher</td><td>{{ game.publisher_name or 'Unknown' }}</td></tr>
+            <tr><td>Total Checkouts</td><td>{{ game.checkout_count or 0 }}</td></tr>
+            {% if game.is_play_to_win %}
+            <tr><td>P2W Entries</td><td>{{ p2w_entry_count }}</td></tr>
+            {% endif %}
+        </table>
+    </div>
+
+    {% if active_checkouts %}
+    <div class="detail-card">
+        <h3>Currently Checked Out</h3>
+        {% for c in active_checkouts %}
+        <div class="checkout-item active-checkout">
+            <strong>{{ c.renter_name }}</strong>
+            <span class="checkout-date">since {{ c.date_created }}</span>
+            <button class="btn btn-small checkin-quick-btn"
+                    data-checkout-id="{{ c.id }}"
+                    data-game-id="{{ game.id }}">Check In</button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if checkout_history %}
+    <div class="detail-card">
+        <h3>Recent Checkout History</h3>
+        <table class="detail-table">
+            <thead><tr><th>Person</th><th>Checked Out</th><th>Returned</th></tr></thead>
+            <tbody>
+            {% for c in checkout_history %}
+            <tr>
+                <td>{{ c.renter_name }}</td>
+                <td>{{ c.date_created }}</td>
+                <td>{{ c.checkin_date or '—' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if p2w_entries %}
+    <div class="detail-card">
+        <h3>Play-to-Win Entries ({{ p2w_entry_count }})</h3>
+        <ul class="p2w-entry-list">
+        {% for e in p2w_entries %}
+            <li>{{ e.name or e.renter_name or 'Unknown' }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/library.js') }}"></script>
+{% endblock %}

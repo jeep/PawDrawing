@@ -233,3 +233,82 @@ class TTEClient:
     def update_playtowin(self, playtowin_id, data):
         """Update a PlayToWin entry (e.g., set win flag)."""
         return self._request("PUT", f"/playtowin/{playtowin_id}", json_body=data)
+
+    # ── Library Management: Checkouts ──────────────────────────────────
+
+    def get_library_checkouts(self, library_id, checked_in=None):
+        """Fetch checkouts for a library. Filter by checked-in status if provided."""
+        params = {}
+        if checked_in is not None:
+            params["is_checked_in"] = 1 if checked_in else 0
+        return self._get_all_pages(f"/library/{library_id}/checkouts", params)
+
+    def get_library_game_checkouts(self, game_id, checked_in=None):
+        """Fetch checkouts for a specific game."""
+        params = {}
+        if checked_in is not None:
+            params["is_checked_in"] = 1 if checked_in else 0
+        return self._get_all_pages(f"/librarygame/{game_id}/checkouts", params)
+
+    def search_checkouts(self, query):
+        """Search checkouts across libraries by renter name."""
+        return self._get_all_pages("/librarygamecheckout", params={"query": query})
+
+    def create_checkout(self, library_id, game_id, renter_name,
+                        convention_id=None, badge_id=None):
+        """Create a new game checkout."""
+        body = {
+            "library_id": library_id,
+            "librarygame_id": game_id,
+            "renter_name": renter_name,
+        }
+        if convention_id:
+            body["convention_id"] = convention_id
+        if badge_id:
+            body["badge_id"] = badge_id
+        return self._request("POST", "/librarygamecheckout", json_body=body)
+
+    def checkin_game(self, checkout_id):
+        """Check in a game (return to library)."""
+        return self._request("POST", f"/librarygamecheckout/{checkout_id}/checkin")
+
+    def get_checkout(self, checkout_id):
+        """Fetch a specific checkout."""
+        return self._request("GET", f"/librarygamecheckout/{checkout_id}")
+
+    def delete_checkout(self, checkout_id):
+        """Delete a checkout."""
+        return self._request("DELETE", f"/librarygamecheckout/{checkout_id}")
+
+    # ── Library Management: P2W Entries ────────────────────────────────
+
+    def create_playtowin_entry(self, library_id, game_id, renter_name,
+                               convention_id=None, badge_id=None):
+        """Create a Play-to-Win drawing entry."""
+        body = {
+            "library_id": library_id,
+            "librarygame_id": game_id,
+            "name": renter_name,
+        }
+        if convention_id:
+            body["convention_id"] = convention_id
+        if badge_id:
+            body["badge_id"] = badge_id
+        return self._request("POST", "/playtowin", json_body=body)
+
+    # ── Library Management: Game Updates ───────────────────────────────
+
+    def update_library_game(self, game_id, data):
+        """Update a library game (e.g., set is_play_to_win)."""
+        return self._request("PUT", f"/librarygame/{game_id}", json_body=data)
+
+    # ── Library Management: Badge Lookup ───────────────────────────────
+
+    def search_badges(self, convention_id, query, query_field=None):
+        """Search convention badges by name, email, or badge number."""
+        params = {"query": query}
+        if query_field:
+            params["query_field"] = query_field
+        return self._get_all_pages(
+            f"/convention/{convention_id}/badges", params
+        )

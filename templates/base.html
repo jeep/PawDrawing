@@ -28,6 +28,29 @@
             margin-left: 1.5rem;
         }
         nav a:hover { text-decoration: underline; }
+        .mode-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-right: 1rem;
+        }
+        .mode-label.active {
+            color: #ecf0f1;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .mode-switch-btn {
+            background: rgba(255,255,255,0.15);
+            color: #ecf0f1;
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .mode-switch-btn:hover {
+            background: rgba(255,255,255,0.25);
+        }
         .container {
             max-width: 1000px;
             margin: 2rem auto;
@@ -77,8 +100,28 @@
 </head>
 <body>
     <header>
-        <h1>PawDrawing</h1>
+        <h1>{% block app_title %}PawDrawing{% endblock %}</h1>
         <nav>
+            {% if session.get('tte_session_id') and session.get('library_id') %}
+            <span class="mode-toggle">
+                {% set mode = session.get('app_mode', 'drawing') %}
+                {% if mode == 'library' %}
+                    <span class="mode-label active">Library</span>
+                    <form method="post" action="{{ url_for('library.switch_mode') }}" style="display:inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="mode" value="drawing">
+                        <button type="submit" class="mode-switch-btn">Switch to Drawing</button>
+                    </form>
+                {% else %}
+                    <span class="mode-label active">Drawing</span>
+                    <form method="post" action="{{ url_for('library.switch_mode') }}" style="display:inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="mode" value="library">
+                        <button type="submit" class="mode-switch-btn">Switch to Library</button>
+                    </form>
+                {% endif %}
+            </span>
+            {% endif %}
             {% block nav %}{% endblock %}
         </nav>
     </header>

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block app_title %}PawLibrary{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/library.css') }}">
+{% endblock %}
+
+{% block nav %}
+    <a href="{{ url_for('library.dashboard') }}">Dashboard</a>
+    <a href="{{ url_for('library.notifications') }}">Notifications</a>
+    <a href="{{ url_for('main.logout') }}">Logout</a>
+{% endblock %}
+
+{% block content %}
+<h2>Notifications</h2>
+
+{% if not notifications %}
+<p class="empty-state">No notifications.</p>
+{% else %}
+<div class="notification-list">
+    {% for n in notifications %}
+    <div class="notification-item {% if n.dismissed %}dismissed{% endif %}" data-id="{{ n.id }}">
+        <div class="notification-header">
+            <span class="notification-type {{ n.type or 'info' }}">{{ n.type or 'info' }}</span>
+            <span class="notification-time">{{ n.timestamp or '' }}</span>
+            {% if not n.dismissed %}
+            <button class="btn btn-small dismiss-btn" data-id="{{ n.id }}">Dismiss</button>
+            {% endif %}
+        </div>
+        <p class="notification-message">{{ n.message }}</p>
+        {% if n.details %}
+        <details class="notification-details">
+            <summary>Details</summary>
+            <ul>
+            {% for detail in n.details %}
+                <li>{{ detail }}</li>
+            {% endfor %}
+            </ul>
+        </details>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.dismiss-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const id = this.dataset.id;
+        fetch('{{ url_for("library.dismiss_notification") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({id: id})
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                const item = this.closest('.notification-item');
+                item.classList.add('dismissed');
+                this.remove();
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

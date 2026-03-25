@@ -27,3 +27,24 @@ class SK:
     NOT_HERE = "not_here"
     NOT_HERE_WARNING_DISMISSED = "not_here_warning_dismissed"
     SOLO_DISMISSED_GAMES = "solo_dismissed_games"
+
+    # ── Library Management Mode ────────────────────────────────────────
+    APP_MODE = "app_mode"  # "drawing" or "library"
+
+    # Person identification
+    PERSON_CACHE = "person_cache"  # {badge_number: {name, badge_id, user_id}}
+
+    # Checkout tracking
+    CHECKOUT_CACHE = "checkout_cache"  # list of active checkouts
+
+    # P2W play group tracking
+    PLAY_GROUPS = "play_groups"  # {person_key: [co-entrant keys]}
+
+    # Notifications
+    NOTIFICATIONS = "notifications"  # [{id, type, message, dismissed, timestamp, details}]
+
+    # Component check tracking
+    COMPONENT_CHECKS = "component_checks"  # {game_id: {checked, volunteer, timestamp}}
+
+    # Library management settings
+    LIBRARY_SETTINGS = "library_settings"  # {include_non_p2w: bool, ...}
