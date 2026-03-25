@@ -109,7 +109,7 @@ def person_detail(badge_number):
     # Get person name from cache
     person_cache = session.get(SK.PERSON_CACHE, {})
     person_info = person_cache.get(badge_number, {})
-    person_name = person_info.get("name", badge_number)
+    person_name = person_info.get("name", "")
 
     client = _get_client()
 
@@ -118,6 +118,20 @@ def person_detail(badge_number):
         all_active = client.get_library_checkouts(library_id, checked_in=False)
     except TTEAPIError as exc:
         return _handle_api_json_error(exc, "load person checkouts")
+
+    # If not in cache, try to find in active checkouts by badge (FR-PRSN-05)
+    if not person_name:
+        for co in all_active:
+            if co.get("badge_id") == badge_number or str(co.get("badge_number", "")) == badge_number:
+                person_name = co.get("renter_name", "")
+                if person_name:
+                    person_cache[badge_number] = {"name": person_name, "badge_id": co.get("badge_id", badge_number)}
+                    session[SK.PERSON_CACHE] = person_cache
+                    person_info = person_cache[badge_number]
+                    break
+
+    if not person_name:
+        person_name = badge_number
 
     # Build game name lookup from cached catalog
     games = session.get(SK.CACHED_GAMES, [])

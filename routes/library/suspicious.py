@@ -32,17 +32,19 @@ def compute_threshold_seconds(game):
     return 4 * 3600  # 4-hour fallback
 
 
-def check_long_checkouts(games, active_checkouts):
+def check_long_checkouts(games, active_checkouts, premium_ids=None):
     """Detect currently-active checkouts that exceed the game's threshold.
 
     Args:
         games: list of game dicts from session cache.
         active_checkouts: list of checkout dicts (is_checked_in=0).
+        premium_ids: optional set of game IDs designated as premium.
 
     Returns:
         list of dicts with suspicious checkout info.
     """
     game_map = {g.get("id"): g for g in games}
+    premium = set(premium_ids or [])
     now = datetime.now(timezone.utc)
     suspicious = []
 
@@ -64,13 +66,13 @@ def check_long_checkouts(games, active_checkouts):
                 "renter_name": co.get("renter_name", "Unknown"),
                 "elapsed_hours": round(elapsed / 3600, 1),
                 "threshold_hours": round(threshold / 3600, 1),
-                "is_premium": game_id in (game.get("_premium_ids") or set()),
+                "is_premium": game_id in premium,
             })
 
     return suspicious
 
 
-def check_partner_patterns(checkouts, play_groups):
+def check_partner_patterns(checkouts, play_groups, games=None):
     """Detect sequential long checkouts by play partners (FR-SUSPCHK-02).
 
     If person A had a long checkout for game X, and person B (a frequent
@@ -79,10 +81,14 @@ def check_partner_patterns(checkouts, play_groups):
     Args:
         checkouts: list of all checkout dicts (both active and history).
         play_groups: dict mapping person name → list of co-entrant names.
+        games: optional list of game dicts for per-game threshold lookup.
 
     Returns:
         list of pattern dicts describing suspicious partner patterns.
     """
+    # Build game lookup for per-game thresholds
+    game_map = {g.get("id"): g for g in (games or [])}
+
     # Group checkouts by game, sorted by date
     from collections import defaultdict
     game_checkouts = defaultdict(list)
@@ -103,10 +109,12 @@ def check_partner_patterns(checkouts, play_groups):
             if b_name not in partners_of_a:
                 continue
 
-            # Were both long checkouts?
+            # Were both long checkouts? Use per-game threshold (FR-SUSPCHK-02)
+            game = game_map.get(game_id, {})
+            threshold = compute_threshold_seconds(game)
             a_secs = a.get("checkedout_seconds", 0) or 0
             b_secs = b.get("checkedout_seconds", 0) or 0
-            if a_secs > 7200 and b_secs > 7200:  # both > 2 hours
+            if a_secs > threshold and b_secs > threshold:
                 patterns.append({
                     "game_id": game_id,
                     "person_a": a_name,

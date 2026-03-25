@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from collections import Counter
 from datetime import datetime, timezone
 
 from flask import flash, jsonify, redirect, render_template, request, session, url_for
@@ -120,6 +121,15 @@ def refresh_catalog():
         flash(f"Catalog refresh failed: {exc}", "error")
         return redirect(url_for("library.dashboard"))
 
+    # Enrich with P2W entry counts (FR-LOWPLAY-01)
+    try:
+        all_p2w = client.get_library_playtowins(library_id)
+        p2w_counts = Counter(e.get("librarygame_id") for e in all_p2w)
+        for g in games:
+            g["_p2w_count"] = p2w_counts.get(g.get("id"), 0)
+    except TTEAPIError:
+        logger.warning("Could not fetch P2W entries for count enrichment")
+
     session[SK.CACHED_GAMES] = games
     logger.info("Catalog refreshed: %d games loaded", len(games))
 
@@ -189,7 +199,7 @@ def check_suspicious():
     except TTEAPIError:
         active = []
 
-    suspicious = check_long_checkouts(games, active)
+    suspicious = check_long_checkouts(games, active, premium_ids=set(session.get(SK.PREMIUM_GAMES, [])))
     play_groups = session.get(SK.PLAY_GROUPS, {})
 
     # Also check history for partner patterns
@@ -198,7 +208,7 @@ def check_suspicious():
     except TTEAPIError:
         history = []
 
-    patterns = check_partner_patterns(active + history, play_groups)
+    patterns = check_partner_patterns(active + history, play_groups, games)
     flagged = flag_suspicious_games(games, suspicious, patterns)
     session[SK.CACHED_GAMES] = games
 

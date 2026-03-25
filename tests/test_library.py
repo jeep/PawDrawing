@@ -865,6 +865,7 @@ class TestSuspiciousDetection(unittest.TestCase):
 
     def test_check_partner_patterns(self):
         from routes.library.suspicious import check_partner_patterns
+        games = [{"id": "g1", "max_play_time": 60}]  # threshold = 7200 sec
         checkouts = [
             {"librarygame_id": "g1", "renter_name": "Alice",
              "date_created": "2026-03-25 10:00:00", "checkedout_seconds": 10000},
@@ -872,7 +873,7 @@ class TestSuspiciousDetection(unittest.TestCase):
              "date_created": "2026-03-25 14:00:00", "checkedout_seconds": 9000},
         ]
         play_groups = {"Alice": ["Bob"], "Bob": ["Alice"]}
-        result = check_partner_patterns(checkouts, play_groups)
+        result = check_partner_patterns(checkouts, play_groups, games)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["person_a"], "Alice")
         self.assertEqual(result[0]["person_b"], "Bob")
@@ -1266,3 +1267,159 @@ class TestNotificationDetails(LibraryTestBase):
                 details = non_p2w_notifs[0]["details"]
                 self.assertIsInstance(details, list)
                 self.assertIn("Chess", details)
+
+
+class TestP2WCountEnrichment(LibraryTestBase):
+    """Test that refresh_catalog populates _p2w_count per game (FR-LOWPLAY-01)."""
+
+    @patch("routes.library.dashboard._get_client")
+    def test_refresh_populates_p2w_counts(self, mock_gc):
+        """Catalog refresh enriches _p2w_count from library P2W entries."""
+        mock_client = MagicMock()
+        mock_client.get_library_games.return_value = [
+            {"id": "g1", "name": "Catan"},
+            {"id": "g2", "name": "Azul"},
+        ]
+        mock_client.get_library_playtowins.return_value = [
+            {"librarygame_id": "g1"},
+            {"librarygame_id": "g1"},
+            {"librarygame_id": "g1"},
+            {"librarygame_id": "g2"},
+        ]
+        mock_gc.return_value = mock_client
+
+        self._set_session()
+        self.client.post("/library-mgmt/refresh-catalog", follow_redirects=True)
+
+        with self.client.session_transaction() as sess:
+            games = sess[SK.CACHED_GAMES]
+            g1 = next(g for g in games if g["id"] == "g1")
+            g2 = next(g for g in games if g["id"] == "g2")
+            self.assertEqual(g1["_p2w_count"], 3)
+            self.assertEqual(g2["_p2w_count"], 1)
+
+    @patch("routes.library.dashboard._get_client")
+    def test_refresh_p2w_count_fallback_on_error(self, mock_gc):
+        """Catalog still loads if P2W count fetch fails."""
+        mock_client = MagicMock()
+        mock_client.get_library_games.return_value = [
+            {"id": "g1", "name": "Catan"},
+        ]
+        mock_client.get_library_playtowins.side_effect = TTEAPIError("timeout")
+        mock_gc.return_value = mock_client
+
+        self._set_session()
+        resp = self.client.post("/library-mgmt/refresh-catalog",
+                                follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"1 games loaded", resp.data)
+
+
+class TestPartnerPatternThresholds(unittest.TestCase):
+    """Test that partner patterns use per-game thresholds (FR-SUSPCHK-02)."""
+
+    def test_partner_pattern_uses_game_threshold(self):
+        """Short-max-play-time game flags patterns at lower threshold."""
+        from routes.library.suspicious import check_partner_patterns
+        # Game with 30-min max play time → threshold = 2×30×60 = 3600 sec
+        games = [{"id": "g1", "max_play_time": 30}]
+        checkouts = [
+            {"librarygame_id": "g1", "renter_name": "Alice",
+             "date_created": "2026-03-25 10:00:00", "checkedout_seconds": 4000},
+            {"librarygame_id": "g1", "renter_name": "Bob",
+             "date_created": "2026-03-25 14:00:00", "checkedout_seconds": 4000},
+        ]
+        play_groups = {"Alice": ["Bob"]}
+        # With games passed, threshold=3600; both have 4000 > 3600 → flagged
+        result = check_partner_patterns(checkouts, play_groups, games)
+        self.assertEqual(len(result), 1)
+
+    def test_partner_pattern_no_false_positive_with_long_game(self):
+        """Long-max-play-time game does NOT flag short checkouts."""
+        from routes.library.suspicious import check_partner_patterns
+        # Game with 180-min max → threshold = 2×180×60 = 21600 sec (6 hours)
+        games = [{"id": "g1", "max_play_time": 180}]
+        checkouts = [
+            {"librarygame_id": "g1", "renter_name": "Alice",
+             "date_created": "2026-03-25 10:00:00", "checkedout_seconds": 10000},
+            {"librarygame_id": "g1", "renter_name": "Bob",
+             "date_created": "2026-03-25 14:00:00", "checkedout_seconds": 9000},
+        ]
+        play_groups = {"Alice": ["Bob"]}
+        # Both < 21600 → NOT flagged
+        result = check_partner_patterns(checkouts, play_groups, games)
+        self.assertEqual(len(result), 0)
+
+    def test_partner_pattern_fallback_no_games(self):
+        """Without games list, uses 4-hour fallback threshold."""
+        from routes.library.suspicious import check_partner_patterns
+        checkouts = [
+            {"librarygame_id": "g1", "renter_name": "Alice",
+             "date_created": "2026-03-25 10:00:00", "checkedout_seconds": 15000},
+            {"librarygame_id": "g1", "renter_name": "Bob",
+             "date_created": "2026-03-25 14:00:00", "checkedout_seconds": 15000},
+        ]
+        play_groups = {"Alice": ["Bob"]}
+        # No games → fallback 4h=14400; both 15000 > 14400 → flagged
+        result = check_partner_patterns(checkouts, play_groups)
+        self.assertEqual(len(result), 1)
+
+
+class TestPremiumFlagInSuspicious(unittest.TestCase):
+    """Test that premium flag is correctly passed to suspicious detection."""
+
+    def test_long_checkout_premium_flag(self):
+        from routes.library.suspicious import check_long_checkouts
+        from datetime import datetime, timedelta, timezone
+        games = [{"id": "g1", "name": "Catan", "max_play_time": 60}]
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=5)).strftime(
+            "%Y-%m-%d %H:%M:%S")
+        active = [{"id": "co1", "librarygame_id": "g1",
+                    "renter_name": "Alice", "date_created": old_time}]
+        # With premium_ids containing g1
+        result = check_long_checkouts(games, active, premium_ids={"g1"})
+        self.assertTrue(result[0]["is_premium"])
+
+    def test_long_checkout_not_premium(self):
+        from routes.library.suspicious import check_long_checkouts
+        from datetime import datetime, timedelta, timezone
+        games = [{"id": "g1", "name": "Catan", "max_play_time": 60}]
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=5)).strftime(
+            "%Y-%m-%d %H:%M:%S")
+        active = [{"id": "co1", "librarygame_id": "g1",
+                    "renter_name": "Alice", "date_created": old_time}]
+        # No premium IDs
+        result = check_long_checkouts(games, active)
+        self.assertFalse(result[0]["is_premium"])
+
+
+class TestPersonLookupFallback(LibraryTestBase):
+    """Test person lookup falls back to checkout data (FR-PRSN-05)."""
+
+    @patch("routes.library.lookup._get_client")
+    def test_person_detail_finds_name_from_checkouts(self, mock_gc):
+        """When badge not in cache, name is discovered from active checkouts."""
+        mock_client = MagicMock()
+        mock_client.get_library_checkouts.side_effect = [
+            # First call: active checkouts
+            [{"id": "co1", "renter_name": "Alice", "badge_id": "200",
+              "badge_number": "200", "librarygame_id": "g1"}],
+            # Second call: checkout history
+            [],
+        ]
+        mock_client.get_library_playtowins.return_value = []
+        mock_gc.return_value = mock_client
+
+        self._set_session(**{
+            SK.CACHED_GAMES: [{"id": "g1", "name": "Catan"}],
+            # No PERSON_CACHE entry for badge "200"
+        })
+        resp = self.client.get("/library-mgmt/person/200")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Alice", resp.data)
+
+        # Verify the cache was populated
+        with self.client.session_transaction() as sess:
+            cache = sess.get(SK.PERSON_CACHE, {})
+            self.assertIn("200", cache)
+            self.assertEqual(cache["200"]["name"], "Alice")
