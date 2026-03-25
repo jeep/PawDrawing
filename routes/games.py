@@ -80,11 +80,14 @@ def games():
 
     data_loaded_at = datetime.now().strftime("%-I:%M %p")
 
+    unique_participants = len({e["badge_id"] for e in filtered})
+
     return render_template(
         "games.html",
         game_data=game_data,
         total_games=len(all_games),
         total_entries=len(filtered),
+        unique_participants=unique_participants,
         convention_name=session.get(SK.CONVENTION_NAME) or session.get(SK.LIBRARY_NAME, ""),
         premium_games=premium_games,
         ejected_entries=ejected_entries,

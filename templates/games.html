@@ -19,7 +19,8 @@
 <div class="summary">
     <h2>{{ convention_name }}</h2>
     <span class="stat"><strong>{{ total_games }}</strong> games</span>
-    <span class="stat"><strong>{{ total_entries }}</strong> unique entries</span>
+    <span class="stat"><strong>{{ unique_participants }}</strong> participants</span>
+    <span class="stat"><strong>{{ total_entries }}</strong> entries</span>
     <span class="stat" id="eject-stat"{% if not ejected_entries %} style="display:none"{% endif %}><strong id="eject-stat-count">{{ ejected_entries|length }}</strong> removed<span class="eject-count">!</span></span>
     <span class="stat" style="font-size:0.8rem;color:#888;">Loaded {{ data_loaded_at }}</span>
     <span class="save-status" id="save-status">Saved</span>
