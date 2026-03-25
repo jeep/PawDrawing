@@ -358,3 +358,116 @@
     font-weight: 600;
     vertical-align: super;
 }
+
+/* Catalog actions bar */
+.catalog-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+    align-items: center;
+}
+
+.inline-form {
+    display: inline;
+}
+
+.btn-warning {
+    background: #e67e22;
+    color: white;
+}
+
+.btn-warning:hover {
+    background: #d35400;
+}
+
+/* Component checks */
+.component-check-controls {
+    margin-bottom: 1rem;
+}
+
+.progress-bar-container {
+    background: #eee;
+    border-radius: 4px;
+    height: 8px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+
+.progress-bar {
+    background: #27ae60;
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.component-table td,
+.component-table th {
+    padding: 0.5rem 0.75rem;
+}
+
+.comp-checked {
+    background: #f0faf0;
+}
+
+.comp-checked td:first-child {
+    text-decoration: line-through;
+    color: #888;
+}
+
+/* Game list filters */
+.filter-controls {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+    align-items: center;
+}
+
+.filter-controls label {
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.filter-controls input[type="number"] {
+    width: 60px;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.filter-controls select {
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.game-list-table {
+    width: 100%;
+}
+
+.game-list-table th {
+    cursor: pointer;
+    user-select: none;
+}
+
+.game-list-table th:hover {
+    background: #f0f0f0;
+}
+
+.suspicious-flag {
+    color: #e74c3c;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+/* Offline banner */
+.offline-banner {
+    background: #fff3cd;
+    color: #856404;
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    border: 1px solid #ffc107;
+    margin-bottom: 1rem;
+    font-weight: 500;
+}

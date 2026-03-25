@@ -16,6 +16,9 @@
 <div class="detail-grid">
     <div class="detail-card">
         <h3>Status</h3>
+        {% if game._suspicious %}
+        <p class="suspicious-flag">⚠ Suspicious checkout activity detected</p>
+        {% endif %}
         {% if not game.is_in_circulation %}
             <span class="status-badge status-unavailable">Not in Circulation</span>
         {% elif game.is_checked_out %}
@@ -27,6 +30,7 @@
         <table class="detail-table">
             <tr><td>Play-to-Win</td><td>{{ "Yes" if game.is_play_to_win else "No" }}</td></tr>
             <tr><td>Players</td><td>{{ game.min_players or '?' }}–{{ game.max_players or '?' }}</td></tr>
+            <tr><td>Play Time</td><td>{{ game.min_play_time or '?' }}–{{ game.max_play_time or '?' }} min</td></tr>
             <tr><td>Publisher</td><td>{{ game.publisher_name or 'Unknown' }}</td></tr>
             <tr><td>Total Checkouts</td><td>{{ game.checkout_count or 0 }}</td></tr>
             {% if game.is_play_to_win %}
@@ -45,6 +49,9 @@
             <button class="btn btn-small checkin-quick-btn"
                     data-checkout-id="{{ c.id }}"
                     data-game-id="{{ game.id }}">Check In</button>
+            <button class="btn btn-small reset-time-btn"
+                    data-checkout-id="{{ c.id }}"
+                    title="Reset checkout timestamp">Reset Time</button>
         </div>
         {% endfor %}
     </div>

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block app_title %}PawLibrary{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/library.css') }}">
+{% endblock %}
+
+{% block nav %}
+    <a href="{{ url_for('library.dashboard') }}">Dashboard</a>
+    <a href="{{ url_for('library.notifications') }}">Notifications</a>
+    <a href="{{ url_for('main.logout') }}">Logout</a>
+{% endblock %}
+
+{% block content %}
+<h2>Game List</h2>
+<p class="subtitle">Showing {{ showing }} of {{ total }} games</p>
+
+<form method="get" class="filter-controls">
+    <label>Max P2W entries:
+        <input type="number" name="max_p2w" min="0" value="{{ max_p2w if max_p2w is not none else '' }}" placeholder="Any">
+    </label>
+    <label>Max checkouts:
+        <input type="number" name="max_checkouts" min="0" value="{{ max_checkouts if max_checkouts is not none else '' }}" placeholder="Any">
+    </label>
+    <label>Status:
+        <select name="status">
+            <option value="">All</option>
+            <option value="available" {{ 'selected' if status_filter == 'available' }}>Available</option>
+            <option value="out" {{ 'selected' if status_filter == 'out' }}>Checked Out</option>
+        </select>
+    </label>
+    <input type="hidden" name="sort" value="{{ sort_by }}">
+    <input type="hidden" name="dir" value="{{ sort_dir }}">
+    <button type="submit" class="btn btn-small btn-primary">Filter</button>
+    <a href="{{ url_for('library.game_list') }}" class="btn btn-small">Clear</a>
+</form>
+
+{% macro sort_link(col, label) %}
+{% set new_dir = 'desc' if sort_by == col and sort_dir == 'asc' else 'asc' %}
+<a href="{{ url_for('library.game_list', sort=col, dir=new_dir, max_p2w=max_p2w, max_checkouts=max_checkouts, status=status_filter) }}">
+    {{ label }}
+    {% if sort_by == col %}{{ '▲' if sort_dir == 'asc' else '▼' }}{% endif %}
+</a>
+{% endmacro %}
+
+<table class="detail-table game-list-table">
+    <thead>
+        <tr>
+            <th>{{ sort_link('name', 'Game') }}</th>
+            <th>{{ sort_link('catalog', 'Catalog #') }}</th>
+            <th>Status</th>
+            <th>{{ sort_link('checkouts', 'Checkouts') }}</th>
+            <th>{{ sort_link('p2w', 'P2W Entries') }}</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for item in items %}
+    <tr>
+        <td>
+            <a href="{{ url_for('library.game_detail', game_id=item.id) }}">{{ item.name }}</a>
+            {% if item.suspicious %}<span class="suspicious-flag"> ⚠</span>{% endif %}
+        </td>
+        <td>{{ item.catalog_number }}</td>
+        <td>
+            {% if not item.is_in_circulation %}
+            <span class="status-badge status-unavailable">Not in circulation</span>
+            {% elif item.is_checked_out %}
+            <span class="status-badge status-out">Checked out</span>
+            {% else %}
+            <span class="status-badge status-available">Available</span>
+            {% endif %}
+        </td>
+        <td>{{ item.checkout_count }}</td>
+        <td>{{ item.p2w_count }}</td>
+        <td>
+            {% if item.is_play_to_win %}
+            <span title="Play-to-Win">🎲</span>
+            {% endif %}
+            {% if item.is_premium %}
+            <span title="Premium Game">⭐</span>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

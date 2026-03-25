@@ -22,10 +22,14 @@ logger = logging.getLogger(__name__)
 
 def _handle_api_json_error(exc, action="complete this request"):
     """Handle TTEAPIError for JSON/AJAX endpoints."""
-    if getattr(exc, "status_code", None) in (401, 403):
+    status = getattr(exc, "status_code", None)
+    if status in (401, 403):
         logger.warning("API auth error during '%s': session cleared", action)
         session.clear()
         return jsonify({"error": "Session expired — please log in again."}), 401
+    if status == 429:
+        logger.warning("Rate limited during '%s'", action)
+        return jsonify({"error": "Rate limit reached — please wait a moment and try again."}), 429
     logger.error("API error during '%s': %s", action, exc)
     return jsonify({"error": f"Could not {action}: {exc}"}), 500
 
@@ -107,6 +111,32 @@ def badge_lookup():
     })
 
 
+@library_bp.route("/active-checkout")
+@login_required(api=True)
+def active_checkout():
+    """AJAX: get the active checkout for a game (for check-in flow)."""
+    game_id = request.args.get("game_id", "").strip()
+    if not game_id or not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID"}), 400
+
+    client = _get_client()
+    try:
+        checkouts = client.get_library_game_checkouts(game_id, checked_in=False)
+    except TTEAPIError as exc:
+        return _handle_api_json_error(exc, "look up active checkout")
+
+    if not checkouts:
+        return jsonify({"error": "No active checkout for this game"}), 404
+
+    checkout = checkouts[0]
+    return jsonify({
+        "checkout_id": checkout.get("id"),
+        "renter_name": checkout.get("renter_name"),
+        "date_created": checkout.get("date_created"),
+        "game_id": game_id,
+    })
+
+
 @library_bp.route("/checkout", methods=["POST"])
 @login_required(api=True)
 def create_checkout():
@@ -138,7 +168,19 @@ def create_checkout():
         if entry:
             badge_id = entry.get("badge_id")
 
+    # Verify game is available before checkout (FR-CAT-04)
     client = _get_client()
+    try:
+        fresh_game = client.get_library_game(game_id)
+    except TTEAPIError as exc:
+        return _handle_api_json_error(exc, "verify game availability")
+
+    if fresh_game.get("is_checked_out"):
+        _update_game_cache(game_id, is_checked_out=1)
+        return jsonify({"error": "This game is already checked out."}), 409
+    if not fresh_game.get("is_in_circulation"):
+        return jsonify({"error": "This game is not in circulation."}), 409
+
     try:
         result = client.create_checkout(
             library_id, game_id, renter_name,
@@ -232,7 +274,19 @@ def create_p2w_entry():
         return jsonify({"error": "No library selected"}), 400
 
     client = _get_client()
+
+    # Check for existing P2W entries to prevent duplicates (FR-P2W-06)
+    try:
+        existing_entries = client.get_library_game_playtowins(game_id)
+    except TTEAPIError:
+        existing_entries = []
+    existing_names = {
+        (e.get("name") or e.get("renter_name") or "").lower()
+        for e in existing_entries
+    }
+
     created = []
+    skipped = []
     errors = []
 
     for entrant in entrants:
@@ -240,12 +294,16 @@ def create_p2w_entry():
         badge_id = entrant.get("badge_id")
         if not name:
             continue
+        if name.lower() in existing_names:
+            skipped.append({"name": name, "reason": "already entered"})
+            continue
         try:
             result = client.create_playtowin_entry(
                 library_id, game_id, name,
                 convention_id=convention_id, badge_id=badge_id,
             )
             created.append({"name": name, "id": result.get("id")})
+            existing_names.add(name.lower())
         except TTEAPIError as exc:
             logger.warning("Failed P2W entry for %s on game %s: %s", name, game_id, exc)
             errors.append({"name": name, "error": str(exc)})
@@ -254,11 +312,12 @@ def create_p2w_entry():
     if len(created) > 1:
         _update_play_groups(created)
 
-    logger.info("P2W entries created: %d success, %d failed for game %s",
-                len(created), len(errors), game_id)
+    logger.info("P2W entries created: %d success, %d skipped, %d failed for game %s",
+                len(created), len(skipped), len(errors), game_id)
     return jsonify({
         "success": True,
         "created": created,
+        "skipped": skipped,
         "errors": errors,
     })
 
@@ -299,3 +358,25 @@ def p2w_suggestions():
         enriched.append({"name": suggestion_name, "badge_id": badge_id})
 
     return jsonify({"suggestions": enriched})
+
+
+@library_bp.route("/reset-checkout-time", methods=["POST"])
+@login_required(api=True)
+def reset_checkout_time():
+    """AJAX: reset a checkout's timestamp (§12 Q1)."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid request"}), 400
+
+    checkout_id = data.get("checkout_id", "").strip()
+    if not checkout_id or not is_valid_tte_id(checkout_id):
+        return jsonify({"error": "Invalid checkout ID"}), 400
+
+    client = _get_client()
+    try:
+        client.reset_checkout_time(checkout_id)
+    except TTEAPIError as exc:
+        return _handle_api_json_error(exc, "reset checkout time")
+
+    logger.info("Checkout time reset: %s", checkout_id)
+    return jsonify({"success": True})

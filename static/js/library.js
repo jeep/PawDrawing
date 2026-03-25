@@ -18,12 +18,78 @@
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(body),
-        }).then(r => r.json());
+        }).then(function(r) { return r.json(); });
     }
 
     function apiGet(url) {
-        return fetch(url).then(r => r.json());
+        return fetch(url).then(function(r) { return r.json(); });
     }
+
+    // ── Offline Queue (§12 Q2) ────────────────────────────────────────
+
+    var QUEUE_KEY = 'pawlibrary_offline_queue';
+    var offlineBanner = null;
+
+    function getQueue() {
+        try {
+            return JSON.parse(localStorage.getItem(QUEUE_KEY)) || [];
+        } catch (e) { return []; }
+    }
+
+    function saveQueue(q) {
+        localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+        updateOfflineBanner();
+    }
+
+    function enqueueOperation(op) {
+        var q = getQueue();
+        op.queued_at = new Date().toISOString();
+        q.push(op);
+        saveQueue(q);
+    }
+
+    function updateOfflineBanner() {
+        var q = getQueue();
+        if (!offlineBanner) {
+            offlineBanner = document.getElementById('offline-banner');
+        }
+        if (offlineBanner) {
+            if (q.length > 0) {
+                offlineBanner.textContent = '⚠ Offline mode: ' + q.length + ' operation(s) queued. Track manually as backup.';
+                offlineBanner.classList.remove('hidden');
+            } else {
+                offlineBanner.classList.add('hidden');
+            }
+        }
+    }
+
+    function syncQueue() {
+        var q = getQueue();
+        if (q.length === 0) return;
+
+        var op = q[0];
+        apiPost(op.url, op.body)
+            .then(function(data) {
+                if (!data.error) {
+                    q.shift();
+                    saveQueue(q);
+                    if (q.length > 0) {
+                        setTimeout(syncQueue, 1500);
+                    }
+                }
+            })
+            .catch(function() {
+                // Still offline, try again later
+            });
+    }
+
+    // Try syncing when we come online
+    window.addEventListener('online', syncQueue);
+    // Initial banner update
+    document.addEventListener('DOMContentLoaded', function() {
+        updateOfflineBanner();
+        syncQueue();
+    });
 
     // ── Game Search (shared between checkout and checkin) ─────────────
 
@@ -151,10 +217,17 @@
                     alert('Checked out: ' + selectedCheckoutGame.name);
                     resetCheckoutForm();
                 }
-            }).catch(() => {
+            }).catch(function() {
                 this.disabled = false;
-                alert('Checkout failed — please try again.');
-            });
+                enqueueOperation({
+                    type: 'checkout',
+                    url: '/library-mgmt/checkout',
+                    body: { game_id: selectedCheckoutGame.id, renter_name: name, badge_number: badge },
+                    description: 'Checkout: ' + selectedCheckoutGame.name + ' → ' + name,
+                });
+                alert('Network error — checkout queued for retry. Please also track manually.');
+                resetCheckoutForm();
+            }.bind(this));
         });
     }
 
@@ -177,27 +250,80 @@
             return;
         }
 
-        // Fetch active checkout for this game
-        apiGet('/library-mgmt/game/' + dataset.id)
-            .then(() => {
-                // For now, show simple confirm UI
+        // Fetch active checkout for this game to get checkout_id
+        apiGet('/library-mgmt/active-checkout?game_id=' + encodeURIComponent(dataset.id))
+            .then(data => {
+                if (data.error) {
+                    alert('Could not find active checkout: ' + data.error);
+                    return;
+                }
                 document.getElementById('checkin-game-name').textContent = dataset.name;
+                var renterInfo = data.renter_name ? ('Checked out by: ' + data.renter_name) : '';
+                document.getElementById('checkin-renter').textContent = renterInfo;
                 document.getElementById('checkin-confirm').classList.remove('hidden');
-                selectedCheckinData = { gameId: dataset.id, gameName: dataset.name };
-
-                // We need the checkout ID — fetch from game detail
-                apiGet('/library-mgmt/game-search?q=' + encodeURIComponent(dataset.name))
-                    .then(() => {
-                        // The actual checkout ID will come from the game detail page
-                        // For the MVP, we'll handle this via the game detail route
-                    });
+                selectedCheckinData = {
+                    gameId: dataset.id,
+                    gameName: dataset.name,
+                    checkoutId: data.checkout_id,
+                    renterName: data.renter_name,
+                    isP2W: dataset.p2w,
+                };
             })
             .catch(() => {
-                document.getElementById('checkin-game-name').textContent = dataset.name;
-                document.getElementById('checkin-confirm').classList.remove('hidden');
-                selectedCheckinData = { gameId: dataset.id, gameName: dataset.name };
+                alert('Could not fetch checkout details. Try using the game detail page.');
             });
     });
+
+    // Check-in button
+    var checkinBtn = document.getElementById('checkin-btn');
+    if (checkinBtn) {
+        checkinBtn.addEventListener('click', function() {
+            if (!selectedCheckinData || !selectedCheckinData.checkoutId) return;
+
+            this.disabled = true;
+            apiPost('/library-mgmt/checkin', {
+                checkout_id: selectedCheckinData.checkoutId,
+                game_id: selectedCheckinData.gameId,
+            }).then(data => {
+                this.disabled = false;
+                if (data.error) {
+                    alert('Check-in failed: ' + data.error);
+                    return;
+                }
+                if (data.is_play_to_win) {
+                    showP2WModal(
+                        { id: selectedCheckinData.gameId, name: selectedCheckinData.gameName },
+                        selectedCheckinData.renterName, ''
+                    );
+                } else {
+                    alert('Checked in: ' + selectedCheckinData.gameName);
+                }
+                resetCheckinForm();
+            }).catch(function() {
+                this.disabled = false;
+                if (selectedCheckinData) {
+                    enqueueOperation({
+                        type: 'checkin',
+                        url: '/library-mgmt/checkin',
+                        body: { checkout_id: selectedCheckinData.checkoutId, game_id: selectedCheckinData.gameId },
+                        description: 'Check-in: ' + selectedCheckinData.gameName,
+                    });
+                    alert('Network error — check-in queued for retry. Please also track manually.');
+                    resetCheckinForm();
+                } else {
+                    alert('Check-in failed — please try again.');
+                }
+            }.bind(this));
+        });
+    }
+
+    function resetCheckinForm() {
+        selectedCheckinData = null;
+        document.getElementById('checkin-confirm').classList.add('hidden');
+        document.getElementById('checkin-game-name').textContent = '';
+        document.getElementById('checkin-renter').textContent = '';
+        document.getElementById('checkin-game-search').value = '';
+    }
 
     // ── P2W Entry Modal ───────────────────────────────────────────────
 
@@ -282,8 +408,13 @@
                     alert('P2W entry failed: ' + data.error);
                     return;
                 }
-                const msg = data.created.length + ' entries created' +
-                    (data.errors.length > 0 ? ', ' + data.errors.length + ' failed' : '');
+                var msg = data.created.length + ' entries created';
+                if (data.skipped && data.skipped.length > 0) {
+                    msg += ', ' + data.skipped.length + ' already entered';
+                }
+                if (data.errors && data.errors.length > 0) {
+                    msg += ', ' + data.errors.length + ' failed';
+                }
                 alert(msg);
                 closeP2WModal();
                 resetCheckoutForm();
@@ -332,6 +463,32 @@
             }).catch(() => {
                 this.disabled = false;
                 alert('Check-in failed — please try again.');
+            });
+        });
+    });
+
+    // ── Reset checkout time buttons (game detail) ─────────────────────
+
+    document.querySelectorAll('.reset-time-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            var checkoutId = this.dataset.checkoutId;
+            if (!confirm('Reset the checkout timestamp to now?')) return;
+
+            this.disabled = true;
+            apiPost('/library-mgmt/reset-checkout-time', {
+                checkout_id: checkoutId,
+            }).then(data => {
+                if (data.error) {
+                    alert('Reset failed: ' + data.error);
+                    this.disabled = false;
+                    return;
+                }
+                this.textContent = 'Time Reset';
+                var dateSpan = this.closest('.checkout-item').querySelector('.checkout-date');
+                if (dateSpan) dateSpan.textContent = 'since just now';
+            }).catch(() => {
+                this.disabled = false;
+                alert('Reset failed — please try again.');
             });
         });
     });

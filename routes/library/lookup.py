@@ -19,10 +19,14 @@ logger = logging.getLogger(__name__)
 
 def _handle_api_json_error(exc, action="complete this request"):
     """Handle TTEAPIError for JSON/AJAX endpoints."""
-    if getattr(exc, "status_code", None) in (401, 403):
+    status = getattr(exc, "status_code", None)
+    if status in (401, 403):
         logger.warning("API auth error during '%s': session cleared", action)
         session.clear()
         return jsonify({"error": "Session expired — please log in again."}), 401
+    if status == 429:
+        logger.warning("Rate limited during '%s'", action)
+        return jsonify({"error": "Rate limit reached — please wait a moment and try again."}), 429
     logger.error("API error during '%s': %s", action, exc)
     return jsonify({"error": f"Could not {action}: {exc}"}), 500
 
@@ -115,12 +119,18 @@ def person_detail(badge_number):
     except TTEAPIError as exc:
         return _handle_api_json_error(exc, "load person checkouts")
 
+    # Build game name lookup from cached catalog
+    games = session.get(SK.CACHED_GAMES, [])
+    game_names = {g.get("id"): g.get("name", "Unknown") for g in games}
+
     # Filter to this person's checkouts
     current_checkouts = [
         c for c in all_active
         if c.get("renter_name", "").lower() == person_name.lower()
         or c.get("badge_id") == person_info.get("badge_id")
     ]
+    for c in current_checkouts:
+        c["game_name"] = game_names.get(c.get("librarygame_id"), "Unknown Game")
 
     # Fetch checkout history
     try:
@@ -134,6 +144,21 @@ def person_detail(badge_number):
         or c.get("badge_id") == person_info.get("badge_id")
     ]
     checkout_history.sort(key=lambda c: c.get("checkin_date", ""), reverse=True)
+    for c in checkout_history:
+        c["game_name"] = game_names.get(c.get("librarygame_id"), "Unknown Game")
+
+    # Fetch P2W entries for this person (FR-PRSN-02)
+    p2w_entries = []
+    try:
+        all_p2w = client.get_library_playtowins(library_id)
+        p2w_entries = [
+            e for e in all_p2w
+            if (e.get("name") or e.get("renter_name") or "").lower() == person_name.lower()
+        ]
+        for e in p2w_entries:
+            e["game_name"] = game_names.get(e.get("librarygame_id"), "Unknown Game")
+    except TTEAPIError:
+        logger.warning("Failed to load P2W entries for person %s", badge_number)
 
     return render_template(
         "library/person_detail.html",
@@ -141,6 +166,7 @@ def person_detail(badge_number):
         badge_number=badge_number,
         current_checkouts=current_checkouts,
         checkout_history=checkout_history[:20],
+        p2w_entries=p2w_entries,
     )
 
 

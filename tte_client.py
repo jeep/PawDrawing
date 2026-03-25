@@ -312,3 +312,22 @@ class TTEClient:
         return self._get_all_pages(
             f"/convention/{convention_id}/badges", params
         )
+
+    # ── Library Management: Privileges ─────────────────────────────────
+
+    def get_library_privileges(self, library_id):
+        """Fetch privileges for a library."""
+        return self._get_all_pages(f"/library/{library_id}/privileges")
+
+    def create_library_privilege(self, library_id, user_id):
+        """Grant a user privilege on a library."""
+        body = {"library_id": library_id, "user_id": user_id}
+        return self._request("POST", "/libraryprivilege", json_body=body)
+
+    # ── Library Management: Checkout Time Reset ────────────────────────
+
+    def reset_checkout_time(self, checkout_id):
+        """Reset checkout time (re-timestamps the checkout)."""
+        return self._request(
+            "POST", f"/librarygamecheckout/{checkout_id}/reset-checkout-time"
+        )
