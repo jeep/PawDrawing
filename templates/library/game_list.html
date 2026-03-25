@@ -5,9 +5,7 @@
 {% endblock %}
 
 {% block nav %}
-    <a href="{{ url_for('library.dashboard') }}">Dashboard</a>
-    <a href="{{ url_for('library.notifications') }}">Notifications</a>
-    <a href="{{ url_for('main.logout') }}">Logout</a>
+{% include 'library/_nav.html' %}
 {% endblock %}
 
 {% block content %}

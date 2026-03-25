@@ -56,8 +56,6 @@ def dashboard():
 
     games = session.get(SK.CACHED_GAMES, [])
     convention_name = session.get(SK.CONVENTION_NAME)
-    notifications = session.get(SK.NOTIFICATIONS, [])
-    unread_count = sum(1 for n in notifications if not n.get("dismissed"))
 
     # Quick stats from cached data
     total_games = len(games)
@@ -71,7 +69,6 @@ def dashboard():
         total_games=total_games,
         checked_out=checked_out,
         p2w_games=p2w_games,
-        unread_count=unread_count,
     )
 
 
