@@ -193,9 +193,7 @@
     <span class="stat"><strong>{{ total_entries }}</strong> entries</span>
     <span class="stat"><strong>{{ total_games }}</strong> games</span>
     {% set removed_count = removed_all|length + removed_per_game|length %}
-    {% if removed_count > 0 %}
-    <span class="stat"><strong id="removed-count">{{ removed_count }}</strong> removed</span>
-    {% endif %}
+    <span class="stat"{% if removed_count == 0 %} style="display:none"{% endif %}><strong id="removed-count">{{ removed_count }}</strong> removed</span>
 </div>
 
 <div class="search-bar">
@@ -305,6 +303,18 @@
                 btn.textContent = gameId === '*' ? 'Remove from Drawing' : 'Remove from Game';
                 return;
             }
+            if (gameId !== '*') {
+                // Per-game removal: update row in place
+                var row = btn.closest('tr');
+                row.classList.add('removed-game');
+                btn.className = 'game-remove-btn restore';
+                btn.textContent = 'Restore';
+                btn.dataset.gameId = gameId;
+                btn.disabled = false;
+                btn.onclick = function() { restorePlayer(btn); };
+                updateRemovedCount(1);
+                return;
+            }
             window.location.reload();
         })
         .catch(function() {
@@ -332,6 +342,17 @@
                 btn.textContent = gameId === '*' ? 'Restore to Drawing' : 'Restore';
                 return;
             }
+            if (gameId !== '*') {
+                // Per-game restore: update row in place
+                var row = btn.closest('tr');
+                row.classList.remove('removed-game');
+                btn.className = 'game-remove-btn remove';
+                btn.textContent = 'Remove from Game';
+                btn.disabled = false;
+                btn.onclick = function() { removePlayer(btn); };
+                updateRemovedCount(-1);
+                return;
+            }
             window.location.reload();
         })
         .catch(function() {
@@ -339,6 +360,21 @@
             btn.textContent = gameId === '*' ? 'Restore to Drawing' : 'Restore';
         });
     };
+
+    function updateRemovedCount(delta) {
+        var el = document.getElementById('removed-count');
+        if (!el) {
+            // Create the stat span if it doesn't exist yet
+            var stat = document.createElement('span');
+            stat.className = 'stat';
+            stat.innerHTML = '<strong id="removed-count">0</strong> removed';
+            document.querySelector('.summary').appendChild(stat);
+            el = document.getElementById('removed-count');
+        }
+        var count = parseInt(el.textContent, 10) + delta;
+        el.textContent = count;
+        el.closest('.stat').style.display = count > 0 ? '' : 'none';
+    }
 
     /* ── Search / Filter ── */
     var searchInput = document.getElementById('search-input');
