@@ -158,6 +158,29 @@
         });
     };
 
+    window.restoreGame = function(gameId) {
+        var btn = document.querySelector('.restore-btn[data-game-id="' + gameId + '"]');
+        if (btn) { btn.disabled = true; btn.textContent = 'Restoring...'; }
+
+        fetch(urls.restoreGame, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({game_id: gameId})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.ok) {
+                if (btn) { btn.disabled = false; btn.textContent = 'Restore'; }
+                if (data.error) alert(data.error);
+                return;
+            }
+            window.location.reload();
+        })
+        .catch(function() {
+            if (btn) { btn.disabled = false; btn.textContent = 'Error — Retry'; }
+        });
+    };
+
     window.awardTo = function(link) {
         var gameId = link.getAttribute('data-game-id');
         var badgeId = link.getAttribute('data-badge-id');

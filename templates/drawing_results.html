@@ -239,6 +239,8 @@
                 {% elif r.winner_badge and r.winner_badge in not_here %}
                 <span class="not-here-badge">Gone</span>
                 {% endif %}
+                {% elif r.has_entries %}
+                <button class="restore-btn" data-game-id="{{ r.game_id }}" onclick="restoreGame('{{ r.game_id }}')">Restore</button>
                 {% endif %}
             </td>
         </tr>
@@ -463,6 +465,7 @@
          "togglePickup": url_for("main.toggle_pickup"),
          "awardNext": url_for("main.award_next"),
          "awardTo": url_for("main.award_to"),
+         "restoreGame": url_for("main.restore_game"),
          "markNotHere": url_for("main.mark_not_here"),
          "redrawAllUnclaimed": url_for("main.redraw_all_unclaimed"),
          "resolveConflicts": url_for("main.resolve_conflicts"),

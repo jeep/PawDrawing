@@ -113,6 +113,32 @@ def advance_winner(drawing_state, game_id, not_here=None):
     return False
 
 
+def restore_winner(drawing_state, game_id, not_here=None):
+    """Rewind an exhausted game to the last valid winner.
+
+    Walks winner_index backwards from the end of the shuffled list,
+    skipping anyone in the not_here set.
+    Returns True if a valid winner was restored, False otherwise.
+    """
+    if not_here is None:
+        not_here = set()
+    for item in drawing_state:
+        if item["game"]["id"] != game_id:
+            continue
+        shuffled = item["shuffled"]
+        if not shuffled:
+            return False
+        # Only restore if the game is currently exhausted
+        if item["winner_index"] < len(shuffled):
+            return False
+        for i in range(len(shuffled) - 1, -1, -1):
+            if shuffled[i].get("badge_id") not in not_here:
+                item["winner_index"] = i
+                return True
+        return False
+    return False
+
+
 def set_winner(drawing_state, game_id, badge_id):
     """Set the winner of a game to a specific entrant by badge_id.
 

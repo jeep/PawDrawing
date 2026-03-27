@@ -5,7 +5,7 @@ from datetime import date
 
 from flask import Response, flash, jsonify, redirect, request, session, url_for
 
-from drawing import advance_winner, get_current_winners, redraw_unclaimed, set_winner
+from drawing import advance_winner, get_current_winners, redraw_unclaimed, restore_winner, set_winner
 from session_keys import SK
 from tte_client import TTEAPIError
 
@@ -91,6 +91,48 @@ def award_next():
         "ok": True,
         "game_id": game_id,
         "has_winner": found,
+        "game_name": game_name,
+        "winner_name": winner.get("name", "Unknown") if winner else None,
+        "winner_badge": winner.get("badge_id", "") if winner else None,
+    })
+
+
+@main_bp.route("/drawing/restore", methods=["POST"])
+@login_required
+def restore_game():
+    """Restore an exhausted game to its last valid winner."""
+    drawing_state = _require_active_drawing()
+    if isinstance(drawing_state, tuple):
+        return drawing_state
+
+    data = request.get_json(silent=True)
+    if not data or "game_id" not in data:
+        return jsonify({"error": "Invalid request"}), 400
+
+    game_id = data["game_id"]
+    if not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID format"}), 400
+
+    not_here = set(session.get(SK.NOT_HERE, []))
+    found = restore_winner(drawing_state, game_id, not_here=not_here)
+    if not found:
+        return jsonify({"ok": False, "error": "No valid winner to restore"}), 400
+
+    session[SK.DRAWING_STATE] = drawing_state
+
+    winners = get_current_winners(drawing_state)
+    winner = winners.get(game_id)
+
+    game_name = None
+    for item in drawing_state:
+        if item["game"]["id"] == game_id:
+            game_name = item["game"].get("name", "Unknown")
+            break
+
+    return jsonify({
+        "ok": True,
+        "game_id": game_id,
+        "has_winner": True,
         "game_name": game_name,
         "winner_name": winner.get("name", "Unknown") if winner else None,
         "winner_badge": winner.get("badge_id", "") if winner else None,

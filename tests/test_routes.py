@@ -1809,6 +1809,109 @@ class TestAwardNextRoute(unittest.TestCase):
         self.assertFalse(data["has_winner"])
 
 
+class TestRestoreRoute(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    GAME_ID = "A0000001-0000-4000-A000-000000000001"
+
+    def _setup_exhausted_state(self, not_here=None):
+        drawing_state = [
+            {
+                "game": {"id": self.GAME_ID, "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "id": "e2", "name": "Bob"},
+                    {"badge_id": "B3", "id": "e3", "name": "Carol"},
+                ],
+                "winner_index": 3,  # exhausted (past end of list)
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = drawing_state
+            sess["not_here"] = not_here or []
+
+    def test_restore_requires_auth(self):
+        resp = self.client.post("/drawing/restore",
+                                json={"game_id": self.GAME_ID},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_restore_requires_drawing_state(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+        resp = self.client.post("/drawing/restore",
+                                json={"game_id": self.GAME_ID},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_restore_validates_input(self):
+        self._setup_exhausted_state()
+        resp = self.client.post("/drawing/restore",
+                                json={},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_restore_rewinds_to_last_winner(self):
+        self._setup_exhausted_state()
+        resp = self.client.post("/drawing/restore",
+                                json={"game_id": self.GAME_ID},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["has_winner"])
+        self.assertEqual(data["winner_name"], "Carol")
+        self.assertEqual(data["winner_badge"], "B3")
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["drawing_state"][0]["winner_index"], 2)
+
+    def test_restore_skips_not_here(self):
+        self._setup_exhausted_state(not_here=["B3"])
+        resp = self.client.post("/drawing/restore",
+                                json={"game_id": self.GAME_ID},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["has_winner"])
+        self.assertEqual(data["winner_name"], "Bob")
+        self.assertEqual(data["winner_badge"], "B2")
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["drawing_state"][0]["winner_index"], 1)
+
+    def test_restore_fails_if_not_exhausted(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = [{
+                "game": {"id": self.GAME_ID, "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "id": "e1", "name": "Alice"},
+                ],
+                "winner_index": 0,  # not exhausted
+            }]
+        resp = self.client.post("/drawing/restore",
+                                json={"game_id": self.GAME_ID},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+        data = resp.get_json()
+        self.assertFalse(data["ok"])
+
+    def test_restore_fails_all_gone(self):
+        self._setup_exhausted_state(not_here=["B1", "B2", "B3"])
+        resp = self.client.post("/drawing/restore",
+                                json={"game_id": self.GAME_ID},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+        data = resp.get_json()
+        self.assertFalse(data["ok"])
+
+
 class TestAwardToRoute(unittest.TestCase):
 
     def setUp(self):

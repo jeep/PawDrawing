@@ -317,7 +317,7 @@
     .view-panel { display: none; }
     .view-panel.active { display: block; }
 
-    .pickup-btn, .award-next-btn, .gone-btn {
+    .pickup-btn, .award-next-btn, .gone-btn, .restore-btn {
         border: none;
         border-radius: 4px;
         padding: 0.3rem 0.7rem;
@@ -394,6 +394,13 @@
     .award-next-btn:hover { background: #d35400; }
     .award-next-btn:disabled { background: #ccc; cursor: not-allowed; }
 
+    .restore-btn {
+        background: #3498db;
+        color: white;
+    }
+    .restore-btn:hover { background: #2980b9; }
+    .restore-btn:disabled { background: #ccc; cursor: not-allowed; }
+
     .gone-btn {
         background: none;
         border: 1px solid #e74c3c;
@@ -418,6 +425,7 @@
     .award-next-btn,
     .gone-btn,
     .not-here-badge,
+    .restore-btn,
     .redraw-btn,
     .redraw-option {
         display: none;
@@ -425,6 +433,7 @@
     body.redraw-mode .award-next-btn { display: inline-block; }
     body.redraw-mode .gone-btn { display: inline-block; }
     body.redraw-mode .not-here-badge { display: inline-block; }
+    body.redraw-mode .restore-btn { display: inline-block; }
     body.redraw-mode .redraw-btn { display: inline-flex; }
     body.redraw-mode .redraw-option {
         display: flex;
