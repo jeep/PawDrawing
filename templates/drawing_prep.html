@@ -250,6 +250,63 @@
     {% endif %}
 </div>
 
+{# ── Suspicious Activity ── #}
+<div class="prep-section">
+    <h3>🔍 Suspicious Activity
+        {% if not has_data %}
+        <span class="prep-status info">No Data</span>
+        {% elif suspicious_alerts|length == 0 %}
+        <span class="prep-status ok">None</span>
+        {% else %}
+        <span class="prep-status alert">{{ suspicious_alerts|length }} Alert{{ 's' if suspicious_alerts|length != 1 }}</span>
+        {% endif %}
+    </h3>
+    {% if has_data %}
+    {% if suspicious_alerts %}
+    {% for alert in suspicious_alerts %}
+    <div class="suspicious-item {{ 'alert-type' if alert.type == 'alert' }}">
+        <strong>{{ alert.message }}</strong>
+        {% if alert.details %}
+        <div class="suspicious-detail">
+            {% for detail in alert.details %}
+            {{ detail }}{% if not loop.last %}<br>{% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="prep-detail" style="color:#27ae60;">No suspicious checkout patterns detected.</p>
+    {% endif %}
+    {% else %}
+    <p class="prep-detail" style="color:#888;font-style:italic;">Load data first to check for suspicious activity.</p>
+    {% endif %}
+</div>
+
+{# ── Ejection Summary ── #}
+<div class="prep-section">
+    <h3>🚫 Player Removals
+        {% if ejected_all_count == 0 and ejected_game_count == 0 %}
+        <span class="prep-status ok">None</span>
+        {% else %}
+        <span class="prep-status warning">{{ ejected_all_count + ejected_game_count }}</span>
+        {% endif %}
+    </h3>
+    {% if ejected_all_count > 0 or ejected_game_count > 0 %}
+    <p class="prep-detail">
+        {% if ejected_all_count > 0 %}
+        <strong>{{ ejected_all_count }}</strong> player{{ 's' if ejected_all_count != 1 }} removed from all games.
+        {% endif %}
+        {% if ejected_game_count > 0 %}
+        <strong>{{ ejected_game_count }}</strong> per-game removal{{ 's' if ejected_game_count != 1 }}.
+        {% endif %}
+        <a href="{{ url_for('main.players') }}" style="color:#3498db;">Review on Manage Players →</a>
+    </p>
+    {% else %}
+    <p class="prep-detail" style="color:#888;">No players have been removed from the drawing.</p>
+    {% endif %}
+</div>
+
 {# ── Component Check ── #}
 <div class="prep-section" id="component-section">
     <h3>🧩 Component Check
@@ -329,63 +386,6 @@
     {% endif %}
     {% else %}
     <p class="prep-detail" style="color:#888;font-style:italic;">Load data first to check components.</p>
-    {% endif %}
-</div>
-
-{# ── Suspicious Activity ── #}
-<div class="prep-section">
-    <h3>🔍 Suspicious Activity
-        {% if not has_data %}
-        <span class="prep-status info">No Data</span>
-        {% elif suspicious_alerts|length == 0 %}
-        <span class="prep-status ok">None</span>
-        {% else %}
-        <span class="prep-status alert">{{ suspicious_alerts|length }} Alert{{ 's' if suspicious_alerts|length != 1 }}</span>
-        {% endif %}
-    </h3>
-    {% if has_data %}
-    {% if suspicious_alerts %}
-    {% for alert in suspicious_alerts %}
-    <div class="suspicious-item {{ 'alert-type' if alert.type == 'alert' }}">
-        <strong>{{ alert.message }}</strong>
-        {% if alert.details %}
-        <div class="suspicious-detail">
-            {% for detail in alert.details %}
-            {{ detail }}{% if not loop.last %}<br>{% endif %}
-            {% endfor %}
-        </div>
-        {% endif %}
-    </div>
-    {% endfor %}
-    {% else %}
-    <p class="prep-detail" style="color:#27ae60;">No suspicious checkout patterns detected.</p>
-    {% endif %}
-    {% else %}
-    <p class="prep-detail" style="color:#888;font-style:italic;">Load data first to check for suspicious activity.</p>
-    {% endif %}
-</div>
-
-{# ── Ejection Summary ── #}
-<div class="prep-section">
-    <h3>🚫 Player Removals
-        {% if ejected_all_count == 0 and ejected_game_count == 0 %}
-        <span class="prep-status ok">None</span>
-        {% else %}
-        <span class="prep-status warning">{{ ejected_all_count + ejected_game_count }}</span>
-        {% endif %}
-    </h3>
-    {% if ejected_all_count > 0 or ejected_game_count > 0 %}
-    <p class="prep-detail">
-        {% if ejected_all_count > 0 %}
-        <strong>{{ ejected_all_count }}</strong> player{{ 's' if ejected_all_count != 1 }} removed from all games.
-        {% endif %}
-        {% if ejected_game_count > 0 %}
-        <strong>{{ ejected_game_count }}</strong> per-game removal{{ 's' if ejected_game_count != 1 }}.
-        {% endif %}
-        <a href="{{ url_for('main.players') }}" style="color:#3498db;">Review on Manage Players →</a>
-    </p>
-    {% else %}
-    <p class="prep-detail" style="color:#888;">No players have been removed from the drawing.</p>
     {% endif %}
 </div>
 
