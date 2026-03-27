@@ -71,9 +71,11 @@ PawDrawing/
 │   └── workflows/
 │       └── deploy.yml      # CI/CD: test + deploy to Azure App Service
 └── docs/
-    ├── DEVELOPER.md        # This file
-    ├── USER_GUIDE.md       # User guide
-    └── Requirements.md     # Project requirements document
+    ├── DEVELOPER.md                    # This file
+    ├── USER_GUIDE.md                   # User guide
+    ├── Requirements.md                 # Drawing requirements document
+    ├── PawLibraryMgmt Requirements.md  # Library management requirements document
+    └── UNIFIED_UI_DESIGN.md            # Unified UI design spec
 ```
 
 ## Module Reference
@@ -160,6 +162,10 @@ Routes are organized into a Blueprint package. `routes/__init__.py` creates `mai
 | GET | `/games/checkout-status` | games | `checkout_status` | AJAX: poll shared state for checkout changes (no TTE calls) |
 | POST | `/games/p2w-entry` | games | `create_p2w_entry` | AJAX: create P2W entry for a game |
 | GET | `/games/p2w-suggestions` | games | `p2w_suggestions` | AJAX: suggest P2W entries after checkout |
+| POST | `/games/manual-entry` | games | `add_manual_entry` | AJAX: add manual P2W entry (name + badge) |
+| DELETE | `/games/manual-entry/<entry_id>` | games | `remove_manual_entry` | AJAX: remove a manual P2W entry |
+| POST | `/games/component-check` | games | `component_check` | AJAX: mark game component check complete |
+| POST | `/games/component-uncheck` | games | `component_uncheck` | AJAX: clear game component check |
 | POST | `/games/reset-checkout-time` | games | `reset_checkout_time` | AJAX: reset checkout timestamp |
 | GET | `/games/notifications` | games | `get_notifications` | AJAX: get notification list |
 | POST | `/games/notifications/dismiss` | games | `dismiss_notification` | AJAX: dismiss a notification |
@@ -382,6 +388,7 @@ All application state lives in the server-side Flask session (`FileSystemCache`)
 | `notifications` | `list[dict]` | Refresh / actions | `[{id, type, message, dismissed, timestamp, details}]` |
 | `component_checks` | `dict` | Component check modal | `{game_id: {checked, volunteer, timestamp}}` |
 | `library_settings` | `dict` | Settings modal | `{include_non_p2w: bool, checkout_alert_hours: int, ...}` |
+| `manual_entry_ids` | `list[str]` | Manual entry | TTE entry IDs created via manual entry (tracked for removal) |
 | `drawing_state` | `list[dict]` | Drawing | Full shuffled state with winner indices |
 | `drawing_conflicts` | `list[dict]` | Drawing | Unresolved multi-win conflicts |
 | `drawing_timestamp` | `str` | Drawing | When the drawing was executed |
@@ -420,8 +427,8 @@ These values are stored in library-scoped JSON files (via `shared_state.py`) and
 | `notifications` | `shared_state.update()` — atomic replace |
 | `library_settings` | `shared_state.update()` — atomic replace |
 | `person_cache` | `shared_state.merge_dict()` — concurrent-safe merge |
-| `play_groups` | `shared_state.merge_dict()` — concurrent-safe merge |
-
+| `play_groups` | `shared_state.merge_dict()` — concurrent-safe merge || `checkout_map` | `shared_state.merge_dict()` — concurrent-safe merge |
+| `manual_entry_ids` | `shared_state.update()` — atomic replace |
 ### Session-Only (Per-Browser)
 
 These values exist only in the server-side session for one browser. They are **not shared** between devices or browser tabs with different session cookies.
@@ -547,9 +554,9 @@ python -m pytest tests/ -v
 
 | File | Tests | Covers |
 |------|-------|--------|
-| `test_routes.py` | 197 | All routes, auth guards, AJAX endpoints, error handling, ID validation |
-| `test_library_mgmt.py` | 62 | Library management: checkout, checkin, P2W entry, badge lookup, suspicious detection, volunteer login/logout, privilege gates, notifications, settings |
-| `test_drawing.py` | 43 | Shuffle, conflicts, resolution, cascading, redraw |
+| `test_routes.py` | 205 | All routes, auth guards, AJAX endpoints, error handling, ID validation, manual entries |
+| `test_library_mgmt.py` | 70 | Library management: checkout, checkin, P2W entry, badge lookup, suspicious detection, volunteer login/logout, privilege gates, notifications, settings, component checks |
+| `test_drawing.py` | 45 | Shuffle, conflicts, resolution, cascading, redraw, conflict gating |
 | `test_tte_client.py` | 22 | Rate limiting, auth, error handling, pagination, endpoints |
 | `test_data_processing.py` | 21 | Entry processing, ejection filtering, grouping |
 

@@ -24,6 +24,8 @@ already have a key, you can use it. Otherwise, click **Create**, fill in a name
 (and optionally a URL and reason), and copy the generated key to enter into
 PawDrawing.
 
+![TTE Account menu showing API Keys link](../images/API_Keys.jpeg)
+
 ### 2. Select a source
 
 The source selection page has two tabs:
@@ -99,6 +101,17 @@ To exclude a player from the drawing, click **Remove from Drawing** next to thei
 
 Removed players are shown with a "Removed" badge and can be restored at any time before running the drawing. Removals are cleared when you change the convention or library source.
 
+#### Manual player entries
+
+If a player's entry wasn't recorded during the convention, you can add it manually from the Manage Players page. Use the **Add Manual Entry** panel:
+
+1. Select a game from the dropdown.
+2. Enter the player's badge number. If a convention is selected, the badge number is looked up automatically on blur to fill in the name — but this is informational only and won't block submission.
+3. Enter or confirm the player's name.
+4. Click **Add Entry**.
+
+The entry is created in TTE immediately. Manual entries appear in the player list with a **"Manual"** badge next to the game name. You can remove a manual entry by clicking the **✕** button next to it — this deletes the entry from TTE and removes it from the local cache.
+
 ### 7. Designate premium games
 
 Toggle the "Premium" checkbox on any games that are premium prizes. Premium games get special treatment during conflict resolution — if a person wins one premium game and one or more non-premium games, they automatically keep the premium game.
@@ -111,7 +124,7 @@ Switch to the **Drawing Prep** tab before running the drawing. This page provide
 
 - **Refresh Data** — click to fetch the latest games and entries from TTE. With a large library, this can take several seconds (typically 5+ API calls).
 - **Drawing Overview** — shows total games, total entries, unique participants, and how many games have zero entries.
-- **Component Check** — shows a per-game inspection checklist for missing pieces/components. Mark each game as inspected, record who checked it and when, and use **Force In** for any games still checked out before inspection.
+- **Component Check** — a per-game inspection checklist for verifying all pieces/components are present. Click **Mark Checked** on each game and enter your volunteer name — the app records who checked it and when. Click **Uncheck** to clear a check. Use **Force In** for any games still checked out before inspection. The progress bar at the top shows how many games have been checked out of the total.
 - **Suspicious Activity** — summarizes any alerts (long checkouts, partner patterns).
 - **Player Removals** — shows how many players have been removed from the drawing.
 
@@ -130,7 +143,9 @@ To pick up the latest data from TTE before drawing, use the **Refresh Data** but
 
 ### 10. Resolve conflicts
 
-If any conflicts remain after auto-resolution, you'll see conflict panels at the top of the results page. For each conflicting person, select which game they should keep, or click **🎲 Random** to choose randomly.
+If any conflicts remain after auto-resolution, you'll see conflict panels at the top of the results page. The results are hidden until all conflicts are resolved — this ensures you review and resolve every conflict before seeing the final winners.
+
+For each conflicting person, select which game they should keep, or click **🎲 Random** to choose randomly.
 
 You can also click the **dismiss (✕)** button on a specific game to remove that person from it and advance to the next candidate. If there are no more candidates, the game is marked **"No winner (redraw eligible)"** — it remains available in the redraw rather than being sent to the box.
 
