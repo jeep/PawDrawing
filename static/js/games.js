@@ -235,16 +235,21 @@
         });
     }
 
-    /* Search */
-    searchInput.addEventListener('input', function() {
+    /* Search & P2W filter */
+    const p2wFilter = document.getElementById('p2w-filter');
+
+    function applyFilters() {
         var query = searchInput.value.trim().toLowerCase();
+        var p2wOnly = p2wFilter && p2wFilter.checked;
         var rows = getGameRows();
         var total = rows.length;
         var visible = 0;
 
         rows.forEach(function(row) {
             var name = row.dataset.gameName || '';
-            var match = !query || name.indexOf(query) !== -1;
+            var matchText = !query || name.indexOf(query) !== -1;
+            var matchP2w = !p2wOnly || row.dataset.isP2w === '1';
+            var match = matchText && matchP2w;
             row.style.display = match ? '' : 'none';
             if (match) visible++;
 
@@ -256,12 +261,15 @@
             }
         });
 
-        if (query) {
+        if (query || p2wOnly) {
             searchCount.innerHTML = '<strong>' + visible + '</strong> of <strong>' + total + '</strong>';
         } else {
             searchCount.textContent = '';
         }
-    });
+    }
+
+    searchInput.addEventListener('input', applyFilters);
+    if (p2wFilter) p2wFilter.addEventListener('change', applyFilters);
 
     document.querySelectorAll('.premium-toggle').forEach(function(toggle) {
         toggle.addEventListener('change', savePremiumGames);
