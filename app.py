@@ -2,9 +2,10 @@ import logging
 import os
 import time
 
-from flask import Flask
+from flask import Flask, flash, redirect, request, session, url_for
 from flask_session import Session
 from flask_wtf import CSRFProtect
+from flask_wtf.csrf import CSRFError
 
 from config import Config
 
@@ -38,6 +39,13 @@ def create_app():
     app.config.from_object(Config)
     Session(app)
     csrf.init_app(app)
+
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(err):
+        logger.warning("CSRF validation failed on %s: %s", request.path, err.description)
+        session.clear()
+        flash("Your browser session expired. Please log in again.", "error")
+        return redirect(url_for("main.login"))
 
     # Initialize shared state directory
     import shared_state
