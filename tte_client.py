@@ -35,7 +35,7 @@ class TTEClient:
 
     def __init__(self, base_url=None, api_key_id=None):
         self.base_url = (base_url or current_app.config["TTE_BASE_URL"]).rstrip("/")
-        self.api_key_id = api_key_id or current_app.config["TTE_API_KEY"]
+        self.api_key_id = api_key_id or current_app.config.get("TTE_API_KEY")
         self.session_id = None
         self.user_id = None
         self._last_request_time = 0.0
