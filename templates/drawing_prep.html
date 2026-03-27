@@ -85,6 +85,27 @@
         letter-spacing: 0.02em;
         text-transform: uppercase;
     }
+    .component-table th.sortable {
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+    }
+    .component-table th.sortable:hover {
+        color: #2c3e50;
+    }
+    .component-table th.sortable::after {
+        content: ' ⇅';
+        font-size: 0.7rem;
+        opacity: 0.4;
+    }
+    .component-table th.sort-asc::after {
+        content: ' ▲';
+        opacity: 0.8;
+    }
+    .component-table th.sort-desc::after {
+        content: ' ▼';
+        opacity: 0.8;
+    }
     .component-row.checked {
         background: #f6fff8;
     }
@@ -362,11 +383,11 @@
         <table class="component-table" id="component-table">
             <thead>
                 <tr>
-                    <th>Game</th>
-                    <th>Availability</th>
-                    <th>Inspection</th>
-                    <th>Checked By</th>
-                    <th>Checked At</th>
+                    <th class="sortable" data-sort="game">Game</th>
+                    <th class="sortable" data-sort="availability">Availability</th>
+                    <th class="sortable" data-sort="inspection">Inspection</th>
+                    <th class="sortable" data-sort="volunteer">Checked By</th>
+                    <th class="sortable" data-sort="timestamp">Checked At</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -741,6 +762,59 @@
         });
 
         updateComponentHeaderBadge();
+
+        /* ── Column sorting ── */
+        var currentSort = {col: null, asc: true};
+
+        function getSortValue(row, col) {
+            switch (col) {
+                case 'game':
+                    return row.cells[0].textContent.trim().toLowerCase();
+                case 'availability':
+                    return row.dataset.out === '1' ? 1 : 0;
+                case 'inspection':
+                    if (row.dataset.damaged === '1') return 2;
+                    if (row.dataset.checked === '1') return 1;
+                    return 0;
+                case 'volunteer':
+                    return row.querySelector('.volunteer-cell').textContent.trim().toLowerCase();
+                case 'timestamp':
+                    return row.querySelector('.timestamp-cell').textContent.trim();
+                default:
+                    return '';
+            }
+        }
+
+        componentTable.querySelector('thead').addEventListener('click', function(e) {
+            var th = e.target.closest('th.sortable');
+            if (!th) return;
+            var col = th.dataset.sort;
+
+            if (currentSort.col === col) {
+                currentSort.asc = !currentSort.asc;
+            } else {
+                currentSort.col = col;
+                currentSort.asc = true;
+            }
+
+            var allTh = componentTable.querySelectorAll('th.sortable');
+            for (var i = 0; i < allTh.length; i++) {
+                allTh[i].classList.remove('sort-asc', 'sort-desc');
+            }
+            th.classList.add(currentSort.asc ? 'sort-asc' : 'sort-desc');
+
+            var tbody = componentTable.querySelector('tbody');
+            var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+            rows.sort(function(a, b) {
+                var va = getSortValue(a, col);
+                var vb = getSortValue(b, col);
+                var cmp = typeof va === 'number' ? va - vb : va.localeCompare(vb);
+                return currentSort.asc ? cmp : -cmp;
+            });
+            for (var j = 0; j < rows.length; j++) {
+                tbody.appendChild(rows[j]);
+            }
+        });
     }
 })();
 </script>
