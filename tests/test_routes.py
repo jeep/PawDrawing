@@ -128,9 +128,25 @@ class TestLogoutRoute(unittest.TestCase):
 
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
+            sess["tte_api_key"] = "user-api-key"
 
         self.client.post("/logout")
         mock_instance.logout.assert_called_once()
+
+    @patch("routes.auth.TTEClient")
+    def test_logout_skips_api_logout_without_api_key(self, MockClient):
+        """If API key is missing, skip TTE logout (can't make the request anyway)."""
+        mock_instance = MagicMock()
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            # No tte_api_key
+
+        resp = self.client.post("/logout")
+        self.assertEqual(resp.status_code, 302)
+        # logout() should not have been called
+        mock_instance.logout.assert_not_called()
 
 
 class TestConventionSelectRoute(unittest.TestCase):

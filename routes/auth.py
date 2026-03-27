@@ -60,7 +60,8 @@ def logout():
     tte_api_key = session.pop(SK.TTE_API_KEY, None)
     session.pop(SK.TTE_USERNAME, None)
 
-    if tte_session_id:
+    # Only call TTE logout if we have both session ID and API key
+    if tte_session_id and tte_api_key:
         client = TTEClient(api_key_id=tte_api_key)
         client.session_id = tte_session_id
         client.logout()
