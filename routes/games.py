@@ -22,7 +22,6 @@ from .helpers import (
     _handle_api_json_error,
     _parse_eject_payload,
     check_checkout_privilege,
-    is_valid_badge_id,
     is_valid_tte_id,
     login_required,
 )
@@ -510,15 +509,14 @@ def add_manual_entry():
         return jsonify({"error": "No library selected"}), 400
 
     cache = session.get(SK.PERSON_CACHE, {})
-    person = cache.get(str(badge_number))
-    if not person or not person.get("badge_id"):
-        return jsonify({"error": "Badge not found. Please verify badge ID first."}), 400
+    person = cache.get(str(badge_number)) or {}
+    tte_badge_id = person.get("badge_id")
+    entrant_badge_id = tte_badge_id or badge_number
 
-    badge_id = person.get("badge_id")
     cached_entries = session.get(SK.CACHED_ENTRIES, []) or []
     existing = [
         e for e in cached_entries
-        if e.get("librarygame_id") == game_id and e.get("badge_id") == badge_id
+        if e.get("librarygame_id") == game_id and e.get("badge_id") == entrant_badge_id
     ]
     if existing:
         return jsonify({"error": "This player is already entered for that game."}), 409
@@ -531,7 +529,7 @@ def add_manual_entry():
             game_id,
             name,
             convention_id=convention_id,
-            badge_id=badge_id,
+            badge_id=tte_badge_id,
         )
     except TTEAPIError as exc:
         return _handle_api_json_error(exc, "add manual Play-to-Win entry")
@@ -540,7 +538,7 @@ def add_manual_entry():
     new_entry = {
         "id": entry_id,
         "librarygame_id": game_id,
-        "badge_id": badge_id,
+        "badge_id": entrant_badge_id,
         "name": name,
     }
     session[SK.CACHED_ENTRIES] = cached_entries + [new_entry]
@@ -550,7 +548,7 @@ def add_manual_entry():
         manual_ids.append(entry_id)
     _save_shared(SK.MANUAL_ENTRY_IDS, manual_ids)
 
-    logger.info("Manual P2W entry added: game=%s badge=%s entry=%s", game_id, badge_id, entry_id)
+    logger.info("Manual P2W entry added: game=%s badge=%s entry=%s", game_id, entrant_badge_id, entry_id)
     return jsonify({"ok": True, "entry_id": entry_id})
 
 

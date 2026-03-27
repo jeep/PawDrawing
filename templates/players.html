@@ -438,7 +438,14 @@
                 manualName.value = result.data.name;
                 setManualStatus('Found: ' + result.data.name, 'ok');
             } else {
-                setManualStatus((result.data && result.data.error) || 'Badge not found', 'error');
+                var err = (result.data && result.data.error) || 'Badge not found';
+                if (err.indexOf('No convention selected') !== -1) {
+                    setManualStatus('No convention badge lookup available. You can still enter name manually.', '');
+                } else if (err.indexOf('Badge not found') !== -1) {
+                    setManualStatus('Badge not found in cache/TTE. You can still enter manually.', '');
+                } else {
+                    setManualStatus(err, 'error');
+                }
             }
             updateManualButtonState();
         })
