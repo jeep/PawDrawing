@@ -632,6 +632,11 @@ class TestSuspiciousDetection(unittest.TestCase):
         self.assertEqual(compute_threshold_seconds({}), 4 * 3600)
         self.assertEqual(compute_threshold_seconds({"max_play_time": 0}), 4 * 3600)
 
+    def test_compute_threshold_uses_max_play_time_not_min(self):
+        from routes.suspicious import compute_threshold_seconds
+        game = {"min_play_time": 180, "max_play_time": 30}
+        self.assertEqual(compute_threshold_seconds(game), 3600)
+
     def test_check_long_checkouts(self):
         from routes.suspicious import check_long_checkouts
         games = [{"id": "g1", "name": "Catan", "max_play_time": 60}]
@@ -651,6 +656,16 @@ class TestSuspiciousDetection(unittest.TestCase):
         active = [{"id": "co1", "librarygame_id": "g1",
                     "renter_name": "Alice", "date_created": recent_time}]
         result = check_long_checkouts(games, active)
+        self.assertEqual(len(result), 0)
+
+    def test_check_long_checkouts_respects_alert_hours_floor(self):
+        from routes.suspicious import check_long_checkouts
+        games = [{"id": "g1", "name": "Catan", "max_play_time": 30}]  # base threshold 1h
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime(
+            "%Y-%m-%d %H:%M:%S")
+        active = [{"id": "co1", "librarygame_id": "g1",
+                    "renter_name": "Alice", "date_created": old_time}]
+        result = check_long_checkouts(games, active, alert_hours=3)
         self.assertEqual(len(result), 0)
 
     def test_check_partner_patterns(self):
@@ -676,6 +691,23 @@ class TestSuspiciousDetection(unittest.TestCase):
         ]
         result = check_partner_patterns(checkouts, {})
         self.assertEqual(len(result), 0)
+
+    def test_partner_patterns_can_skip_non_partner_between(self):
+        from routes.suspicious import check_partner_patterns
+        games = [{"id": "g1", "max_play_time": 60}]  # threshold 2h
+        checkouts = [
+            {"librarygame_id": "g1", "renter_name": "Alice",
+             "date_created": "2026-03-25 10:00:00", "checkedout_seconds": 10000},
+            {"librarygame_id": "g1", "renter_name": "Charlie",
+             "date_created": "2026-03-25 11:00:00", "checkedout_seconds": 9000},
+            {"librarygame_id": "g1", "renter_name": "Bob",
+             "date_created": "2026-03-25 14:00:00", "checkedout_seconds": 9000},
+        ]
+        play_groups = {"Alice": ["Bob"], "Bob": ["Alice"]}
+        result = check_partner_patterns(checkouts, play_groups, games)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["person_a"], "Alice")
+        self.assertEqual(result[0]["person_b"], "Bob")
 
     def test_flag_suspicious_games(self):
         from routes.suspicious import flag_suspicious_games

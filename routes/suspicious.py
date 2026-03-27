@@ -32,7 +32,21 @@ def compute_threshold_seconds(game):
     return 4 * 3600  # 4-hour fallback
 
 
-def check_long_checkouts(games, active_checkouts, premium_ids=None):
+def _resolve_threshold_seconds(game, alert_hours=None):
+    """Combine per-game threshold with optional operator alert-hours floor."""
+    threshold = compute_threshold_seconds(game)
+    if alert_hours is None:
+        return threshold
+    try:
+        alert_seconds = int(alert_hours) * 3600
+    except (TypeError, ValueError):
+        return threshold
+    if alert_seconds <= 0:
+        return threshold
+    return max(threshold, alert_seconds)
+
+
+def check_long_checkouts(games, active_checkouts, premium_ids=None, alert_hours=None):
     """Detect currently-active checkouts that exceed the game's threshold.
 
     Args:
@@ -51,7 +65,7 @@ def check_long_checkouts(games, active_checkouts, premium_ids=None):
     for co in active_checkouts:
         game_id = co.get("librarygame_id")
         game = game_map.get(game_id, {})
-        threshold = compute_threshold_seconds(game)
+        threshold = _resolve_threshold_seconds(game, alert_hours=alert_hours)
 
         started = _parse_datetime(co.get("date_created"))
         if not started:
@@ -72,7 +86,7 @@ def check_long_checkouts(games, active_checkouts, premium_ids=None):
     return suspicious
 
 
-def check_partner_patterns(checkouts, play_groups, games=None):
+def check_partner_patterns(checkouts, play_groups, games=None, alert_hours=None):
     """Detect sequential long checkouts by play partners (FR-SUSPCHK-02).
 
     If person A had a long checkout for game X, and person B (a frequent
@@ -97,24 +111,34 @@ def check_partner_patterns(checkouts, play_groups, games=None):
 
     patterns = []
     for game_id, cos in game_checkouts.items():
-        cos.sort(key=lambda c: c.get("date_created", ""))
-        for i in range(len(cos) - 1):
-            a = cos[i]
-            b = cos[i + 1]
-            a_name = a.get("renter_name", "")
-            b_name = b.get("renter_name", "")
+        cos.sort(key=lambda c: _parse_datetime(c.get("date_created")) or datetime.min.replace(tzinfo=timezone.utc))
+        game = game_map.get(game_id, {})
+        threshold = _resolve_threshold_seconds(game, alert_hours=alert_hours)
 
-            # Are they play partners?
-            partners_of_a = play_groups.get(a_name, [])
-            if b_name not in partners_of_a:
+        long_cos = [
+            co for co in cos
+            if (co.get("checkedout_seconds", 0) or 0) > threshold
+        ]
+
+        for i in range(len(long_cos) - 1):
+            a = long_cos[i]
+            a_name = a.get("renter_name", "")
+            if not a_name:
                 continue
 
-            # Were both long checkouts? Use per-game threshold (FR-SUSPCHK-02)
-            game = game_map.get(game_id, {})
-            threshold = compute_threshold_seconds(game)
-            a_secs = a.get("checkedout_seconds", 0) or 0
-            b_secs = b.get("checkedout_seconds", 0) or 0
-            if a_secs > threshold and b_secs > threshold:
+            partners_of_a = play_groups.get(a_name, [])
+            if not partners_of_a:
+                continue
+
+            # Consider any later long checkout by a play partner, not just adjacent rows.
+            for j in range(i + 1, len(long_cos)):
+                b = long_cos[j]
+                b_name = b.get("renter_name", "")
+                if b_name not in partners_of_a:
+                    continue
+
+                a_secs = a.get("checkedout_seconds", 0) or 0
+                b_secs = b.get("checkedout_seconds", 0) or 0
                 patterns.append({
                     "game_id": game_id,
                     "person_a": a_name,
@@ -122,6 +146,7 @@ def check_partner_patterns(checkouts, play_groups, games=None):
                     "a_hours": round(a_secs / 3600, 1),
                     "b_hours": round(b_secs / 3600, 1),
                 })
+                break
 
     return patterns
 

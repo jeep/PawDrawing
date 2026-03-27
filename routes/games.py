@@ -168,13 +168,20 @@ def _detect_non_p2w_games():
 def _run_suspicious_check(client, library_id):
     """Run suspicious checkout detection and generate notifications."""
     games = session.get(SK.CACHED_GAMES, [])
+    lib_settings = session.get(SK.LIBRARY_SETTINGS) or {}
+    alert_hours = lib_settings.get("checkout_alert_hours", 3)
     try:
         active = client.get_library_checkouts(library_id, checked_in=False)
     except TTEAPIError:
         active = []
 
     premium_ids = set(session.get(SK.PREMIUM_GAMES, []))
-    suspicious = check_long_checkouts(games, active, premium_ids=premium_ids)
+    suspicious = check_long_checkouts(
+        games,
+        active,
+        premium_ids=premium_ids,
+        alert_hours=alert_hours,
+    )
 
     play_groups = session.get(SK.PLAY_GROUPS, {})
     try:
@@ -182,7 +189,12 @@ def _run_suspicious_check(client, library_id):
     except TTEAPIError:
         history = []
 
-    patterns = check_partner_patterns(active + history, play_groups, games)
+    patterns = check_partner_patterns(
+        active + history,
+        play_groups,
+        games,
+        alert_hours=alert_hours,
+    )
     flag_suspicious_games(games, suspicious, patterns)
     session[SK.CACHED_GAMES] = games
 
