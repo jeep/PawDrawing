@@ -68,6 +68,10 @@ def library_select_route():
         library = client.get_library(library_id)
     except TTEAPIError as exc:
         return _handle_api_error(exc, url_for("main.convention_select"), "load library")
+    except Exception:
+        logger.exception("Unexpected error loading library %s", library_id)
+        flash("Could not load that library. You may not have access to it.", "error")
+        return redirect(url_for("main.convention_select"))
 
     library_name = library.get("name", "Unknown")
 
@@ -129,6 +133,10 @@ def convention_select_route():
         convention = client.get_convention(convention_id, include_library=True)
     except TTEAPIError as exc:
         return _handle_api_error(exc, url_for("main.convention_select"), "load convention")
+    except Exception:
+        logger.exception("Unexpected error loading convention %s", convention_id)
+        flash("Could not load that convention. You may not have access to it.", "error")
+        return redirect(url_for("main.convention_select"))
 
     convention_name = convention.get("name", "Unknown")
     library = convention.get("library")

@@ -2449,6 +2449,18 @@ class TestErrorHandlingRoutes(unittest.TestCase):
             self.assertNotIn("tte_session_id", sess)
 
     @patch("routes.helpers.TTEClient")
+    def test_convention_select_unexpected_error_redirects(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.get_convention.side_effect = RuntimeError("unexpected")
+        MockClient.return_value = mock_instance
+        self._setup_session()
+
+        resp = self.client.post("/convention/select",
+                                data={"convention_id": "C0000001-0000-4000-A000-000000000001"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/convention", resp.headers["Location"])
+
+    @patch("routes.helpers.TTEClient")
     def test_games_auth_error_clears_session(self, MockClient):
         mock_instance = MagicMock()
         mock_instance.get_library_games.side_effect = TTEAPIError("Forbidden", 403)
