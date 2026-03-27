@@ -39,11 +39,14 @@ def create_app():
     Session(app)
     csrf.init_app(app)
 
+    # Initialize shared state directory
+    import shared_state
+    shared_state._shared_dir = app.config.get("SHARED_STATE_DIR", "shared_state")
+    shared_state.init_dir()
+
     from routes import main_bp
-    from routes.library import library_bp
 
     app.register_blueprint(main_bp)
-    app.register_blueprint(library_bp)
 
     _cleanup_old_sessions(app)
 

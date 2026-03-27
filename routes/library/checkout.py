@@ -195,7 +195,9 @@ def create_checkout():
         return _handle_api_json_error(exc, "create checkout")
 
     # Update local cache
-    _update_game_cache(game_id, is_checked_out=1)
+    _update_game_cache(game_id, is_checked_out=1,
+                       _renter_name=renter_name,
+                       _checkout_id=result.get("id", ""))
 
     # Cache the person for future lookups
     if badge_number and renter_name:
@@ -243,7 +245,8 @@ def checkin():
 
     # Update local cache
     if game_id and is_valid_tte_id(game_id):
-        _update_game_cache(game_id, is_checked_out=0)
+        _update_game_cache(game_id, is_checked_out=0,
+                           _renter_name="", _checkout_id="")
 
     # Check if P2W game
     is_p2w = False
@@ -392,4 +395,30 @@ def reset_checkout_time():
         return _handle_api_json_error(exc, "reset checkout time")
 
     logger.info("Checkout time reset: %s", checkout_id)
+    return jsonify({"success": True})
+
+
+@library_bp.route("/p2w-delete", methods=["POST"])
+@login_required(api=True)
+def delete_p2w_entry():
+    """AJAX: remove a Play-to-Win entry by ID."""
+    denied = check_checkout_privilege()
+    if denied:
+        return denied
+
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid request"}), 400
+
+    entry_id = data.get("entry_id", "").strip()
+    if not entry_id or not is_valid_tte_id(entry_id):
+        return jsonify({"error": "Invalid entry ID"}), 400
+
+    client = _get_client()
+    try:
+        client.delete_playtowin(entry_id)
+    except TTEAPIError as exc:
+        return _handle_api_json_error(exc, "remove P2W entry")
+
+    logger.info("P2W entry deleted: %s", entry_id)
     return jsonify({"success": True})

@@ -57,6 +57,37 @@ def game_detail(game_id):
         except TTEAPIError:
             logger.warning("Failed to load P2W entries for game %s", game_id)
 
+    # Build a map of P2W entries keyed by renter name for linking to checkouts
+    p2w_by_name = {}
+    for e in p2w_entries:
+        name = (e.get("name") or e.get("renter_name") or "Unknown").lower()
+        p2w_by_name.setdefault(name, []).append(e)
+
+    # Annotate each checkout with its associated P2W entries
+    for c in checkout_history:
+        renter = (c.get("renter_name") or "").lower()
+        c["p2w_entries"] = p2w_by_name.get(renter, [])
+    for c in active_checkouts:
+        renter = (c.get("renter_name") or "").lower()
+        c["p2w_entries"] = p2w_by_name.get(renter, [])
+
+    # Check if a drawing has been run and this game has a winner
+    drawing_state = session.get("drawing_state", [])
+    drawing_winner = None
+    for item in drawing_state:
+        if item.get("game", {}).get("id") == game_id:
+            from drawing import get_current_winners
+            winners = get_current_winners(drawing_state)
+            w = winners.get(game_id)
+            if w:
+                drawing_winner = {
+                    "name": w.get("name", "Unknown"),
+                    "badge_id": w.get("badge_id", ""),
+                    "total_entries": len(item.get("shuffled", [])),
+                    "position": item.get("winner_index", 0) + 1,
+                }
+            break
+
     return render_template(
         "library/game_detail.html",
         game=game,
@@ -64,6 +95,7 @@ def game_detail(game_id):
         checkout_history=checkout_history[:20],
         p2w_entries=p2w_entries,
         p2w_entry_count=len(p2w_entries),
+        drawing_winner=drawing_winner,
     )
 
 
@@ -204,3 +236,71 @@ def person_search():
             })
     results.sort(key=lambda p: p.get("name", ""))
     return jsonify({"results": results[:50]})
+
+
+@library_bp.route("/people")
+@login_required
+def people_list():
+    """People list — all known attendees from the badge cache."""
+    person_cache = session.get(SK.PERSON_CACHE, {})
+    library_id = session.get(SK.LIBRARY_ID)
+
+    # Build people list from cache
+    people = []
+    for badge_number, info in person_cache.items():
+        people.append({
+            "badge_number": badge_number,
+            "name": info.get("name", badge_number),
+        })
+    people.sort(key=lambda p: p["name"].lower())
+
+    # Get active checkouts to show who currently has games
+    active_by_name = {}
+    if library_id:
+        games = session.get(SK.CACHED_GAMES, [])
+        game_names = {g.get("id"): g.get("name", "Unknown") for g in games}
+        for g in games:
+            renter = g.get("_renter_name", "")
+            if renter and g.get("is_checked_out"):
+                active_by_name.setdefault(renter.lower(), []).append(
+                    game_names.get(g.get("id"), "Unknown")
+                )
+
+    # Annotate people with their active checkouts
+    for p in people:
+        p["active_games"] = active_by_name.get(p["name"].lower(), [])
+
+    return render_template(
+        "library/people_list.html",
+        people=people,
+        total=len(people),
+    )
+
+
+@library_bp.route("/person-add", methods=["POST"])
+@login_required(api=True)
+def person_add():
+    """AJAX: add a person to the local badge cache."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid request"}), 400
+
+    badge_number = (data.get("badge_number") or "").strip()
+    name = (data.get("name") or "").strip()
+
+    if not badge_number:
+        return jsonify({"error": "Badge number is required"}), 400
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+    if len(badge_number) > 200 or len(name) > 200:
+        return jsonify({"error": "Input too long"}), 400
+
+    person_cache = session.get(SK.PERSON_CACHE) or {}
+    person_cache[badge_number] = {
+        "name": name,
+        "badge_id": person_cache.get(badge_number, {}).get("badge_id", ""),
+    }
+    session[SK.PERSON_CACHE] = person_cache
+
+    logger.info("Person added to cache: badge=%s name=%s", badge_number, name)
+    return jsonify({"success": True})

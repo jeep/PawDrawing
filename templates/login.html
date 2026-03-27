@@ -106,6 +106,10 @@
                         onclick="toggleVisibility('api_key', this)">👁</button>
             </div>
         </div>
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.85rem;margin-bottom:1rem;cursor:pointer;">
+            <input type="checkbox" id="remember-key" checked>
+            Remember API key on this device
+        </label>
         <button type="submit" class="btn-login">Log In</button>
     </form>
     {% if session.get('library_id') %}
@@ -127,5 +131,28 @@ function toggleVisibility(fieldId, btn) {
         btn.setAttribute('aria-label', btn.getAttribute('aria-label').replace('Hide', 'Show'));
     }
 }
+
+// Restore API key from localStorage
+(function() {
+    const saved = localStorage.getItem('pawdrawing_api_key');
+    if (saved) {
+        document.getElementById('api_key').value = saved;
+    }
+    const remembered = localStorage.getItem('pawdrawing_remember_key');
+    if (remembered === 'false') {
+        document.getElementById('remember-key').checked = false;
+    }
+
+    document.querySelector('.login-card form').addEventListener('submit', function() {
+        const cb = document.getElementById('remember-key');
+        const key = document.getElementById('api_key').value.trim();
+        localStorage.setItem('pawdrawing_remember_key', cb.checked);
+        if (cb.checked && key) {
+            localStorage.setItem('pawdrawing_api_key', key);
+        } else {
+            localStorage.removeItem('pawdrawing_api_key');
+        }
+    });
+})();
 </script>
 {% endblock %}

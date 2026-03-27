@@ -1,4 +1,5 @@
     <a href="{{ url_for('library.dashboard') }}">Dashboard</a>
+    <a href="{{ url_for('library.people_list') }}">People</a>
     <a href="{{ url_for('library.notifications') }}">Notifications
     {%- set _unread = (session.get('notifications') or [])|rejectattr('dismissed')|list|length -%}
     {%- if _unread > 0 %} <span class="badge">{{ _unread }}</span>{% endif -%}

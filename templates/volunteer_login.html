@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block app_title %}PawLibrary — Volunteer Login{% endblock %}
+{% block app_title %}PawDrawing — Volunteer Login{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -94,7 +94,7 @@
 <div class="login-card">
     <h2>Volunteer Login</h2>
     <p class="library-info">Library: <strong>{{ library_name }}</strong></p>
-    <form method="POST" action="{{ url_for('library.volunteer_login') }}">
+    <form method="POST" action="{{ url_for('main.volunteer_login') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
             <label for="username">Your TTE Username or Email</label>

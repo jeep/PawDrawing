@@ -29,7 +29,7 @@ class SK:
     SOLO_DISMISSED_GAMES = "solo_dismissed_games"
 
     # ── Library Management Mode ────────────────────────────────────────
-    APP_MODE = "app_mode"  # "drawing" or "library"
+    APP_MODE = "app_mode"  # "management", "players", "prep", or "drawing"
     AUTH_MODE = "auth_mode"  # "owner" or "volunteer"
 
     # Volunteer login
@@ -41,6 +41,7 @@ class SK:
 
     # Checkout tracking
     CHECKOUT_CACHE = "checkout_cache"  # list of active checkouts
+    CHECKOUT_MAP = "checkout_map"  # shared: {game_id: {renter, checkout_id} | null}
 
     # P2W play group tracking
     PLAY_GROUPS = "play_groups"  # {person_key: [co-entrant keys]}
@@ -50,6 +51,9 @@ class SK:
 
     # Component check tracking
     COMPONENT_CHECKS = "component_checks"  # {game_id: {checked, volunteer, timestamp}}
+
+    # Drawing prep tracking
+    PREP_COMPLETED = "prep_completed"  # bool — whether Drawing Prep has been visited
 
     # Library management settings
     LIBRARY_SETTINGS = "library_settings"  # {include_non_p2w: bool, ...}

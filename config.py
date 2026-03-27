@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 _session_dir = os.environ.get("SESSION_FILE_DIR", "flask_session")
+_shared_state_dir = os.environ.get("SHARED_STATE_DIR", "shared_state")
 
 
 class Config:
@@ -21,4 +22,5 @@ class Config:
     SESSION_TYPE = "cachelib"
     SESSION_CACHELIB = FileSystemCache(cache_dir=_session_dir, threshold=0)
     SESSION_PERMANENT = True
-    PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
+    PERMANENT_SESSION_LIFETIME = timedelta(days=30)
+    SHARED_STATE_DIR = _shared_state_dir

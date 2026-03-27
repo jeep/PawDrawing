@@ -40,19 +40,19 @@
 </div>
 
 <div class="catalog-actions">
+    <a href="{{ url_for('library.game_list') }}" class="btn btn-primary btn-large">Open Game List</a>
     <form method="post" action="{{ url_for('library.refresh_catalog') }}" class="inline-form" id="refresh-catalog-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-small" id="refresh-catalog-btn">Refresh Catalog</button>
+        <button type="submit" class="btn" id="refresh-catalog-btn">Refresh Catalog</button>
     </form>
     {% if total_games > p2w_games %}
     <form method="post" action="{{ url_for('library.mark_all_p2w') }}" class="inline-form"
           onsubmit="return confirm('This will mark all {{ total_games - p2w_games }} non-P2W in-circulation games as Play-to-Win. This cannot be easily undone. Are you sure?');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-small btn-warning">Mark All as P2W</button>
+        <button type="submit" class="btn btn-warning">Mark All as P2W</button>
     </form>
     {% endif %}
-    <a href="{{ url_for('library.game_list') }}" class="btn btn-small">Game List</a>
-    <a href="{{ url_for('library.component_checks') }}" class="btn btn-small">Component Checks</a>
+    <a href="{{ url_for('library.component_checks') }}" class="btn">Component Checks</a>
     <label class="settings-toggle">
         <input type="checkbox" id="include-non-p2w" {% if session.get('library_settings', {}).get('include_non_p2w') %}checked{% endif %}>
         Include non-P2W games

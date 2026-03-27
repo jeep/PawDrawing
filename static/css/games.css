@@ -18,6 +18,49 @@
         color: #2c3e50;
         font-size: 1.1rem;
     }
+
+    /* Mode selector pills */
+    .mode-selector {
+        display: inline-flex;
+        border: 2px solid #3498db;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+    .mode-pill {
+        background: white;
+        color: #3498db;
+        border: none;
+        padding: 0.45rem 1.2rem;
+        font-family: inherit;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s, color 0.15s;
+        text-decoration: none;
+        display: inline-block;
+        text-align: center;
+    }
+    .mode-pill + .mode-pill { border-left: 1px solid #3498db; }
+    .mode-pill:hover { background: #ebf5fb; }
+    .mode-pill.active {
+        background: #3498db;
+        color: white;
+    }
+
+    /* P2W badge */
+    .p2w-badge {
+        display: inline-block;
+        background: #3498db;
+        color: white;
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 0.1rem 0.35rem;
+        border-radius: 3px;
+        margin-left: 0.4rem;
+        text-transform: uppercase;
+        vertical-align: middle;
+    }
+
     .game-table {
         width: 100%;
         border-collapse: collapse;
@@ -107,7 +150,33 @@
     .save-status.visible { opacity: 1; }
     .th-premium { text-align: center; width: 90px; }
     .td-premium { text-align: center; }
-    .refresh-btn, .change-source-btn {
+
+    /* Status column */
+    .th-status { width: 140px; }
+    .td-status { white-space: nowrap; }
+    .status-available { color: #27ae60; font-weight: 500; }
+    .status-out { color: #2c3e50; font-weight: 500; }
+    .status-overdue { color: #e74c3c; font-weight: 600; }
+
+    /* Action column */
+    .th-action { width: 100px; text-align: center; }
+    .td-action { text-align: center; white-space: nowrap; }
+    .btn-checkout, .btn-checkin {
+        border: none;
+        padding: 0.35rem 0.75rem;
+        font-family: inherit;
+        font-size: 0.82rem;
+        font-weight: 600;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .btn-checkout { background: #3498db; color: white; }
+    .btn-checkout:hover { background: #2980b9; }
+    .btn-checkin { background: #e67e22; color: white; }
+    .btn-checkin:hover { background: #d35400; }
+
+    .refresh-btn, .settings-btn {
         margin-left: auto;
         background: #3498db;
         color: white;
@@ -120,8 +189,164 @@
         text-decoration: none;
         display: inline-block;
     }
-    .change-source-btn { margin-left: 0; }
-    .refresh-btn:hover, .change-source-btn:hover { background: #2980b9; }
+    .refresh-btn:hover { background: #2980b9; }
+    /* Settings button (now a <button>) */
+    .settings-btn {
+        margin-left: 0;
+        background: #7f8c8d;
+        color: white;
+        border: none;
+        padding: 0.4rem 1rem;
+        font-size: 0.85rem;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .settings-btn:hover { background: #636e72; }
+
+    /* Settings modal card */
+    .settings-card {
+        max-width: 400px;
+    }
+    .settings-title-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    .settings-title-row h3 { margin: 0; }
+    .settings-close {
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        cursor: pointer;
+        color: #999;
+        padding: 0.2rem 0.4rem;
+    }
+    .settings-close:hover { color: #333; }
+    .settings-section {
+        border-bottom: 1px solid #eee;
+        padding: 0.75rem 0;
+    }
+    .settings-section:last-child { border-bottom: none; }
+    .settings-label {
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #555;
+        margin-bottom: 0.3rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .settings-value {
+        font-size: 0.95rem;
+        color: #2c3e50;
+    }
+    .settings-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.92rem;
+    }
+    .alert-hours-input {
+        width: 60px;
+        padding: 0.35rem 0.5rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        text-align: center;
+    }
+    .alert-hours-input:focus { border-color: #3498db; outline: none; }
+
+    /* ── Notification bell ── */
+    .notif-wrapper {
+        position: relative;
+        display: inline-block;
+    }
+    .notif-bell {
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        cursor: pointer;
+        position: relative;
+        padding: 0.2rem 0.4rem;
+        line-height: 1;
+    }
+    .notif-badge {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        background: #e74c3c;
+        color: white;
+        font-size: 0.65rem;
+        font-weight: 700;
+        min-width: 16px;
+        height: 16px;
+        line-height: 16px;
+        border-radius: 8px;
+        text-align: center;
+        padding: 0 3px;
+    }
+    .notif-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        width: 320px;
+        max-height: 400px;
+        overflow-y: auto;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        z-index: 7000;
+        margin-top: 0.4rem;
+    }
+    .notif-header {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #2c3e50;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #eee;
+    }
+    .notif-list {
+        padding: 0.5rem;
+    }
+    .notif-empty {
+        color: #999;
+        font-size: 0.85rem;
+        text-align: center;
+        padding: 1rem;
+    }
+    .notif-item {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 0.4rem;
+        padding: 0.5rem 0.6rem;
+        border-radius: 5px;
+        margin-bottom: 0.3rem;
+        font-size: 0.85rem;
+        position: relative;
+    }
+    .notif-item.notif-warning { background: #fff8e1; }
+    .notif-item.notif-alert { background: #fdecea; }
+    .notif-item.notif-non_p2w { background: #e3f2fd; }
+    .notif-item.notif-info { background: #f5f5f5; }
+    .notif-msg { flex: 1; color: #333; }
+    .notif-dismiss {
+        background: none;
+        border: none;
+        color: #999;
+        cursor: pointer;
+        font-size: 0.9rem;
+        padding: 0 0.2rem;
+        flex-shrink: 0;
+    }
+    .notif-dismiss:hover { color: #333; }
+    .notif-details {
+        width: 100%;
+        font-size: 0.78rem;
+        color: #777;
+        margin-top: 0.15rem;
+    }
 
     /* Ejection panel */
     .eject-panel {
@@ -272,3 +497,244 @@
     .action-row .btn-drawing:hover { background: #229954; }
     .action-row .btn-players { background: #3498db; }
     .action-row .btn-players:hover { background: #2980b9; }
+
+    /* ── Modal overlay ── */
+    .modal-overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(44, 62, 80, 0.6);
+        z-index: 5000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    .modal-card {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+        padding: 1.5rem 2rem;
+        width: 90%;
+        max-width: 480px;
+        max-height: 85vh;
+        overflow-y: auto;
+    }
+    .modal-card h3 {
+        margin: 0 0 1rem;
+        color: #2c3e50;
+        font-size: 1.15rem;
+    }
+    .modal-field {
+        margin-bottom: 0.75rem;
+    }
+    .modal-field label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 0.25rem;
+    }
+    .modal-field input {
+        width: 100%;
+        padding: 0.55rem 0.75rem;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        font-size: 0.95rem;
+        outline: none;
+        box-sizing: border-box;
+    }
+    .modal-field input:focus { border-color: #3498db; box-shadow: 0 0 0 2px rgba(52,152,219,0.15); }
+    .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-top: 1.25rem;
+    }
+    .btn-cancel, .btn-primary, .btn-secondary {
+        border: none;
+        padding: 0.55rem 1.2rem;
+        font-family: inherit;
+        font-size: 0.9rem;
+        font-weight: 600;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+    .btn-cancel { background: #ecf0f1; color: #555; }
+    .btn-cancel:hover { background: #dfe6e9; }
+    .btn-primary { background: #3498db; color: white; }
+    .btn-primary:hover { background: #2980b9; }
+    .btn-primary:disabled { background: #bdc3c7; cursor: not-allowed; }
+    .btn-secondary { background: #95a5a6; color: white; }
+    .btn-secondary:hover { background: #7f8c8d; }
+
+    /* Badge lookup status */
+    .badge-status {
+        display: block;
+        font-size: 0.8rem;
+        margin-top: 0.2rem;
+        min-height: 1.1em;
+    }
+    .badge-found { color: #27ae60; }
+    .badge-notfound { color: #e67e22; }
+
+    /* Checkin renter line */
+    .checkin-renter {
+        color: #555;
+        font-size: 0.92rem;
+        margin: 0 0 1rem;
+    }
+
+    /* P2W section in check-in modal */
+    .p2w-section {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.5rem;
+        background: #fafafa;
+    }
+    .p2w-header {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #2c3e50;
+        margin-bottom: 0.5rem;
+    }
+    .p2w-entrants {
+        margin-bottom: 0.5rem;
+    }
+    .p2w-entrant {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.25rem 0;
+        font-size: 0.9rem;
+    }
+    .p2w-entrant label { cursor: pointer; }
+    .p2w-remove-btn {
+        background: none;
+        border: none;
+        color: #c0392b;
+        cursor: pointer;
+        font-size: 1rem;
+        padding: 0 0.3rem;
+    }
+    .p2w-add-row {
+        display: flex;
+        gap: 0.4rem;
+        align-items: center;
+    }
+    .p2w-input-sm {
+        width: 80px;
+        padding: 0.4rem 0.5rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 0.85rem;
+    }
+    .p2w-input {
+        flex: 1;
+        padding: 0.4rem 0.5rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 0.85rem;
+    }
+    .btn-add {
+        background: #27ae60;
+        color: white;
+        border: none;
+        padding: 0.4rem 0.7rem;
+        font-size: 0.82rem;
+        font-weight: 600;
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .btn-add:hover { background: #229954; }
+
+    /* Toast notification */
+    .toast {
+        position: fixed;
+        bottom: 1.5rem;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 0.6rem 1.5rem;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        z-index: 6000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .toast-success { background: #27ae60; color: white; }
+    .toast-error { background: #e74c3c; color: white; }
+
+    /* ── Components check modal ── */
+    .components-card {
+        max-width: 560px;
+    }
+    .components-subtitle {
+        color: #777;
+        font-size: 0.88rem;
+        margin: 0 0 1rem;
+    }
+    .components-section-title {
+        font-weight: 700;
+        font-size: 0.8rem;
+        color: #555;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 0.4rem;
+        padding-bottom: 0.25rem;
+        border-bottom: 1px solid #eee;
+    }
+    .components-out-list {
+        margin-bottom: 1rem;
+    }
+    .components-out-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.4rem 0.5rem;
+        border-radius: 4px;
+        background: #fff8e1;
+        margin-bottom: 0.3rem;
+    }
+    .components-game-name { font-weight: 600; flex: 1; }
+    .components-renter { color: #888; font-size: 0.85rem; }
+    .btn-force-in {
+        background: #e67e22;
+        color: white;
+        border: none;
+        padding: 0.3rem 0.65rem;
+        font-size: 0.78rem;
+        font-weight: 600;
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .btn-force-in:hover { background: #d35400; }
+    .btn-force-in:disabled { background: #bdc3c7; cursor: not-allowed; }
+    .components-avail-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem 1rem;
+        max-height: 180px;
+        overflow-y: auto;
+        margin-bottom: 0.75rem;
+    }
+    .components-avail-item {
+        font-size: 0.85rem;
+        color: #27ae60;
+        white-space: nowrap;
+    }
+    .components-summary {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #555;
+        margin: 0.5rem 0 0;
+    }
+
+    /* Responsive */
+    @media (max-width: 700px) {
+        .th-status, .td-status { display: none; }
+        .modal-card { width: 95%; padding: 1rem 1.25rem; }
+        .mode-selector { width: 100%; }
+        .mode-pill { flex: 1; text-align: center; font-size: 0.75rem; padding: 0.4rem 0.3rem; }
+        .notif-dropdown { width: 280px; right: -1rem; }
+    }

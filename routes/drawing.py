@@ -98,8 +98,28 @@ def drawing_results():
     """Display drawing results from session state."""
     drawing_state = session.get(SK.DRAWING_STATE)
     if drawing_state is None:
-        flash("No drawing results to display.", "error")
-        return redirect(url_for("main.games"))
+        # No drawing yet — show the "run drawing" prompt
+        convention_name = session.get(SK.CONVENTION_NAME) or session.get(SK.LIBRARY_NAME, "")
+        has_data = session.get(SK.CACHED_GAMES) is not None and session.get(SK.CACHED_ENTRIES) is not None
+        return render_template(
+            "drawing_results.html",
+            results=[],
+            awaiting=[],
+            picked_up_list=[],
+            no_entries=[],
+            conflicts=[],
+            auto_resolved=[],
+            conflicted_game_ids=set(),
+            premium_games=session.get(SK.PREMIUM_GAMES, []),
+            convention_name=convention_name,
+            picked_up=set(),
+            not_here=[],
+            not_here_warning_dismissed=False,
+            drawing_timestamp="",
+            no_drawing=True,
+            has_data=has_data,
+            prep_completed=session.get(SK.PREP_COMPLETED, False),
+        )
 
     results = _build_results_from_session()
     conflicts = session.get(SK.DRAWING_CONFLICTS, [])
@@ -128,6 +148,8 @@ def drawing_results():
         not_here=session.get(SK.NOT_HERE, []),
         not_here_warning_dismissed=session.get(SK.NOT_HERE_WARNING_DISMISSED, False),
         drawing_timestamp=session.get(SK.DRAWING_TIMESTAMP, ""),
+        no_drawing=False,
+        prep_completed=session.get(SK.PREP_COMPLETED, False),
     )
 
 

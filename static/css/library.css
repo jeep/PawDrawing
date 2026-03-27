@@ -85,10 +85,10 @@
 .search-group input,
 .form-row input {
     width: 100%;
-    padding: 0.6rem 0.75rem;
+    padding: 0.75rem 1rem;
     border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 0.95rem;
+    border-radius: 6px;
+    font-size: 1.05rem;
 }
 
 .search-group input:focus,
@@ -153,11 +153,11 @@
 }
 
 .btn {
-    padding: 0.5rem 1rem;
+    padding: 0.6rem 1.25rem;
     border: 1px solid #ddd;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 1rem;
     background: #f5f5f5;
     white-space: nowrap;
 }
@@ -173,8 +173,14 @@
 .btn-primary:hover { background: #2980b9; }
 
 .btn-small {
-    padding: 0.3rem 0.6rem;
-    font-size: 0.8rem;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+}
+
+.btn-large {
+    padding: 0.75rem 1.5rem;
+    font-size: 1.1rem;
+    font-weight: 600;
 }
 
 .hidden { display: none !important; }
@@ -444,21 +450,23 @@
 }
 
 .filter-controls label {
-    font-size: 0.85rem;
+    font-size: 0.95rem;
     color: #666;
 }
 
 .filter-controls input[type="number"] {
-    width: 60px;
-    padding: 0.25rem 0.5rem;
+    width: 80px;
+    padding: 0.5rem 0.75rem;
     border: 1px solid #ddd;
-    border-radius: 4px;
+    border-radius: 6px;
+    font-size: 1rem;
 }
 
 .filter-controls select {
-    padding: 0.25rem 0.5rem;
+    padding: 0.5rem 0.75rem;
     border: 1px solid #ddd;
-    border-radius: 4px;
+    border-radius: 6px;
+    font-size: 1rem;
 }
 
 .game-list-table {
@@ -468,16 +476,185 @@
 .game-list-table th {
     cursor: pointer;
     user-select: none;
+    font-size: 0.9rem;
 }
 
 .game-list-table th:hover {
     background: #f0f0f0;
 }
 
+.game-list-table td {
+    vertical-align: middle;
+}
+
+.action-cell {
+    white-space: nowrap;
+}
+
+.renter-info {
+    font-size: 0.8rem;
+    color: #666;
+    margin-top: 0.15rem;
+}
+
 .suspicious-flag {
     color: #e74c3c;
     font-weight: 600;
     font-size: 0.85rem;
+}
+
+/* Inline checkout form in game list */
+.gl-checkout-row td {
+    background: #f0f7ff;
+    border-left: 3px solid #3498db;
+}
+
+.gl-checkout-form {
+    padding: 0.5rem 0;
+}
+
+.gl-checkout-form strong {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #2c3e50;
+}
+
+.gl-checkout-form .form-row {
+    margin-top: 0;
+}
+
+.gl-checkout-form .form-row input {
+    max-width: 220px;
+}
+
+/* Lookup search section labels */
+.search-section-label {
+    padding: 0.3rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid #eee;
+}
+
+.search-results a.search-result-item {
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    justify-content: space-between;
+}
+
+.search-results a.search-result-item:hover {
+    background: #e3f2fd;
+}
+
+/* Game detail page */
+.game-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.game-detail-header h2 {
+    margin-bottom: 0.25rem;
+}
+
+.game-detail-status {
+    flex-shrink: 0;
+}
+
+.game-action-card {
+    border-left: 4px solid #3498db;
+    margin-bottom: 1.5rem;
+}
+
+.game-action-card h3 {
+    margin-bottom: 0.75rem;
+}
+
+.alert-banner {
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    font-weight: 500;
+}
+
+.alert-warning {
+    background: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffcc80;
+}
+
+.drawing-card {
+    background: linear-gradient(135deg, #f8f4ff, #fff);
+    border-left: 4px solid #8e44ad;
+    margin-bottom: 1.5rem;
+}
+
+.drawing-winner-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.drawing-winner-info strong {
+    font-size: 1.1rem;
+}
+
+.badge-ref {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.draw-position {
+    color: #888;
+    font-size: 0.85rem;
+}
+
+.btn-danger {
+    background: #e74c3c;
+    color: white;
+    border-color: #e74c3c;
+}
+
+.btn-danger:hover {
+    background: #c0392b;
+}
+
+.p2w-table td {
+    vertical-align: middle;
+}
+
+.checkout-history-table td {
+    font-size: 0.92rem;
+}
+
+.back-link {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #eee;
+}
+
+.back-link a {
+    color: #3498db;
+    text-decoration: none;
+    font-size: 0.95rem;
+}
+
+.back-link a:hover {
+    text-decoration: underline;
+}
+
+/* Hide columns on narrow screens */
+@media (max-width: 700px) {
+    .hide-narrow {
+        display: none;
+    }
 }
 
 /* Offline banner */

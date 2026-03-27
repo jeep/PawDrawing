@@ -234,6 +234,10 @@ class TTEClient:
         """Update a PlayToWin entry (e.g., set win flag)."""
         return self._request("PUT", f"/playtowin/{playtowin_id}", json_body=data)
 
+    def delete_playtowin(self, playtowin_id):
+        """Delete a PlayToWin entry."""
+        return self._request("DELETE", f"/playtowin/{playtowin_id}")
+
     # ── Library Management: Checkouts ──────────────────────────────────
 
     def get_library_checkouts(self, library_id, checked_in=None):

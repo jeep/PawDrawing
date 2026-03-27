@@ -59,6 +59,8 @@ def game_list():
             "checkout_count": checkout_count,
             "p2w_count": p2w_count,
             "suspicious": g.get("_suspicious", False),
+            "renter_name": g.get("_renter_name", ""),
+            "checkout_id": g.get("_checkout_id", ""),
         })
 
     # Sort

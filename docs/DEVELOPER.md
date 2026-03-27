@@ -25,7 +25,9 @@ PawDrawing/
 ├── tte_client.py           # TTE API client with rate limiting & pagination
 ├── drawing.py              # Drawing algorithm (shuffle, conflicts, resolution)
 ├── data_processing.py      # Entry validation, de-duplication, grouping
+├── shared_state.py         # Library-scoped shared state (cross-device persistence)
 ├── populate_library.py     # Test data generator for TTE libraries
+├── run_demo.py             # Demo mode with mock data (no TTE needed)
 ├── requirements.txt        # pip dependencies
 ├── .env.example            # Template for environment variables
 ├── startup.sh              # Azure App Service startup command
@@ -35,8 +37,9 @@ PawDrawing/
 │   ├── auth.py                 # Login, logout, health check, index redirect
 │   ├── convention.py           # Convention search & library selection
 │   ├── drawing.py              # Drawing execution, results, conflict resolution
-│   ├── drawing_actions.py      # AJAX: pickup, award-next, not-here, redraw, push, export
-│   └── games.py                # Game list, premium toggles, eject/uneject, entrants
+│   ├── drawing_actions.py      # AJAX: pickup, award-to, award-next, not-here, redraw, push, export
+│   ├── games.py                # Unified game/library management, checkout, P2W, volunteer login
+│   └── suspicious.py           # Suspicious checkout detection (long checkouts, partner patterns)
 ├── static/
 │   ├── css/
 │   │   ├── drawing.css         # Styles for drawing results page
@@ -47,18 +50,21 @@ PawDrawing/
 ├── templates/
 │   ├── base.html               # Base layout with flash messages & loading overlay
 │   ├── login.html              # Login form (username, password, API key)
+│   ├── volunteer_login.html    # Volunteer login form (checkout privilege required)
 │   ├── convention_select.html  # Convention search & library browse
 │   ├── convention_confirm.html # Confirm selected convention
 │   ├── library_confirm.html    # Confirm selected library (no convention)
-│   ├── games.html              # Game list with premium toggles, sorting & search
+│   ├── games.html              # Game list with management controls (checkout, P2W, settings)
 │   ├── players.html            # Player management with remove/restore controls
+│   ├── drawing_prep.html       # Pre-drawing checklist (component check, stats, alerts)
 │   └── drawing_results.html    # Results with conflicts, pickup, push, export
 ├── tests/
 │   ├── conftest.py             # Disables CSRF for test client
-│   ├── test_routes.py          # Route/view tests
-│   ├── test_tte_client.py      # API client tests
-│   ├── test_drawing.py         # Drawing algorithm tests
-│   └── test_data_processing.py # Data processing tests
+│   ├── test_routes.py          # Route/view tests (197)
+│   ├── test_library_mgmt.py    # Library management route tests (62)
+│   ├── test_drawing.py         # Drawing algorithm tests (43)
+│   ├── test_tte_client.py      # API client tests (22)
+│   └── test_data_processing.py # Data processing tests (21)
 ├── .githooks/
 │   └── commit-msg          # Conventional Commits hook
 ├── .github/
@@ -96,7 +102,8 @@ Loads `.env` via `python-dotenv`, then exposes:
 | `SESSION_TYPE` | — | `"cachelib"` | flask-session backend type |
 | `SESSION_CACHELIB` | — | `FileSystemCache("flask_session")` | Server-side session storage; directory overridden via `SESSION_FILE_DIR` env var |
 | `SESSION_PERMANENT` | — | `True` | Sessions persist across browser restarts |
-| `PERMANENT_SESSION_LIFETIME` | — | `8 hours` | Session expiry |
+| `PERMANENT_SESSION_LIFETIME` | — | `30 days` | Session expiry |
+| `SHARED_STATE_DIR` | `SHARED_STATE_DIR` | `"shared_state"` | Directory for library-scoped shared state files |
 
 ### `session_keys.py`
 
@@ -121,8 +128,9 @@ Routes are organized into a Blueprint package. `routes/__init__.py` creates `mai
 | `auth.py` | Login, logout, health check (`/health`), index redirect |
 | `convention.py` | Convention search, convention/library selection, library browsing |
 | `drawing.py` | Run drawing, display results, dismiss conflict games, resolve conflicts |
-| `drawing_actions.py` | Pickup toggle, award-next, not-here, redraw unclaimed, push to TTE, CSV export |
-| `games.py` | Game list, player management, premium toggles, eject/uneject, entrant list |
+| `drawing_actions.py` | Pickup toggle, award-to, award-next, not-here, redraw unclaimed, push to TTE, CSV export |
+| `games.py` | Unified game/library management: game list, premium toggles, eject/uneject, entrants, checkout/checkin, P2W entry, badge lookup, notifications, settings, suspicious detection, mark-all-P2W, drawing prep, volunteer login/logout |
+| `suspicious.py` | Suspicious checkout detection: long-checkout threshold, partner pattern analysis |
 
 **All routes:**
 
@@ -137,18 +145,36 @@ Routes are organized into a Blueprint package. `routes/__init__.py` creates `mai
 | POST | `/convention/select` | convention | `convention_select_route` | Fetch and confirm convention |
 | GET | `/library/browse` | convention | `library_browse` | AJAX: list user's libraries |
 | POST | `/library/select` | convention | `library_select_route` | Fetch and confirm library (no convention) |
-| GET | `/games` | games | `games` | Load and display P2W games |
+| GET | `/games` | games | `games` | Load and display games (Management tab) |
+| POST | `/games/mode` | games | `switch_mode` | Switch mode and redirect (management/players/prep/drawing) |
 | GET | `/games/players` | games | `players` | Player management (list, remove, restore) |
+| GET | `/games/prep` | games | `drawing_prep` | Drawing Prep checklist (component check, stats, alerts) |
 | POST | `/games/premium` | games | `set_premium_games` | AJAX: save premium designations |
 | POST | `/games/eject` | games | `eject_player` | AJAX: eject player from drawing |
 | POST | `/games/uneject` | games | `uneject_player` | AJAX: undo an ejection |
 | GET | `/games/entrants/<game_id>` | games | `get_entrants` | AJAX: list entrants for a game |
+| GET | `/games/badge-lookup` | games | `badge_lookup` | AJAX: look up attendee by badge number |
+| GET | `/games/active-checkout` | games | `active_checkout` | AJAX: get active checkout for a game |
+| POST | `/games/checkout` | games | `create_checkout` | AJAX: check out a game |
+| POST | `/games/checkin` | games | `checkin` | AJAX: check in a game |
+| GET | `/games/checkout-status` | games | `checkout_status` | AJAX: poll shared state for checkout changes (no TTE calls) |
+| POST | `/games/p2w-entry` | games | `create_p2w_entry` | AJAX: create P2W entry for a game |
+| GET | `/games/p2w-suggestions` | games | `p2w_suggestions` | AJAX: suggest P2W entries after checkout |
+| POST | `/games/reset-checkout-time` | games | `reset_checkout_time` | AJAX: reset checkout timestamp |
+| GET | `/games/notifications` | games | `get_notifications` | AJAX: get notification list |
+| POST | `/games/notifications/dismiss` | games | `dismiss_notification` | AJAX: dismiss a notification |
+| POST | `/games/settings` | games | `update_settings` | AJAX: update library settings |
+| POST | `/games/mark-all-p2w` | games | `mark_all_p2w` | AJAX: mark all games as P2W via TTE API |
+| GET/POST | `/volunteer-login` | games | `volunteer_login` | Volunteer login form and authentication |
+| POST | `/volunteer-logout` | games | `volunteer_logout` | Volunteer logout (preserves library context) |
 | POST | `/drawing` | drawing | `run_drawing_route` | Execute drawing algorithm (redirects to results) |
 | GET | `/drawing/results` | drawing | `drawing_results` | Display drawing results from session |
 | POST | `/drawing/dismiss-game` | drawing | `dismiss_conflict_game` | AJAX: dismiss a game from conflict resolution |
 | POST | `/drawing/resolve` | drawing | `resolve_conflicts` | AJAX: apply conflict resolutions |
 | POST | `/drawing/pickup` | drawing_actions | `toggle_pickup` | AJAX: toggle pickup status |
 | POST | `/drawing/award-next` | drawing_actions | `award_next` | AJAX: advance to next winner |
+| POST | `/drawing/award-to` | drawing_actions | `award_to` | AJAX: award game to a specific entrant |
+| GET | `/drawing/entrants/<game_id>` | drawing_actions | `drawing_entrants` | AJAX: list entrants for a game in drawing context |
 | POST | `/drawing/not-here` | drawing_actions | `mark_not_here` | AJAX: mark person absent, advance their games |
 | POST | `/drawing/redraw-unclaimed` | drawing_actions | `redraw_all_unclaimed` | AJAX: redraw all unclaimed games |
 | POST | `/drawing/push` | drawing_actions | `push_to_tte` | AJAX: push wins to TTE API |
@@ -188,6 +214,19 @@ REST client for the tabletop.events API.
 | `get_convention_playtowins(id)` | GET `/convention/{id}/playtowins` | Yes |
 | `get_playtowin(playtowin_id)` | GET `/playtowin/{id}` | No |
 | `update_playtowin(id, data)` | PUT `/playtowin/{id}` | No |
+| `delete_playtowin(playtowin_id)` | DELETE `/playtowin/{id}` | No |
+| `get_library_checkouts(id, checked_in)` | GET `/library/{id}/checkouts` | Yes |
+| `get_library_game_checkouts(game_id, checked_in)` | GET `/librarygame/{id}/checkouts` | Yes |
+| `search_checkouts(query)` | GET `/checkout` | Yes |
+| `create_checkout(library_id, game_id, ...)` | POST `/checkout` | No |
+| `checkin_game(checkout_id)` | PUT `/checkout/{id}` | No |
+| `get_checkout(checkout_id)` | GET `/checkout/{id}` | No |
+| `delete_checkout(checkout_id)` | DELETE `/checkout/{id}` | No |
+| `create_playtowin_entry(library_id, game_id, ...)` | POST `/playtowin` | No |
+| `update_library_game(game_id, data)` | PUT `/librarygame/{id}` | No |
+| `search_badges(convention_id, query, ...)` | GET `/convention/{id}/badges` | Yes |
+| `get_library_privileges(library_id)` | GET `/library/{id}/privileges` | Yes |
+| `reset_checkout_time(checkout_id)` | PUT `/checkout/{id}` | No |
 
 ### `drawing.py`
 
@@ -210,6 +249,19 @@ Core drawing algorithm. Pure functions operating on data structures (no I/O).
 - `process_entries(entries)` — filters entries without a usable identifier and de-duplicates by `(badge_id, librarygame_id)`. Falls back to `user_id` then `name` when `badge_id` is absent.
 - `apply_ejections(entries, ejected_entries)` — removes ejected entries. Supports per-game ejection or wildcard (`"*"`) for all games.
 - `group_entries_by_game(entries, games)` — groups entries by game, attaches game metadata. Games with zero entries are included.
+
+### `shared_state.py`
+
+Library-scoped shared state that persists across browser sessions. Stores data that must be visible to all devices working with the same library: ejections, notifications, settings, person cache, play groups. Each library gets a separate JSON file in the `shared_state/` directory.
+
+**Functions:**
+
+- `init_dir()` — creates the shared state directory if it doesn't exist.
+- `load(library_id)` — loads the full shared state dict for a library. Returns `{}` if no file exists.
+- `save(library_id, state)` — replaces the entire shared state file for a library.
+- `update(library_id, key, value)` — atomically sets a single key in the shared state file. Uses `fcntl.flock()` file locking.
+- `merge_dict(library_id, key, updates)` — atomically merges a dict into a shared state key. Used for `person_cache` and `play_groups` to prevent concurrent writes from overwriting each other.
+- `delete(library_id)` — removes a library's shared state and lock files.
 
 ## Cross-Cutting Concerns
 
@@ -259,44 +311,46 @@ Library Confirm                POST /library/select  (alternative path)
   │                              └─ Stores library_id, library_name in session
   │                              └─ Clears convention_id, convention_name
   ▼
-Games Page                     GET /games
-  │                              ├─ TTEClient.get_library_games()
-  │                              ├─ Convention mode:
-  │                              │    └─ TTEClient.get_convention_playtowins()
-  │                              ├─ Library-only mode:
-  │                              │    └─ TTEClient.get_library_game_playtowins() per game
-  │                              └─ process_entries() + apply_ejections() + group_entries_by_game()
-  │                              └─ Caches all_games and entries in session for reuse
-  │                              └─ Sortable columns & search/filter bar
-  │                              └─ Premium toggles: AJAX POST /games/premium
-  │                              └─ Manage Players: GET /games/players
-  │                              └─ Remove player: AJAX POST /games/eject
-  │                              └─ Restore player: AJAX POST /games/uneject
-  │                              └─ View entrants: AJAX GET /games/entrants/<game_id>
+Games Page                     GET /games (or GET /games?refresh=1)
+  │  On first load or refresh:
+  │   ├─ [1] TTEClient.get_library_games()        → cached_games
+  │   ├─ [2] TTEClient.get_convention_playtowins() → cached_entries
+  │   │       (or get_library_playtowins in library-only mode)
+  │   ├─ [3] TTEClient.get_library_checkouts(checked_in=False)
+  │   │       → enrich games with renter names & checkout IDs
+  │   ├─ [4] TTEClient.get_library_checkouts(checked_in=False)
+  │   │       → suspicious: long checkout detection
+  │   ├─ [5] TTEClient.get_library_checkouts(checked_in=True)
+  │   │       → suspicious: partner pattern analysis
+  │   └─ process_entries() + apply_ejections() + group_entries_by_game()
+  │  On cached load: no API calls, uses session data
+  │
+  │  Management mode actions (AJAX):
+  │   ├─ Badge lookup:        GET  /games/badge-lookup → [1] search_badges()
+  │   ├─ Game checkout:       POST /games/checkout     → [1] get_library_game()
+  │   │                                                  [2] create_checkout()
+  │   ├─ Game checkin:        POST /games/checkin      → [1] checkin_game()
+  │   ├─ P2W entry:           POST /games/p2w-entry    → [1] get_library_game_playtowins()
+  │   │                                                  [2] create_playtowin_entry()
+  │   ├─ Active checkout:     GET  /games/active-checkout → [1] get_library_game_checkouts()
+  │   ├─ Reset checkout time: POST /games/reset-checkout-time → [1] reset_checkout_time()
+  │   ├─ Mark All P2W:        POST /games/mark-all-p2w → [N] update_library_game() per game
+  │   ├─ Settings/premium:    POST /games/settings, /games/premium → session only
+  │   └─ Eject/uneject:       POST /games/eject, /games/uneject   → session only
   ▼
 Run Drawing                    POST /drawing → 302 → GET /drawing/results
   │                              ├─ Uses cached games + entries from session (no API calls)
-  │                              └─ apply_ejections() → run_drawing() → drawing_state, conflicts, auto_resolved
-  │                              └─ Stores drawing_state in session, redirects (PRG pattern)
+  │                              └─ apply_ejections() → run_drawing() → drawing_state
   ▼
-Resolve Conflicts              AJAX POST /drawing/resolve
-  │                              └─ apply_resolution() → detect_conflicts() (cascading)
-  ▼
-Track Pickups                  AJAX POST /drawing/pickup
-  │                              └─ Toggles game_id in session["picked_up"]
-  ▼
-Award to Next / Not Here       AJAX POST /drawing/award-next
-  │                              AJAX POST /drawing/not-here
-  │                              └─ Advances winner_index, skips not_here badges
-  ▼
-Redraw Unclaimed               AJAX POST /drawing/redraw-unclaimed
-  │                              └─ Reshuffles unclaimed games excluding not_here & original winners
-  ▼
-Push to TTE                    AJAX POST /drawing/push
-  │                              └─ TTEClient.update_playtowin(id, {win: 1})
-  ▼
-Export CSV                     GET /drawing/export
-                                 └─ Downloads CSV with results
+Results & Redraw               GET /drawing/results
+  │   ├─ Resolve conflicts:   POST /drawing/resolve       → session only
+  │   ├─ Track pickups:       POST /drawing/pickup         → session only
+  │   ├─ Award next:          POST /drawing/award-next     → session only
+  │   ├─ Award to:            POST /drawing/award-to       → session only
+  │   ├─ Gone (not here):     POST /drawing/not-here       → session only
+  │   ├─ Redraw unclaimed:    POST /drawing/redraw-unclaimed → session only
+  │   ├─ Push to TTE:         POST /drawing/push           → [N] update_playtowin()
+  │   └─ Export CSV:           GET /drawing/export          → no API calls
 ```
 
 ## Session State Reference
@@ -313,20 +367,140 @@ All application state lives in the server-side Flask session (`FileSystemCache`)
 | `convention_name` | `str` | Convention select | Convention display name (absent in library-only mode) |
 | `library_id` | `str` | Convention/library select | Associated library ID |
 | `library_name` | `str` | Convention/library select | Library display name |
-| `cached_games` | `list[dict]` | Games page | Cached game data from TTE (cleared on source change) |
-| `cached_entries` | `list[dict]` | Games page | Cached entry data from TTE (cleared on source change) |
+| `app_mode` | `str` | Mode switch | Current UI mode: `"management"`, `"players"`, `"prep"`, or `"drawing"` |
+| `prep_completed` | `bool` | Drawing Prep | Whether Drawing Prep has been visited (shows warning on Drawing tab if not) |
+| `auth_mode` | `str` | Login / volunteer login | `"owner"` or `"volunteer"` |
+| `volunteer_name` | `str` | Volunteer login | Display name for current volunteer |
+| `has_checkout_privilege` | `bool` | Volunteer login | Whether volunteer has checkout privilege (cached at login) |
+| `cached_games` | `list[dict]` | Games page refresh | Cached game data from TTE |
+| `cached_entries` | `list[dict]` | Games page refresh | Cached entry data from TTE |
 | `premium_games` | `list[str]` | Premium toggle | Game IDs marked as premium |
 | `ejected_entries` | `list[list]` | Eject player | Pairs of `[badge_id, game_id]` (`"*"` = all games) |
+| `person_cache` | `dict` | Badge lookup / checkout | `{badge_number: {name, badge_id, user_id}}` |
+| `checkout_cache` | `list` | Checkout actions | List of active checkouts |
+| `play_groups` | `dict` | P2W entry | `{person_key: [co-entrant keys]}` for partner detection |
+| `notifications` | `list[dict]` | Refresh / actions | `[{id, type, message, dismissed, timestamp, details}]` |
+| `component_checks` | `dict` | Component check modal | `{game_id: {checked, volunteer, timestamp}}` |
+| `library_settings` | `dict` | Settings modal | `{include_non_p2w: bool, checkout_alert_hours: int, ...}` |
 | `drawing_state` | `list[dict]` | Drawing | Full shuffled state with winner indices |
 | `drawing_conflicts` | `list[dict]` | Drawing | Unresolved multi-win conflicts |
 | `drawing_timestamp` | `str` | Drawing | When the drawing was executed |
 | `auto_resolved` | `list[dict]` | Drawing | Auto-resolved premium conflicts |
 | `picked_up` | `list[str]` | Pickup toggle | Game IDs marked as picked up |
-| `not_here` | `list[str]` | Not Here | Badge IDs marked as absent |
-| `not_here_warning_dismissed` | `bool` | Not Here | Whether the confirmation warning was dismissed |
+| `not_here` | `list[str]` | Gone | Badge IDs marked as absent |
+| `not_here_warning_dismissed` | `bool` | Gone | Whether the confirmation warning was dismissed |
 | `solo_dismissed_games` | `list[str]` | Dismiss conflict | Games dismissed during conflict resolution |
 
 Session is cleared entirely on auth errors (401/403) and on logout. All library-scoped keys (everything below `tte_api_key` in the table above) are cleared when the convention or library source changes.
+
+## Data Architecture: Session vs TTE
+
+Application data falls into three categories based on where it lives and how it's shared:
+
+### TTE-Synced (Authoritative)
+
+These operations write to the TTE API. Changes are visible to all users/devices immediately.
+
+| Data | Write Operation | Read Back |
+|------|----------------|-----------|
+| Game checkouts | `create_checkout()` | On refresh: `get_library_checkouts()` |
+| Game checkins | `checkin_game()` | On refresh: `get_library_checkouts()` |
+| P2W entries | `create_playtowin_entry()` | On refresh: `get_convention_playtowins()` |
+| P2W win flags | `update_playtowin({win: 1})` | — (push is the final step) |
+| Game P2W flag | `update_library_game({is_play_to_win: 1})` | On refresh: `get_library_games()` |
+| Checkout timestamps | `reset_checkout_time()` | On refresh: `get_library_checkouts()` |
+
+### Shared State (Library-Scoped)
+
+These values are stored in library-scoped JSON files (via `shared_state.py`) and synced into the session on page loads. Changes made on one device are visible to all devices working with the same library.
+
+| Data | Shared Mechanism |
+|------|-----------------|
+| `ejected_entries` | `shared_state.update()` — atomic replace |
+| `notifications` | `shared_state.update()` — atomic replace |
+| `library_settings` | `shared_state.update()` — atomic replace |
+| `person_cache` | `shared_state.merge_dict()` — concurrent-safe merge |
+| `play_groups` | `shared_state.merge_dict()` — concurrent-safe merge |
+
+### Session-Only (Per-Browser)
+
+These values exist only in the server-side session for one browser. They are **not shared** between devices or browser tabs with different session cookies.
+
+| Data | Impact If Not Shared |
+|------|---------------------|
+| `cached_games`, `cached_entries` | Each browser has its own snapshot; stale until manually refreshed |
+| `premium_games` | Premium designations set on one device are not visible on another |
+| `drawing_state`, `drawing_conflicts` | Drawing results exist only in the session that ran the drawing |
+| `picked_up`, `not_here` | Pickup tracking and absent markers are per-session |
+| `component_checks` | Component check records are per-session |
+
+### Derived (Computed on Refresh)
+
+Computed from TTE data during a refresh and cached in session:
+
+| Data | Computed From |
+|------|--------------|
+| Renter names on games | `get_library_checkouts()` → merged into `cached_games` |
+| Suspicious flags on games | `check_long_checkouts()` + `check_partner_patterns()` → flags on `cached_games` |
+| Non-P2W notifications | Scanned from `cached_games` after refresh |
+
+### Multi-Device Implications
+
+When multiple volunteers use separate devices (each with their own browser session):
+
+- **Consistent across devices:** Checkouts, checkins, P2W entries, and game data — because these are written to TTE and re-fetched on refresh. Also ejections, notifications, settings, person cache, and play groups — because these are stored in library-scoped shared state files and synced on every page load.
+- **Not shared across devices:** Premium designations, drawing state, pickup tracking, and component checks. Each device has its own copy.
+- **Staleness risk:** The JS polls `checkout-status` every 30 seconds (paused when the tab is hidden), so checkout changes from other devices appear within ~30 seconds. New P2W entries, newly added games, and other game-level changes still require a manual Refresh.
+- **Drawing must run on one device:** Only the device that runs the drawing has the results. Pushing to TTE writes win flags, but the pickup tracking and redraw workflow are session-local.
+
+> **Recommendation for operators:** Run the drawing from the library owner's device. Volunteers can use separate devices for checkouts. Premium designations and component checks should be set on each device independently (or use a single shared device for these).
+
+## Rate Limiting
+
+### TTE API Limit
+
+The TTE API enforces a rate limit of **1 request per second**. The `TTEClient._throttle()` method enforces this client-side via `time.sleep()`.
+
+The throttle timestamp is stored in the Flask session (`_tte_last_request`) so it persists across `TTEClient` instances within the same request context. Each browser session has its own throttle — multiple devices do **not** share the rate limit counter.
+
+### API Calls Per Operation
+
+| Operation | API Calls | Trigger | Notes |
+|-----------|-----------|---------|-------|
+| **Page load / Refresh** | **5** | User clicks Refresh or first visit | Most expensive operation |
+|  ↳ Get games | 1+ (paginated) | Automatic | 100 games/page |
+|  ↳ Get P2W entries | 1+ (paginated) | Automatic | 100 entries/page |
+|  ↳ Get active checkouts (renter enrichment) | 1+ (paginated) | Automatic | |
+|  ↳ Get active checkouts (suspicious detection) | 1+ (paginated) | Automatic | Duplicate of above — could be optimized |
+|  ↳ Get checkout history (partner patterns) | 1+ (paginated) | Automatic | Can be large for active libraries |
+| **Single checkout** | 2 | User action | `get_library_game` (verify) + `create_checkout` |
+| **Single checkin** | 1 | User action | `checkin_game` |
+| **P2W entry** | 2 | User action | `get_library_game_playtowins` (dup check) + `create_playtowin_entry` |
+| **Badge lookup** | 1 | User action | `search_badges` |
+| **Active checkout lookup** | 1 | User action | `get_library_game_checkouts` |
+| **Reset checkout time** | 1 | User action | `reset_checkout_time` |
+| **Mark All P2W** | N | User action | 1 `update_library_game` per non-P2W game |
+| **Push wins to TTE** | N | User action | 1 `update_playtowin` per picked-up game |
+| **Volunteer login** | 2 | User action | `login` + `get_library_privileges` |
+| **Run drawing** | 0 | User action | Uses cached session data only |
+| **All redraw actions** | 0 | User action | Session-only operations |
+| **Checkout status poll** | 0 | Automatic (30s) | Reads shared state only — no TTE calls; pauses when tab hidden |
+
+### Rate Limit Scenarios
+
+**Refresh with a large library:** A library with 200 games and 500 P2W entries triggers at minimum 5 API calls (possibly more with pagination). At 1 req/sec, this takes ~5 seconds. Very large libraries with extensive checkout histories could take 10–15 seconds.
+
+**Mark All P2W on 50 non-P2W games:** 50 sequential API calls at 1 req/sec = ~50 seconds. The UI should indicate progress.
+
+**Push wins for 30 games:** 30 calls at 1 req/sec = ~30 seconds.
+
+**Multiple volunteers refreshing simultaneously:** Each device has its own rate limiter, so two devices refreshing at the same time make 2× the API calls. The TTE server may enforce a per-API-key or per-IP limit beyond the client-side throttle — this is not documented by TTE.
+
+### Optimization Opportunities
+
+1. **Deduplicate checkout fetches on refresh:** The active checkout list is fetched twice (once for renter enrichment, once for suspicious detection). This could be fetched once and reused.
+2. **Batch P2W updates:** Mark All P2W makes N sequential calls. If TTE supports batch updates, this could be a single call.
+3. **Lazy suspicious detection:** Partner pattern analysis fetches the full checkout history. This could be deferred to a background task or triggered less frequently.
 
 ## Drawing Algorithm
 
@@ -373,8 +547,9 @@ python -m pytest tests/ -v
 
 | File | Tests | Covers |
 |------|-------|--------|
-| `test_routes.py` | 191 | All routes, auth guards, AJAX endpoints, error handling, ID validation |
-| `test_drawing.py` | 40 | Shuffle, conflicts, resolution, cascading, redraw |
+| `test_routes.py` | 197 | All routes, auth guards, AJAX endpoints, error handling, ID validation |
+| `test_library_mgmt.py` | 62 | Library management: checkout, checkin, P2W entry, badge lookup, suspicious detection, volunteer login/logout, privilege gates, notifications, settings |
+| `test_drawing.py` | 43 | Shuffle, conflicts, resolution, cascading, redraw |
 | `test_tte_client.py` | 22 | Rate limiting, auth, error handling, pagination, endpoints |
 | `test_data_processing.py` | 21 | Entry processing, ejection filtering, grouping |
 
@@ -384,7 +559,9 @@ python -m pytest tests/ -v
 
 ### Mocking patterns
 
-- **TTEClient in routes:** `@patch("routes.auth.TTEClient")` or `@patch("routes.helpers.TTEClient")` — mock the class where it's imported, configure the instance via `MockClient.return_value`. Used for routes that call the TTE API directly (games, login, convention/library select).
+- **TTEClient in routes:** `@patch("routes.auth.TTEClient")` or `@patch("routes.helpers.TTEClient")` — mock the class where it's imported, configure the instance via `MockClient.return_value`. Used for routes that call the TTE API directly (login, convention/library select).
+- **TTEClient from local import:** `@patch("tte_client.TTEClient")` — for routes that import TTEClient inside the function body (e.g., volunteer login/logout), mock at the source module.
+- **_get_client in games.py:** `@patch("routes.games._get_client")` — mock the helper that creates TTEClient instances. Used for checkout, checkin, P2W entry, and other game management routes. Configure the mock client's method return values.
 - **Cached session data in routes:** Drawing and player routes use cached session data (`cached_games`, `cached_entries`) instead of API calls. Tests populate these keys via `session_transaction()` rather than mocking TTEClient.
 - **requests in tte_client:** `@patch("tte_client.requests.Session.send", ...)` or `@patch("tte_client.requests.request")` — mock the raw HTTP call, return a `MagicMock` response with `.status_code`, `.ok`, `.json()`, `.text`.
 - **Session setup:** Use `self.client.session_transaction()` context manager to pre-populate Flask session keys before making requests.

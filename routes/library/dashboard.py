@@ -127,6 +127,24 @@ def refresh_catalog():
     except TTEAPIError:
         logger.warning("Could not fetch P2W entries for count enrichment")
 
+    # Enrich checked-out games with renter info for game list inline actions
+    try:
+        active = client.get_library_checkouts(library_id, checked_in=False)
+        checkout_map = {}
+        for co in active:
+            gid = co.get("librarygame_id")
+            if gid:
+                checkout_map[gid] = {
+                    "_renter_name": co.get("renter_name", "Unknown"),
+                    "_checkout_id": co.get("id", ""),
+                }
+        for g in games:
+            info = checkout_map.get(g.get("id"), {})
+            g["_renter_name"] = info.get("_renter_name", "")
+            g["_checkout_id"] = info.get("_checkout_id", "")
+    except TTEAPIError:
+        logger.warning("Could not fetch active checkouts for renter enrichment")
+
     session[SK.CACHED_GAMES] = games
     logger.info("Catalog refreshed: %d games loaded", len(games))
 

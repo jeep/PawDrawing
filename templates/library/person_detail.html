@@ -54,12 +54,27 @@
     {% if p2w_entries %}
     <div class="detail-card">
         <h3>Play-to-Win Entries ({{ p2w_entries|length }})</h3>
-        <ul class="p2w-entry-list">
-        {% for e in p2w_entries %}
-            <li><a href="{{ url_for('library.game_detail', game_id=e.librarygame_id) }}">{{ e.game_name }}</a></li>
-        {% endfor %}
-        </ul>
+        <table class="detail-table p2w-table">
+            <thead><tr><th>Game</th><th></th></tr></thead>
+            <tbody>
+            {% for e in p2w_entries %}
+            <tr id="p2w-row-{{ e.id }}">
+                <td><a href="{{ url_for('library.game_detail', game_id=e.librarygame_id) }}">{{ e.game_name }}</a></td>
+                <td class="action-cell">
+                    <button class="btn btn-small btn-danger p2w-remove-btn"
+                            data-entry-id="{{ e.id }}"
+                            data-entry-name="{{ person_name }} from {{ e.game_name }}"
+                            title="Remove from drawing">Remove</button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
     </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/library.js') }}"></script>
 {% endblock %}
