@@ -27,7 +27,6 @@ def _build_results_from_session():
     drawing_state = session.get(SK.DRAWING_STATE, [])
     premium_games = session.get(SK.PREMIUM_GAMES, [])
     picked_up = set(session.get(SK.PICKED_UP, []))
-    solo_dismissed = set(session.get(SK.SOLO_DISMISSED_GAMES, []))
     winners = get_current_winners(drawing_state)
 
     results = []
@@ -46,7 +45,6 @@ def _build_results_from_session():
             "is_picked_up": game_id in picked_up,
             "has_winner": winner is not None,
             "has_entries": len(item["shuffled"]) > 0,
-            "is_solo_dismissed": game_id in solo_dismissed,
         })
 
     results.sort(key=lambda r: r["game_name"])
@@ -87,7 +85,6 @@ def run_drawing_route():
     session[SK.PICKED_UP] = []
     session[SK.NOT_HERE] = []
     session[SK.NOT_HERE_WARNING_DISMISSED] = False
-    session[SK.SOLO_DISMISSED_GAMES] = []
     session[SK.DRAWING_TIMESTAMP] = datetime.now().strftime("%-I:%M %p")
 
     return redirect(url_for("main.drawing_results"))
@@ -133,9 +130,9 @@ def drawing_results():
         conflicted_game_ids.update(conflict["game_ids"])
 
     # Categorize results into three groups
-    awaiting = [r for r in results if r["has_winner"] and not r["is_picked_up"]]
+    awaiting = [r for r in results if (r["has_winner"] or r["has_entries"]) and not r["is_picked_up"]]
     picked_up_list = [r for r in results if r["has_winner"] and r["is_picked_up"]]
-    no_entries = [r for r in results if not r["has_entries"] or (r["has_entries"] and not r["has_winner"] and not r["is_picked_up"])]
+    no_entries = [r for r in results if not r["has_entries"]]
 
     return render_template(
         "drawing_results.html",
@@ -186,14 +183,6 @@ def resolve_conflicts():
     premium_games = set(session.get(SK.PREMIUM_GAMES, []))
     had_conflicts = bool(session.get(SK.DRAWING_CONFLICTS, []))
     advanced = apply_resolution(drawing_state, keep_map)
-
-    # Track any games that exhausted their entrant list during resolution
-    winners = get_current_winners(drawing_state)
-    solo_dismissed = session.get(SK.SOLO_DISMISSED_GAMES, [])
-    for game_id in advanced:
-        if winners.get(game_id) is None and game_id not in solo_dismissed:
-            solo_dismissed.append(game_id)
-    session[SK.SOLO_DISMISSED_GAMES] = solo_dismissed
 
     # Check for new conflicts from cascading
     new_conflicts = detect_conflicts(drawing_state)
@@ -266,14 +255,6 @@ def dismiss_conflict_game():
 
     not_here = set(session.get(SK.NOT_HERE, []))
     found = advance_winner(drawing_state, game_id, not_here=not_here)
-
-    # If the game is now exhausted (no more candidates), track it so it
-    # shows as "No winner (redraw eligible)" instead of "To the box!"
-    if not found:
-        solo_dismissed = session.get(SK.SOLO_DISMISSED_GAMES, [])
-        if game_id not in solo_dismissed:
-            solo_dismissed.append(game_id)
-        session[SK.SOLO_DISMISSED_GAMES] = solo_dismissed
 
     session[SK.DRAWING_STATE] = drawing_state
 

@@ -27,7 +27,6 @@ class SK:
     PICKED_UP = "picked_up"
     NOT_HERE = "not_here"
     NOT_HERE_WARNING_DISMISSED = "not_here_warning_dismissed"
-    SOLO_DISMISSED_GAMES = "solo_dismissed_games"
 
     # ── Library Management Mode ────────────────────────────────────────
     APP_MODE = "app_mode"  # "management", "players", "prep", or "drawing"

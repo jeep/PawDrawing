@@ -396,7 +396,6 @@ All application state lives in the server-side Flask session (`FileSystemCache`)
 | `picked_up` | `list[str]` | Pickup toggle | Game IDs marked as picked up |
 | `not_here` | `list[str]` | Gone | Badge IDs marked as absent |
 | `not_here_warning_dismissed` | `bool` | Gone | Whether the confirmation warning was dismissed |
-| `solo_dismissed_games` | `list[str]` | Dismiss conflict | Games dismissed during conflict resolution |
 
 Session is cleared entirely on auth errors (401/403) and on logout. All library-scoped keys (everything below `tte_api_key` in the table above) are cleared when the convention or library source changes.
 

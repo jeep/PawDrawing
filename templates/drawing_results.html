@@ -226,17 +226,19 @@
                 {{ r.game_name }}
                 {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
             </td>
-            <td>{{ r.winner_name }}</td>
+            <td>{{ r.winner_name or 'No winner' }}</td>
             <td>{{ r.winner_badge or '—' }}</td>
             <td>{{ r.total_entries }}</td>
-            <td>{{ r.winner_index + 1 }} / {{ r.total_entries }}</td>
+            <td>{% if r.has_winner %}{{ r.winner_index + 1 }} / {{ r.total_entries }}{% else %}—{% endif %}</td>
             <td>
+                {% if r.has_winner %}
                 <button class="pickup-btn" data-game-id="{{ r.game_id }}" onclick="togglePickup('{{ r.game_id }}')">Mark Picked Up</button>
                 <button class="award-next-btn" data-game-id="{{ r.game_id }}" onclick="awardNext('{{ r.game_id }}')">Award to Next</button>
                 {% if r.winner_badge and r.winner_badge not in not_here %}
                 <button class="gone-btn" data-badge-id="{{ r.winner_badge }}" onclick="confirmGone('{{ r.winner_badge }}', '{{ r.winner_name|replace("'", "\\'") }}')">Gone</button>
                 {% elif r.winner_badge and r.winner_badge in not_here %}
                 <span class="not-here-badge">Gone</span>
+                {% endif %}
                 {% endif %}
             </td>
         </tr>
@@ -308,7 +310,7 @@
                 {{ r.game_name }}
                 {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
             </td>
-            <td>{% if r.is_solo_dismissed %}No winner (redraw eligible){% elif r.has_entries %}To the box!{% else %}No entries{% endif %}</td>
+            <td>No entries</td>
         </tr>
         {% endfor %}
     </tbody>
@@ -427,7 +429,7 @@
                 {{ r.game_name }}
                 {% if r.is_premium %}<span class="premium-label">Premium</span>{% endif %}
             </td>
-            <td>{% if r.is_solo_dismissed %}No winner (redraw eligible){% elif r.has_entries %}To the box!{% else %}No entries{% endif %}</td>
+            <td>{% if r.has_entries %}No winner{% else %}No entries{% endif %}</td>
         </tr>
         {% endfor %}
     </tbody>

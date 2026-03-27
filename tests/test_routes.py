@@ -1408,14 +1408,10 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         self.assertTrue(data["was_exhausted"])
         self.assertEqual(data["dismissed_game_id"], "A0000001-0000-4000-A000-000000000001")
 
-        # Session should track the dismissal
-        with self.client.session_transaction() as sess:
-            self.assertIn("A0000001-0000-4000-A000-000000000001", sess["solo_dismissed_games"])
-
-        # The results should show the game as solo-dismissed
+        # The results should show the game as no-winner but with entries
         solo = [r for r in data["results"] if r["game_id"] == "A0000001-0000-4000-A000-000000000001"]
-        self.assertTrue(solo[0]["is_solo_dismissed"])
         self.assertFalse(solo[0]["has_winner"])
+        self.assertTrue(solo[0]["has_entries"])
 
     def test_dismiss_non_solo_not_exhausted(self):
         """Dismissing a game with a next candidate should NOT mark as exhausted."""
@@ -1436,9 +1432,6 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         data = resp.get_json()
         self.assertFalse(data["was_exhausted"])
         self.assertFalse(data["was_solo_entrant"])
-
-        with self.client.session_transaction() as sess:
-            self.assertEqual(sess.get("solo_dismissed_games", []), [])
 
     def test_dismiss_two_entrant_both_gone(self):
         """Dismiss sole-remaining candidate from a 2-entry game -> exhausted."""
@@ -1480,13 +1473,10 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         self.assertTrue(data["was_exhausted"])
         self.assertFalse(data["was_solo_entrant"])  # 2 entrants, not solo
 
-        with self.client.session_transaction() as sess:
-            self.assertIn("A0000001-0000-4000-A000-000000000001", sess["solo_dismissed_games"])
-
-        # The results should show the game as no-winner (redraw eligible)
+        # The results should show the game as no-winner but with entries
         g1 = [r for r in data["results"] if r["game_id"] == "A0000001-0000-4000-A000-000000000001"]
-        self.assertTrue(g1[0]["is_solo_dismissed"])
         self.assertFalse(g1[0]["has_winner"])
+        self.assertTrue(g1[0]["has_entries"])
 
     def test_resolve_tracks_exhausted_games(self):
         """Resolve route tracks games exhausted after apply_resolution."""
@@ -1526,14 +1516,10 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         data = resp.get_json()
         self.assertTrue(data["ok"])
 
-        # G1 had only B1, who kept G2; G1 is now exhausted
-        with self.client.session_transaction() as sess:
-            self.assertIn("A0000001-0000-4000-A000-000000000001", sess.get("solo_dismissed_games", []))
-
-        # Results should show G1 as no-winner (redraw eligible)
+        # G1 had only B1, who kept G2; G1 is now exhausted -> no winner but has entries
         g1 = [r for r in data["results"] if r["game_id"] == "A0000001-0000-4000-A000-000000000001"]
-        self.assertTrue(g1[0]["is_solo_dismissed"])
         self.assertFalse(g1[0]["has_winner"])
+        self.assertTrue(g1[0]["has_entries"])
 
     def test_resolve_multi_entrant_exhausted(self):
         """Resolve exhausts a multi-entrant game (cascade scenario).
@@ -1577,13 +1563,10 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         data = resp.get_json()
         self.assertTrue(data["ok"])
 
-        # G1 had 2 entrants, both resolved away -> exhausted
-        with self.client.session_transaction() as sess:
-            self.assertIn("A0000001-0000-4000-A000-000000000001", sess.get("solo_dismissed_games", []))
-
+        # G1 had 2 entrants, both resolved away -> exhausted, no winner but has entries
         g1 = [r for r in data["results"] if r["game_id"] == "A0000001-0000-4000-A000-000000000001"]
-        self.assertTrue(g1[0]["is_solo_dismissed"])
         self.assertFalse(g1[0]["has_winner"])
+        self.assertTrue(g1[0]["has_entries"])
 
     def test_resolve_reorders_lists_after_conflicts_cleared(self):
         """When the last conflict is resolved, current winners move to index 0."""
@@ -1687,8 +1670,8 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         self.assertEqual(data["conflicts"][0]["badge_id"], "B2")
         self.assertEqual(set(data["conflicts"][0]["game_ids"]), {"A0000001-0000-4000-A000-000000000001", "A0000003-0000-4000-A000-000000000003"})
 
-    def test_dismiss_shown_in_results_template(self):
-        """Dismissed game shows 'No winner (redraw eligible)' not 'To the box!'."""
+    def test_exhausted_game_in_awaiting_section(self):
+        """Exhausted game with entries shows 'No winner' in Awaiting section."""
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
             sess["drawing_state"] = [
@@ -1700,16 +1683,13 @@ class TestDismissConflictGameRoute(unittest.TestCase):
                     "winner_index": 1,  # exhausted
                 },
             ]
-            sess["solo_dismissed_games"] = ["A0000001-0000-4000-A000-000000000001"]
 
         resp = self.client.get("/drawing/results")
         html = resp.data.decode()
-        self.assertIn("No winner (redraw eligible)", html)
-        # The no-entries table should NOT show "To the box!" for this game
-        no_entries_start = html.index('id="no-entries-table"')
-        no_entries_end = html.index("</table>", no_entries_start)
-        no_entries_table = html[no_entries_start:no_entries_end]
-        self.assertNotIn("To the box!", no_entries_table)
+        self.assertIn("No winner", html)
+        # Game has entries so it should be in awaiting, not no-entries
+        self.assertIn("Awaiting", html)
+        self.assertNotIn("no-entries-table", html)
 
     def test_results_hidden_until_conflicts_resolved(self):
         with self.client.session_transaction() as sess:
@@ -1732,21 +1712,8 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         self.assertNotIn('id="search-input"', html)
 
     def test_new_drawing_clears_solo_dismissed(self):
-        with self.client.session_transaction() as sess:
-            sess["tte_session_id"] = "session-123"
-            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
-            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
-            sess["convention_name"] = "GameFest"
-            sess["solo_dismissed_games"] = ["A0000001-0000-4000-A000-000000000001"]
-            sess["cached_games"] = [{"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"}]
-            sess["cached_entries"] = [
-                {"id": "e1", "badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
-            ]
-
-        self.client.post("/drawing")
-
-        with self.client.session_transaction() as sess:
-            self.assertEqual(sess["solo_dismissed_games"], [])
+        """Removed: solo_dismissed_games session key no longer exists (#102)."""
+        pass
 
 
 class TestAwardNextRoute(unittest.TestCase):

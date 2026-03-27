@@ -245,7 +245,6 @@ def redraw_all_unclaimed():
     )
 
     session[SK.DRAWING_STATE] = drawing_state
-    session[SK.SOLO_DISMISSED_GAMES] = []
     if conflicts:
         session[SK.DRAWING_CONFLICTS] = conflicts
     else:
