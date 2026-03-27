@@ -44,6 +44,13 @@
             <a href="{{ url_for('main.drawing_prep') }}" style="color:#856404;font-weight:600;" onclick="document.getElementById('loading-overlay').classList.add('active');">Review now</a>
         </div>
         {% endif %}
+        {% if has_data and not tte_refreshed %}
+        <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+            <span style="font-size:1.2em;">⚠️</span>
+            <span>Data has not been refreshed from TTE this session. Drawing results may be based on stale entries.</span>
+            <a href="{{ url_for('main.games', refresh='1', ret='prep') }}" style="color:#856404;font-weight:600;" onclick="document.getElementById('loading-overlay').classList.add('active');">Refresh now</a>
+        </div>
+        {% endif %}
         {% if has_data %}
         <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin:0;" id="drawing-form" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running Drawing...';document.getElementById('loading-message').textContent='Running drawing\u2026';document.getElementById('loading-note').textContent='This may take a minute or two depending on the number of games and entries.';document.getElementById('loading-overlay').classList.add('active');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -54,6 +61,13 @@
         {% endif %}
     </div>
     {% else %}
+    {% if not tte_refreshed %}
+    <div style="margin-top:0.75rem;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:0.75rem 1rem;margin-bottom:0.75rem;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+        <span style="font-size:1.2em;">⚠️</span>
+        <span>Data has not been refreshed from TTE this session.</span>
+        <a href="{{ url_for('main.games', refresh='1', ret='prep') }}" style="color:#856404;font-weight:600;" onclick="document.getElementById('loading-overlay').classList.add('active');">Refresh now</a>
+    </div>
+    {% endif %}
     {% if unresolved_conflicts %}
     <div style="margin-top:0.75rem;background:#fff7e6;border:1px solid #ffd08a;border-radius:8px;padding:0.75rem 1rem;color:#8a5b00;">
         Resolve all conflicts to unlock results, pickup tracking, and redraw actions.

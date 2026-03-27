@@ -121,6 +121,7 @@ def drawing_results():
             has_data=has_data,
             prep_completed=session.get(SK.PREP_COMPLETED, False),
             unresolved_conflicts=False,
+            tte_refreshed=session.get(SK.TTE_REFRESHED, False),
         )
 
     results = _build_results_from_session()
@@ -154,6 +155,7 @@ def drawing_results():
         no_drawing=False,
         prep_completed=session.get(SK.PREP_COMPLETED, False),
         unresolved_conflicts=unresolved_conflicts,
+        tte_refreshed=session.get(SK.TTE_REFRESHED, False),
     )
 
 

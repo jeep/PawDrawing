@@ -340,6 +340,7 @@ def games():
         # Cache games and entries in session for reuse
         session[SK.CACHED_GAMES] = all_games
         session[SK.CACHED_ENTRIES] = entries
+        session[SK.TTE_REFRESHED] = True
         logger.info("Loaded %d games and %d entries for library %s",
                     len(all_games), len(entries), library_id)
 

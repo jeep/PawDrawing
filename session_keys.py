@@ -54,6 +54,7 @@ class SK:
 
     # Drawing prep tracking
     PREP_COMPLETED = "prep_completed"  # bool — whether Drawing Prep has been visited
+    TTE_REFRESHED = "tte_refreshed"  # bool — whether TTE data was refreshed in this session
 
     # Library management settings
     LIBRARY_SETTINGS = "library_settings"  # {include_non_p2w: bool, ...}
