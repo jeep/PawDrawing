@@ -13,8 +13,8 @@
     </div>
 </div>
 <form method="POST" action="{{ url_for('main.logout') }}" style="display:inline">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" style="background:none;border:none;color:#ecf0f1;cursor:pointer;font-size:0.9rem;">
+    <input type="hidden" name="csrf_token">
+    <button type="button" onclick="submitFormWithCSRF(this.form)" style="background:none;border:none;color:#ecf0f1;cursor:pointer;font-size:0.9rem;">
         Logout ({{ session.get('tte_username', '') }})
     </button>
 </form>
