@@ -155,6 +155,34 @@ def apply_resolution(drawing_state, keep_map):
     return advanced
 
 
+def finalize_resolved_winners(drawing_state, rng=None):
+    """Normalize each game's entrant order after conflict resolution.
+
+    For games with a current winner, place that winner at index 0 and
+    reshuffle the remaining entrants. This preserves the resolved winner while
+    reopening a fair draw order for redraw-mode advancement.
+    """
+    if rng is None:
+        rng = random.Random()
+
+    for item in drawing_state:
+        entries = item["shuffled"]
+        idx = item["winner_index"]
+
+        if not entries:
+            item["winner_index"] = -1
+            continue
+
+        if 0 <= idx < len(entries):
+            winner = entries[idx]
+            remaining = entries[:idx] + entries[idx + 1:]
+            rng.shuffle(remaining)
+            item["shuffled"] = [winner] + remaining
+            item["winner_index"] = 0
+
+    return drawing_state
+
+
 def build_conflict_info(drawing_state, conflicts_dict, premium_games):
     """Build display-friendly conflict dicts from raw conflict data.
 

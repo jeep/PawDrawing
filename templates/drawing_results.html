@@ -54,6 +54,17 @@
         {% endif %}
     </div>
     {% else %}
+    {% if unresolved_conflicts %}
+    <div style="margin-top:0.75rem;background:#fff7e6;border:1px solid #ffd08a;border-radius:8px;padding:0.75rem 1rem;color:#8a5b00;">
+        Resolve all conflicts to unlock results, pickup tracking, and redraw actions.
+    </div>
+    <div class="summary-buttons" style="margin-top:0.75rem;">
+        <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin:0;" onsubmit="{% if picked_up or auto_resolved %}var warnings=[];{% if picked_up %}warnings.push('{{ picked_up|length }} game{{ 's' if picked_up|length != 1 }} already picked up.');{% endif %}{% if auto_resolved %}warnings.push('{{ auto_resolved|length }} conflict{{ 's' if auto_resolved|length != 1 }} already resolved.');{% endif %}warnings.push('');warnings.push('Re-running will discard all progress and redraw ALL games from scratch.');warnings.push('');warnings.push('If you only want to redraw unclaimed games, cancel and use Enter Redraw Mode instead.');if(!confirm(warnings.join('\n'))){return false;}{% endif %}var b=this.querySelector('button');b.disabled=true;b.textContent='Running...';document.getElementById('loading-message').textContent='Running drawing\u2026';document.getElementById('loading-note').textContent='This may take a minute or two depending on the number of games and entries.';document.getElementById('loading-overlay').classList.add('active');sessionStorage.removeItem('redrawMode');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="rerun-btn">Re-run Drawing</button>
+        </form>
+    </div>
+    {% else %}
     <div class="summary-buttons" style="margin-top:0.75rem;">
         <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin:0;" onsubmit="{% if picked_up or auto_resolved %}var warnings=[];{% if picked_up %}warnings.push('{{ picked_up|length }} game{{ 's' if picked_up|length != 1 }} already picked up.');{% endif %}{% if auto_resolved %}warnings.push('{{ auto_resolved|length }} conflict{{ 's' if auto_resolved|length != 1 }} already resolved.');{% endif %}warnings.push('');warnings.push('Re-running will discard all progress and redraw ALL games from scratch.');warnings.push('');warnings.push('If you only want to redraw unclaimed games, cancel and use Enter Redraw Mode instead.');if(!confirm(warnings.join('\n'))){return false;}{% endif %}var b=this.querySelector('button');b.disabled=true;b.textContent='Running...';document.getElementById('loading-message').textContent='Running drawing\u2026';document.getElementById('loading-note').textContent='This may take a minute or two depending on the number of games and entries.';document.getElementById('loading-overlay').classList.add('active');sessionStorage.removeItem('redrawMode');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -67,6 +78,7 @@
             <input type="checkbox" id="redraw-same-rules"> Apply one-win rules
         </label>
     </div>
+    {% endif %}
     {% endif %}
 </div>
 
@@ -161,6 +173,7 @@
 {% endif %}
 </div>
 
+{% if not unresolved_conflicts %}
 <div class="view-tabs">
     <button class="view-tab" id="tab-by-game" onclick="switchView('by-game')">By Game</button>
     <button class="view-tab active" id="tab-by-winner" onclick="switchView('by-winner')">By Winner</button>
@@ -409,6 +422,7 @@
 {% endif %}
 
 </div>
+{% endif %}
 {% endif %}{# not no_drawing #}
 
 {% if not no_drawing %}

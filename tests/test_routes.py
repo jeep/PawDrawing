@@ -861,8 +861,9 @@ class TestDrawingRoutes(unittest.TestCase):
         self.assertIn(b"Multi-Win Conflicts", resp.data)
         # Verify the person's name is shown, not just badge
         self.assertIn(b"Alice", resp.data)
-        # Verify conflict badge on the results table
-        self.assertIn(b'class="conflict-badge"', resp.data)
+        # Results stay hidden until conflicts are resolved
+        self.assertIn(b"Resolve all conflicts to unlock results", resp.data)
+        self.assertNotIn(b'class="conflict-badge"', resp.data)
 
     def test_drawing_conflict_shows_rerun_button(self):
         with self.client.session_transaction() as sess:
@@ -1568,6 +1569,60 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         self.assertTrue(g1[0]["is_solo_dismissed"])
         self.assertFalse(g1[0]["has_winner"])
 
+    def test_resolve_reorders_lists_after_conflicts_cleared(self):
+        """When the last conflict is resolved, current winners move to index 0."""
+        state = [
+            {
+                "game": {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "id": "e2", "name": "Bob"},
+                    {"badge_id": "B5", "id": "e3", "name": "Eve"},
+                ],
+                "winner_index": 1,
+            },
+            {
+                "game": {"id": "A0000003-0000-4000-A000-000000000003", "name": "Wingspan"},
+                "shuffled": [
+                    {"badge_id": "B2", "id": "e4", "name": "Bob"},
+                    {"badge_id": "B4", "id": "e5", "name": "Dave"},
+                ],
+                "winner_index": 0,
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = state
+            sess["drawing_conflicts"] = [{
+                "badge_id": "B2", "winner_name": "Bob",
+                "game_ids": ["A0000001-0000-4000-A000-000000000001", "A0000003-0000-4000-A000-000000000003"],
+                "game_names": {
+                    "A0000001-0000-4000-A000-000000000001": "Catan",
+                    "A0000003-0000-4000-A000-000000000003": "Wingspan",
+                },
+                "is_premium_conflict": False,
+            }]
+            sess["premium_games"] = []
+
+        resp = self.client.post(
+            "/drawing/resolve",
+            json={"resolutions": [{
+                "badge_id": "B2",
+                "keep_game_id": "A0000001-0000-4000-A000-000000000001",
+            }]},
+            content_type="application/json",
+        )
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["conflicts"], [])
+
+        with self.client.session_transaction() as sess:
+            reordered = sess["drawing_state"]
+            self.assertEqual(reordered[0]["winner_index"], 0)
+            self.assertEqual(reordered[0]["shuffled"][0]["badge_id"], "B2")
+            self.assertEqual(reordered[1]["winner_index"], 0)
+            self.assertEqual(reordered[1]["shuffled"][0]["badge_id"], "B4")
+
     def test_dismiss_cascading_conflict(self):
         """Dismissing G1 advances to B2 who already wins G3 -> new conflict."""
         state = [
@@ -1639,6 +1694,26 @@ class TestDismissConflictGameRoute(unittest.TestCase):
         no_entries_end = html.index("</table>", no_entries_start)
         no_entries_table = html[no_entries_start:no_entries_end]
         self.assertNotIn("To the box!", no_entries_table)
+
+    def test_results_hidden_until_conflicts_resolved(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = self._multi_win_state()
+            sess["drawing_conflicts"] = [{
+                "badge_id": "B1", "winner_name": "Alice",
+                "game_ids": ["A0000001-0000-4000-A000-000000000001", "A0000002-0000-4000-A000-000000000002"],
+                "game_names": {
+                    "A0000001-0000-4000-A000-000000000001": "Catan",
+                    "A0000002-0000-4000-A000-000000000002": "Ticket to Ride",
+                },
+                "is_premium_conflict": False,
+            }]
+
+        resp = self.client.get("/drawing/results")
+        html = resp.data.decode()
+        self.assertIn("Resolve all conflicts to unlock results", html)
+        self.assertIn("Multi-Win Conflicts", html)
+        self.assertNotIn('id="search-input"', html)
 
     def test_new_drawing_clears_solo_dismissed(self):
         with self.client.session_transaction() as sess:

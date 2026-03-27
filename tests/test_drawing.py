@@ -9,6 +9,7 @@ from drawing import (
     advance_winner,
     apply_resolution,
     detect_conflicts,
+    finalize_resolved_winners,
     get_current_winners,
     redraw_unclaimed,
     resolve_premium_auto,
@@ -392,6 +393,41 @@ class TestApplyResolution:
         assert state[0]["winner_index"] == 1  # G1 advanced
         assert state[1]["winner_index"] == 0  # G2 kept
         assert state[2]["winner_index"] == 1  # G3 advanced
+
+
+class TestFinalizeResolvedWinners:
+    def test_moves_current_winner_to_front(self):
+        state = [
+            {
+                "game": {"id": "G1"},
+                "shuffled": [
+                    _make_entry("B1", "G1"),
+                    _make_entry("B2", "G1"),
+                    _make_entry("B3", "G1"),
+                ],
+                "winner_index": 2,
+            },
+        ]
+
+        finalize_resolved_winners(state, rng=random.Random(42))
+
+        assert state[0]["winner_index"] == 0
+        assert state[0]["shuffled"][0]["badge_id"] == "B3"
+        assert {e["badge_id"] for e in state[0]["shuffled"]} == {"B1", "B2", "B3"}
+
+    def test_keeps_exhausted_game_unchanged(self):
+        state = [
+            {
+                "game": {"id": "G1"},
+                "shuffled": [_make_entry("B1", "G1")],
+                "winner_index": 1,
+            },
+        ]
+
+        finalize_resolved_winners(state, rng=random.Random(42))
+
+        assert state[0]["winner_index"] == 1
+        assert state[0]["shuffled"][0]["badge_id"] == "B1"
 
 
 # --- run_drawing (integration) ---

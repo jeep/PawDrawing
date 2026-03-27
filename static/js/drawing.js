@@ -7,8 +7,9 @@
     var pendingNotHereName = null;
 
     window.toggleRedrawMode = function() {
-        document.body.classList.toggle('redraw-mode');
         var btn = document.getElementById('redraw-toggle');
+        if (!btn) return;
+        document.body.classList.toggle('redraw-mode');
         btn.classList.toggle('active');
         var active = document.body.classList.contains('redraw-mode');
         btn.textContent = active ? 'Exit Redraw Mode' : 'Enter Redraw Mode';
@@ -86,16 +87,21 @@
     });
 
     window.switchView = function(view) {
-        document.getElementById('tab-by-game').classList.toggle('active', view === 'by-game');
-        document.getElementById('tab-by-winner').classList.toggle('active', view === 'by-winner');
-        document.getElementById('panel-by-game').classList.toggle('active', view === 'by-game');
-        document.getElementById('panel-by-winner').classList.toggle('active', view === 'by-winner');
+        var tabByGame = document.getElementById('tab-by-game');
+        var tabByWinner = document.getElementById('tab-by-winner');
+        var panelByGame = document.getElementById('panel-by-game');
+        var panelByWinner = document.getElementById('panel-by-winner');
+        if (!tabByGame || !tabByWinner || !panelByGame || !panelByWinner) return;
+        tabByGame.classList.toggle('active', view === 'by-game');
+        tabByWinner.classList.toggle('active', view === 'by-winner');
+        panelByGame.classList.toggle('active', view === 'by-game');
+        panelByWinner.classList.toggle('active', view === 'by-winner');
         sessionStorage.setItem('activeTab', view);
     };
 
     // Restore active tab after page reload
     var savedTab = sessionStorage.getItem('activeTab');
-    if (savedTab === 'by-game') {
+    if (savedTab === 'by-game' && document.getElementById('tab-by-game')) {
         switchView('by-game');
     }
 
@@ -475,14 +481,16 @@
         }
     }
 
-    searchInput.addEventListener('input', filterResults);
+    if (searchInput && searchCount) {
+        searchInput.addEventListener('input', filterResults);
 
-    // Re-filter when switching tabs
-    var origSwitchView = window.switchView;
-    window.switchView = function(view) {
-        origSwitchView(view);
-        filterResults();
-    };
+        // Re-filter when switching tabs
+        var origSwitchView = window.switchView;
+        window.switchView = function(view) {
+            origSwitchView(view);
+            filterResults();
+        };
+    }
 
     function escHtml(str) {
         var div = document.createElement('div');
@@ -495,11 +503,13 @@
     }
 
     window.pushToTTE = function() {
-        var count = document.getElementById('pickup-count').textContent;
-        if (!confirm('This will update ' + count + ' games in TTE. Proceed?')) return;
-
+        var pickupEl = document.getElementById('pickup-count');
         var btn = document.getElementById('push-btn');
         var resultDiv = document.getElementById('push-result');
+        if (!pickupEl || !btn || !resultDiv) return;
+        var count = pickupEl.textContent;
+        if (!confirm('This will update ' + count + ' games in TTE. Proceed?')) return;
+
         btn.disabled = true;
         btn.textContent = 'Pushing...';
         resultDiv.style.display = 'block';

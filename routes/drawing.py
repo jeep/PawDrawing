@@ -9,6 +9,7 @@ from drawing import (
     apply_resolution,
     build_conflict_info,
     detect_conflicts,
+    finalize_resolved_winners,
     get_current_winners,
     run_drawing,
 )
@@ -119,10 +120,12 @@ def drawing_results():
             no_drawing=True,
             has_data=has_data,
             prep_completed=session.get(SK.PREP_COMPLETED, False),
+            unresolved_conflicts=False,
         )
 
     results = _build_results_from_session()
     conflicts = session.get(SK.DRAWING_CONFLICTS, [])
+    unresolved_conflicts = bool(conflicts)
 
     conflicted_game_ids = set()
     for conflict in conflicts:
@@ -150,6 +153,7 @@ def drawing_results():
         drawing_timestamp=session.get(SK.DRAWING_TIMESTAMP, ""),
         no_drawing=False,
         prep_completed=session.get(SK.PREP_COMPLETED, False),
+        unresolved_conflicts=unresolved_conflicts,
     )
 
 
@@ -178,6 +182,7 @@ def resolve_conflicts():
         keep_map[badge_id] = keep_game_id
 
     premium_games = set(session.get(SK.PREMIUM_GAMES, []))
+    had_conflicts = bool(session.get(SK.DRAWING_CONFLICTS, []))
     advanced = apply_resolution(drawing_state, keep_map)
 
     # Track any games that exhausted their entrant list during resolution
@@ -206,6 +211,9 @@ def resolve_conflicts():
         new_only = {bid: gids for bid, gids in new_conflicts.items()
                     if bid not in existing_badge_ids}
         conflicts_out.extend(build_conflict_info(drawing_state, new_only, premium_games))
+
+    if had_conflicts and not conflicts_out:
+        finalize_resolved_winners(drawing_state)
 
     session[SK.DRAWING_CONFLICTS] = conflicts_out
 
@@ -269,6 +277,7 @@ def dismiss_conflict_game():
 
     # Update conflicts: remove the dismissed game from the badge's conflict
     conflicts = session.get(SK.DRAWING_CONFLICTS, [])
+    had_conflicts = bool(conflicts)
     updated_conflicts = []
     for c in conflicts:
         if c["badge_id"] == badge_id:
@@ -297,6 +306,9 @@ def dismiss_conflict_game():
                     if bid not in existing_badge_ids}
         updated_conflicts.extend(build_conflict_info(drawing_state, new_only,
                                                      set(session.get(SK.PREMIUM_GAMES, []))))
+
+    if had_conflicts and not updated_conflicts:
+        finalize_resolved_winners(drawing_state)
 
     session[SK.DRAWING_CONFLICTS] = updated_conflicts
 
