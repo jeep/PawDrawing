@@ -37,6 +37,7 @@ _SHARED_KEYS = (
     SK.PERSON_CACHE,
     SK.PLAY_GROUPS,
     SK.CHECKOUT_MAP,
+    SK.MANUAL_ENTRY_IDS,
 )
 
 # Dict-type keys that use merge semantics to avoid losing concurrent writes
@@ -430,6 +431,8 @@ def players():
         flash("Please load the games page first.", "info")
         return redirect(url_for("main.games"))
 
+    manual_entry_ids = set(session.get(SK.MANUAL_ENTRY_IDS, []))
+
     # Build game name lookup
     game_names = {g.get("id"): g.get("name", "Unknown") for g in all_games}
 
@@ -449,6 +452,8 @@ def players():
         players_map[badge_id]["games"].append({
             "game_id": game_id,
             "game_name": game_names.get(game_id, "Unknown"),
+            "entry_id": entry.get("id"),
+            "is_manual": entry.get("id") in manual_entry_ids,
         })
 
     player_list = sorted(players_map.values(), key=lambda p: p["name"].lower())
@@ -463,6 +468,13 @@ def players():
         else:
             removed_per_game.setdefault(badge_id, set()).add(game_id)
 
+    p2w_games = [
+        {"id": g.get("id"), "name": g.get("name", "Unknown")}
+        for g in all_games
+        if g.get("is_play_to_win")
+    ]
+    p2w_games.sort(key=lambda g: g["name"].lower())
+
     return render_template(
         "players.html",
         player_list=player_list,
@@ -472,7 +484,101 @@ def players():
         convention_name=session.get(SK.CONVENTION_NAME) or session.get(SK.LIBRARY_NAME, ""),
         removed_all=removed_all,
         removed_per_game=removed_per_game,
+        p2w_games=p2w_games,
     )
+
+
+@main_bp.route("/games/manual-entry", methods=["POST"])
+@login_required(api=True)
+def add_manual_entry():
+    """AJAX: add a manual Play-to-Win entry for a specific game."""
+    data = request.get_json(silent=True) or {}
+
+    game_id = (data.get("game_id") or "").strip()
+    badge_number = (data.get("badge_number") or "").strip()
+    name = (data.get("name") or "").strip()
+
+    if not game_id or not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID"}), 400
+    if not badge_number:
+        return jsonify({"error": "Badge ID is required"}), 400
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+
+    library_id = session.get(SK.LIBRARY_ID)
+    if not library_id:
+        return jsonify({"error": "No library selected"}), 400
+
+    cache = session.get(SK.PERSON_CACHE, {})
+    person = cache.get(str(badge_number))
+    if not person or not person.get("badge_id"):
+        return jsonify({"error": "Badge not found. Please verify badge ID first."}), 400
+
+    badge_id = person.get("badge_id")
+    cached_entries = session.get(SK.CACHED_ENTRIES, []) or []
+    existing = [
+        e for e in cached_entries
+        if e.get("librarygame_id") == game_id and e.get("badge_id") == badge_id
+    ]
+    if existing:
+        return jsonify({"error": "This player is already entered for that game."}), 409
+
+    convention_id = session.get(SK.CONVENTION_ID)
+    client = _get_client()
+    try:
+        created = client.create_playtowin_entry(
+            library_id,
+            game_id,
+            name,
+            convention_id=convention_id,
+            badge_id=badge_id,
+        )
+    except TTEAPIError as exc:
+        return _handle_api_json_error(exc, "add manual Play-to-Win entry")
+
+    entry_id = created.get("id")
+    new_entry = {
+        "id": entry_id,
+        "librarygame_id": game_id,
+        "badge_id": badge_id,
+        "name": name,
+    }
+    session[SK.CACHED_ENTRIES] = cached_entries + [new_entry]
+
+    manual_ids = list(session.get(SK.MANUAL_ENTRY_IDS, []))
+    if entry_id and entry_id not in manual_ids:
+        manual_ids.append(entry_id)
+    _save_shared(SK.MANUAL_ENTRY_IDS, manual_ids)
+
+    logger.info("Manual P2W entry added: game=%s badge=%s entry=%s", game_id, badge_id, entry_id)
+    return jsonify({"ok": True, "entry_id": entry_id})
+
+
+@main_bp.route("/games/manual-entry/<entry_id>", methods=["DELETE"])
+@login_required(api=True)
+def remove_manual_entry(entry_id):
+    """AJAX: remove a manual Play-to-Win entry by ID."""
+    if not entry_id or not is_valid_tte_id(entry_id):
+        return jsonify({"error": "Invalid entry ID"}), 400
+
+    manual_ids = set(session.get(SK.MANUAL_ENTRY_IDS, []))
+    if entry_id not in manual_ids:
+        return jsonify({"error": "Entry is not tracked as manual"}), 404
+
+    client = _get_client()
+    try:
+        client.delete_playtowin(entry_id)
+    except TTEAPIError as exc:
+        return _handle_api_json_error(exc, "remove manual Play-to-Win entry")
+
+    cached_entries = session.get(SK.CACHED_ENTRIES, []) or []
+    session[SK.CACHED_ENTRIES] = [e for e in cached_entries if e.get("id") != entry_id]
+
+    updated_manual_ids = [mid for mid in manual_ids if mid != entry_id]
+    _save_shared(SK.MANUAL_ENTRY_IDS, updated_manual_ids)
+
+    logger.info("Manual P2W entry removed: %s", entry_id)
+    return jsonify({"ok": True})
 
 
 @main_bp.route("/games/prep")

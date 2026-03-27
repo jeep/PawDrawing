@@ -51,6 +51,67 @@
     .search-count { font-size: 0.85rem; color: #888; white-space: nowrap; }
     .search-count strong { color: #2c3e50; }
 
+    .manual-entry-panel {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        padding: 1rem 1.25rem;
+        margin-bottom: 1rem;
+    }
+    .manual-entry-panel h3 {
+        margin: 0 0 0.7rem;
+        font-size: 1rem;
+        color: #2c3e50;
+    }
+    .manual-entry-grid {
+        display: grid;
+        grid-template-columns: minmax(180px, 1.6fr) minmax(130px, 1fr) minmax(220px, 1.4fr) auto;
+        gap: 0.55rem;
+        align-items: center;
+    }
+    .manual-entry-grid input,
+    .manual-entry-grid select {
+        width: 100%;
+        padding: 0.45rem 0.6rem;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        font-size: 0.9rem;
+    }
+    .manual-entry-grid input:focus,
+    .manual-entry-grid select:focus {
+        outline: none;
+        border-color: #3498db;
+        box-shadow: 0 0 0 2px rgba(52,152,219,0.15);
+    }
+    .manual-entry-grid button {
+        background: #2c7be5;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        padding: 0.5rem 0.9rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .manual-entry-grid button:hover { background: #1f64bf; }
+    .manual-entry-grid button:disabled {
+        background: #bdc3c7;
+        cursor: default;
+    }
+    .manual-entry-note {
+        margin-top: 0.55rem;
+        font-size: 0.82rem;
+        color: #666;
+    }
+    .manual-entry-status {
+        margin-top: 0.5rem;
+        font-size: 0.82rem;
+        min-height: 1.1rem;
+    }
+    .manual-entry-status.ok { color: #1e8449; }
+    .manual-entry-status.error { color: #c0392b; }
+
     .player-table {
         width: 100%;
         border-collapse: collapse;
@@ -146,6 +207,19 @@
         text-decoration: line-through;
         color: #999;
     }
+    .manual-game-badge {
+        display: inline-block;
+        background: #2c7be5;
+        color: white;
+        font-size: 0.62rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        padding: 0.05rem 0.3rem;
+        border-radius: 3px;
+        margin-left: 0.3rem;
+        vertical-align: middle;
+    }
     .tag-action {
         background: none;
         border: none;
@@ -160,6 +234,8 @@
     .tag-action.remove:hover { color: #c0392b; }
     .tag-action.restore { color: #27ae60; }
     .tag-action.restore:hover { color: #1e8449; }
+    .tag-action.manual-delete { color: #8e44ad; }
+    .tag-action.manual-delete:hover { color: #6c3483; }
 
     .expand-btn {
         background: none;
@@ -197,6 +273,12 @@
     .game-remove-btn.restore:hover { background: #eafaf1; }
 
     .th-actions { width: 180px; }
+
+    @media (max-width: 900px) {
+        .manual-entry-grid {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -215,6 +297,23 @@
     <a href="{{ url_for('main.players') }}" class="mode-pill active">Manage Players</a>
     <a href="{{ url_for('main.drawing_prep') }}" class="mode-pill" onclick="document.getElementById('loading-overlay').classList.add('active');">Drawing Prep</a>
     <a href="{{ url_for('main.drawing_results') }}" class="mode-pill" onclick="document.getElementById('loading-overlay').classList.add('active');">Drawing</a>
+</div>
+
+<div class="manual-entry-panel">
+    <h3>Add Manual Entry</h3>
+    <div class="manual-entry-grid">
+        <select id="manual-game" aria-label="Game">
+            <option value="">Select game...</option>
+            {% for g in p2w_games %}
+            <option value="{{ g.id }}">{{ g.name }}</option>
+            {% endfor %}
+        </select>
+        <input type="text" id="manual-badge" placeholder="Badge ID" autocomplete="off">
+        <input type="text" id="manual-name" placeholder="Name" autocomplete="off">
+        <button type="button" id="manual-add-btn" disabled>Add to Drawing</button>
+    </div>
+    <div class="manual-entry-note">Badge ID and name are both required. Entering a badge ID auto-fills the name from TTE when available.</div>
+    <div class="manual-entry-status" id="manual-entry-status"></div>
 </div>
 
 <div class="search-bar">
@@ -257,8 +356,11 @@
                     {% set game_removed = is_removed_all or g.game_id in per_game_removals %}
                     <span class="game-tag{{ ' removed-game' if game_removed }}" data-game-id="{{ g.game_id }}" data-badge-id="{{ player.badge_id }}">
                         {{- g.game_name -}}
+                        {%- if g.is_manual -%}<span class="manual-game-badge">Manual</span>{%- endif -%}
                         {%- if not is_removed_all -%}
-                            {%- if g.game_id in per_game_removals -%}
+                            {%- if g.is_manual -%}
+                            <button class="tag-action manual-delete" data-entry-id="{{ g.entry_id }}" onclick="removeManualEntry(this)" title="Delete manual entry">&#128465;</button>
+                            {%- elif g.game_id in per_game_removals -%}
                             <button class="tag-action restore" onclick="tagAction(this)" title="Restore">&#8634;</button>
                             {%- else -%}
                             <button class="tag-action remove" onclick="tagAction(this)" title="Remove from game">&times;</button>
@@ -281,11 +383,13 @@
             data-parent-badge="{{ player.badge_id }}"
             data-game-id="{{ g.game_id }}"
             style="display:none;">
-            <td colspan="3">{{ g.game_name }}</td>
+            <td colspan="3">{{ g.game_name }}{% if g.is_manual %} <span class="manual-game-badge">Manual</span>{% endif %}</td>
             <td></td>
             <td>
                 {% if not is_removed_all %}
-                    {% if g.game_id in per_game_removals %}
+                    {% if g.is_manual %}
+                    <button class="game-remove-btn remove" data-entry-id="{{ g.entry_id }}" onclick="removeManualEntry(this)">Delete Entry</button>
+                    {% elif g.game_id in per_game_removals %}
                     <button class="game-remove-btn restore" data-badge-id="{{ player.badge_id }}" data-game-id="{{ g.game_id }}" onclick="restorePlayer(this)">Restore</button>
                     {% else %}
                     <button class="game-remove-btn remove" data-badge-id="{{ player.badge_id }}" data-game-id="{{ g.game_id }}" onclick="removePlayer(this)">Remove from Game</button>
@@ -303,6 +407,106 @@
 
 <script>
 (function() {
+    var manualGame = document.getElementById('manual-game');
+    var manualBadge = document.getElementById('manual-badge');
+    var manualName = document.getElementById('manual-name');
+    var manualAddBtn = document.getElementById('manual-add-btn');
+    var manualStatus = document.getElementById('manual-entry-status');
+
+    function setManualStatus(msg, kind) {
+        manualStatus.textContent = msg || '';
+        manualStatus.className = 'manual-entry-status' + (kind ? ' ' + kind : '');
+    }
+
+    function updateManualButtonState() {
+        var ready = manualGame.value && manualBadge.value.trim() && manualName.value.trim();
+        manualAddBtn.disabled = !ready;
+    }
+
+    function lookupBadge() {
+        var badge = manualBadge.value.trim();
+        if (!badge) {
+            setManualStatus('', '');
+            updateManualButtonState();
+            return;
+        }
+        setManualStatus('Looking up badge...', '');
+        fetch('{{ url_for("main.badge_lookup") }}?badge_number=' + encodeURIComponent(badge))
+        .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+        .then(function(result) {
+            if (result.ok && result.data && result.data.name) {
+                manualName.value = result.data.name;
+                setManualStatus('Found: ' + result.data.name, 'ok');
+            } else {
+                setManualStatus((result.data && result.data.error) || 'Badge not found', 'error');
+            }
+            updateManualButtonState();
+        })
+        .catch(function() {
+            setManualStatus('Badge lookup failed', 'error');
+            updateManualButtonState();
+        });
+    }
+
+    manualGame.addEventListener('change', updateManualButtonState);
+    manualBadge.addEventListener('input', updateManualButtonState);
+    manualName.addEventListener('input', updateManualButtonState);
+    manualBadge.addEventListener('blur', lookupBadge);
+
+    manualAddBtn.addEventListener('click', function() {
+        if (manualAddBtn.disabled) return;
+        manualAddBtn.disabled = true;
+        manualAddBtn.textContent = 'Adding...';
+        setManualStatus('', '');
+
+        fetch('{{ url_for("main.add_manual_entry") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                game_id: manualGame.value,
+                badge_number: manualBadge.value.trim(),
+                name: manualName.value.trim()
+            })
+        })
+        .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+        .then(function(result) {
+            if (!result.ok || !result.data.ok) {
+                setManualStatus((result.data && result.data.error) || 'Failed to add entry', 'error');
+                manualAddBtn.disabled = false;
+                manualAddBtn.textContent = 'Add to Drawing';
+                return;
+            }
+            window.location.reload();
+        })
+        .catch(function() {
+            setManualStatus('Failed to add entry', 'error');
+            manualAddBtn.disabled = false;
+            manualAddBtn.textContent = 'Add to Drawing';
+        });
+    });
+
+    window.removeManualEntry = function(btn) {
+        var entryId = btn.dataset.entryId;
+        if (!entryId) return;
+        btn.disabled = true;
+
+        fetch('{{ url_for("main.remove_manual_entry", entry_id="__ENTRY_ID__") }}'.replace('__ENTRY_ID__', encodeURIComponent(entryId)), {
+            method: 'DELETE',
+            headers: {'Content-Type': 'application/json'}
+        })
+        .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+        .then(function(result) {
+            if (!result.ok || !result.data.ok) {
+                btn.disabled = false;
+                return;
+            }
+            window.location.reload();
+        })
+        .catch(function() {
+            btn.disabled = false;
+        });
+    };
+
     /* ── Expand/collapse game details ── */
     document.querySelectorAll('.expand-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {

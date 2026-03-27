@@ -14,6 +14,7 @@ class SK:
 
     CACHED_GAMES = "cached_games"
     CACHED_ENTRIES = "cached_entries"
+    MANUAL_ENTRY_IDS = "manual_entry_ids"  # list[str] of P2W entry IDs manually added in app
 
     DRAWING_STATE = "drawing_state"
     DRAWING_CONFLICTS = "drawing_conflicts"

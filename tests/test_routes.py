@@ -3155,6 +3155,27 @@ class TestPlayersRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Partial", resp.data)
 
+    def test_players_shows_manual_badge_per_game(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
+            sess["convention_name"] = "GameFest"
+            sess["cached_games"] = [
+                {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan", "is_play_to_win": 1},
+                {"id": "A0000002-0000-4000-A000-000000000002", "name": "Azul", "is_play_to_win": 1},
+            ]
+            sess["cached_entries"] = [
+                {"badge_id": "B1", "librarygame_id": "A0000001-0000-4000-A000-000000000001", "id": "e1", "name": "Alice"},
+                {"badge_id": "B1", "librarygame_id": "A0000002-0000-4000-A000-000000000002", "id": "e2", "name": "Alice"},
+            ]
+            sess["manual_entry_ids"] = ["e1"]
+
+        resp = self.client.get("/games/players")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Manual", resp.data)
+        self.assertIn(b"Delete Entry", resp.data)
+
     def test_players_library_only_mode(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
@@ -3198,6 +3219,90 @@ class TestPlayersRoute(unittest.TestCase):
         resp = self.client.get("/games/players")
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/games", resp.headers["Location"])
+
+    def test_add_manual_entry_requires_badge(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+
+        resp = self.client.post(
+            "/games/manual-entry",
+            json={"game_id": "A0000001-0000-4000-A000-000000000001", "name": "Alice"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Badge ID is required", resp.get_json()["error"])
+
+    @patch("routes.helpers.TTEClient")
+    def test_add_manual_entry_creates_tte_entry_and_updates_session(self, MockClient):
+        mock_instance = MagicMock()
+        mock_instance.create_playtowin_entry.return_value = {"id": "E0000001-0000-4000-A000-000000000001"}
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
+            sess["cached_entries"] = []
+            sess["person_cache"] = {
+                "1042": {
+                    "name": "Jane Smith",
+                    "badge_id": "B0000001-0000-4000-A000-000000000001",
+                    "user_id": "U1",
+                }
+            }
+
+        resp = self.client.post(
+            "/games/manual-entry",
+            json={
+                "game_id": "A0000001-0000-4000-A000-000000000001",
+                "badge_number": "1042",
+                "name": "Jane Smith",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.get_json()["ok"])
+
+        mock_instance.create_playtowin_entry.assert_called_once_with(
+            "10000001-0000-4000-A000-000000000001",
+            "A0000001-0000-4000-A000-000000000001",
+            "Jane Smith",
+            convention_id="C0000001-0000-4000-A000-000000000001",
+            badge_id="B0000001-0000-4000-A000-000000000001",
+        )
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(len(sess["cached_entries"]), 1)
+            self.assertEqual(sess["cached_entries"][0]["id"], "E0000001-0000-4000-A000-000000000001")
+            self.assertIn("E0000001-0000-4000-A000-000000000001", sess["manual_entry_ids"])
+
+    @patch("routes.helpers.TTEClient")
+    def test_remove_manual_entry_deletes_from_tte_and_cache(self, MockClient):
+        mock_instance = MagicMock()
+        MockClient.return_value = mock_instance
+
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["cached_entries"] = [
+                {
+                    "id": "E0000001-0000-4000-A000-000000000001",
+                    "badge_id": "B0000001-0000-4000-A000-000000000001",
+                    "librarygame_id": "A0000001-0000-4000-A000-000000000001",
+                    "name": "Jane Smith",
+                }
+            ]
+            sess["manual_entry_ids"] = ["E0000001-0000-4000-A000-000000000001"]
+
+        resp = self.client.delete("/games/manual-entry/E0000001-0000-4000-A000-000000000001")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.get_json()["ok"])
+        mock_instance.delete_playtowin.assert_called_once_with("E0000001-0000-4000-A000-000000000001")
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["cached_entries"], [])
+            self.assertEqual(sess["manual_entry_ids"], [])
 
     @patch("routes.helpers.TTEClient")
     def test_games_page_has_players_mode_pill(self, MockClient):
