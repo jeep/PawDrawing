@@ -39,5 +39,8 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Start Azure Web App
+        run: az webapp start --resource-group PawDrawing-rg --name ${{ vars.AZURE_WEBAPP_NAME }}
+
       - name: Deploy to Azure Web App
         run: az webapp up --resource-group PawDrawing-rg --name ${{ vars.AZURE_WEBAPP_NAME }} --runtime "PYTHON:3.12"
