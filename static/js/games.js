@@ -419,6 +419,25 @@
     var p2wEntrants = document.getElementById('p2w-entrants');
     var p2wGameLabel = document.getElementById('p2w-game-label');
 
+    function populateP2wEntrantsForRenter(renter) {
+        p2wEntrants.innerHTML = '';
+        if (!renter) return;
+
+        // Add renter as default entrant (pre-checked).
+        addP2wEntrant(renter, '', true);
+
+        fetch(urls.p2wSuggestions + '?name=' + encodeURIComponent(renter))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            (data.suggestions || []).forEach(function(s) {
+                if (s && s.name) {
+                    addP2wEntrant(s.name, s.badge_id || '', false);
+                }
+            });
+        })
+        .catch(function() {});
+    }
+
     function openCheckinModal(btn) {
         var gameId = btn.dataset.gameId;
         var checkoutId = btn.dataset.checkoutId;
@@ -439,19 +458,7 @@
             p2wSection.style.display = '';
             p2wGameLabel.textContent = gameName;
             document.getElementById('checkin-submit').textContent = 'Enter into Drawing';
-
-            // Add renter as default entrant (pre-checked)
-            addP2wEntrant(renter, '', true);
-
-            // Fetch suggestions
-            fetch(urls.p2wSuggestions + '?name=' + encodeURIComponent(renter))
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                (data.suggestions || []).forEach(function(s) {
-                    addP2wEntrant(s.name, s.badge_id || '', false);
-                });
-            })
-            .catch(function() {});
+            populateP2wEntrantsForRenter(renter);
         } else {
             p2wSection.style.display = 'none';
             document.getElementById('checkin-submit').textContent = 'Check In';
@@ -466,7 +473,12 @@
             .then(function(data) {
                 if (data.checkout_id) {
                     checkinCheckoutId.value = data.checkout_id;
-                    if (data.renter_name) checkinRenterName.textContent = data.renter_name;
+                    if (data.renter_name) {
+                        checkinRenterName.textContent = data.renter_name;
+                        if (isP2w && data.renter_name !== renter) {
+                            populateP2wEntrantsForRenter(data.renter_name);
+                        }
+                    }
                 }
             })
             .catch(function() {});
@@ -563,6 +575,7 @@
                 })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
+                    applyP2wResultToGameRow(gameId, data);
                     if (data.created && data.created.length) {
                         showToast(data.created.length + ' P2W entry(s) added');
                     }
@@ -573,6 +586,27 @@
         .catch(function() {
             showToast('Check in failed', 'error');
         });
+    }
+
+    function applyP2wResultToGameRow(gameId, data) {
+        var createdCount = (data && data.created && data.created.length) ? data.created.length : 0;
+        if (createdCount <= 0) return;
+
+        var row = document.querySelector('tr[data-game-id="' + gameId + '"]');
+        if (!row) return;
+
+        var current = parseInt(row.dataset.entrantCount, 10) || 0;
+        var next = current + createdCount;
+        row.dataset.entrantCount = String(next);
+
+        var entriesCell = row.children[1];
+        if (entriesCell) {
+            if (next === 0) {
+                entriesCell.innerHTML = '<span class="badge-zero">No entries</span>';
+            } else {
+                entriesCell.textContent = String(next);
+            }
+        }
     }
 
     /* ── Update game row after checkout/checkin ── */
