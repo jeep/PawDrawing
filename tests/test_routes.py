@@ -1912,6 +1912,100 @@ class TestRestoreRoute(unittest.TestCase):
         self.assertFalse(data["ok"])
 
 
+class TestRemoveGameRoute(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["TESTING"] = True
+        self.app.config["TTE_API_KEY"] = "test-key"
+        self.client = self.app.test_client()
+
+    GAME_ID = "A0000001-0000-4000-A000-000000000001"
+    GAME_ID_2 = "A0000002-0000-4000-A000-000000000002"
+
+    def _setup_drawing_state(self, picked_up=None):
+        drawing_state = [
+            {
+                "game": {"id": self.GAME_ID, "name": "Catan"},
+                "shuffled": [
+                    {"badge_id": "B1", "id": "e1", "name": "Alice"},
+                    {"badge_id": "B2", "id": "e2", "name": "Bob"},
+                ],
+                "winner_index": 0,
+            },
+            {
+                "game": {"id": self.GAME_ID_2, "name": "Ticket to Ride"},
+                "shuffled": [
+                    {"badge_id": "B3", "id": "e3", "name": "Carol"},
+                ],
+                "winner_index": 0,
+            },
+        ]
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["drawing_state"] = drawing_state
+            sess["picked_up"] = picked_up or []
+
+    def test_remove_requires_auth(self):
+        resp = self.client.post("/drawing/remove-game",
+                                json={"game_id": self.GAME_ID},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_remove_requires_drawing_state(self):
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+        resp = self.client.post("/drawing/remove-game",
+                                json={"game_id": self.GAME_ID},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_remove_validates_input(self):
+        self._setup_drawing_state()
+        resp = self.client.post("/drawing/remove-game",
+                                json={},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_remove_game_succeeds(self):
+        self._setup_drawing_state()
+        resp = self.client.post("/drawing/remove-game",
+                                json={"game_id": self.GAME_ID},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["game_id"], self.GAME_ID)
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(len(sess["drawing_state"]), 1)
+            self.assertEqual(sess["drawing_state"][0]["game"]["id"], self.GAME_ID_2)
+
+    def test_remove_cleans_up_picked_up(self):
+        self._setup_drawing_state(picked_up=[self.GAME_ID])
+        resp = self.client.post("/drawing/remove-game",
+                                json={"game_id": self.GAME_ID},
+                                content_type="application/json")
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+
+        with self.client.session_transaction() as sess:
+            self.assertNotIn(self.GAME_ID, sess["picked_up"])
+
+    def test_remove_nonexistent_game_404(self):
+        self._setup_drawing_state()
+        resp = self.client.post("/drawing/remove-game",
+                                json={"game_id": "A0000099-0000-4000-A000-000000000099"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_remove_invalid_game_id(self):
+        self._setup_drawing_state()
+        resp = self.client.post("/drawing/remove-game",
+                                json={"game_id": "not-a-valid-id"},
+                                content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+
 class TestAwardToRoute(unittest.TestCase):
 
     def setUp(self):
