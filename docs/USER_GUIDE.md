@@ -111,7 +111,7 @@ Switch to the **Drawing Prep** tab before running the drawing. This page provide
 
 - **Refresh Data** — click to fetch the latest games and entries from TTE. With a large library, this can take several seconds (typically 5+ API calls).
 - **Drawing Overview** — shows total games, total entries, unique participants, and how many games have zero entries.
-- **Component Check** — lists any Play-to-Win games currently checked out, with a **Force In** button to check them in. Also shows the full grid of available P2W games.
+- **Component Check** — shows a per-game inspection checklist for missing pieces/components. Mark each game as inspected, record who checked it and when, and use **Force In** for any games still checked out before inspection.
 - **Suspicious Activity** — summarizes any alerts (long checkouts, partner patterns).
 - **Player Removals** — shows how many players have been removed from the drawing.
 

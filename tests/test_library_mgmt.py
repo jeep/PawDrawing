@@ -175,6 +175,108 @@ class TestCheckin(LibraryTestBase):
         self.assertEqual(resp.status_code, 400)
 
 
+# ── Component Inspection Tests ───────────────────────────────────────
+
+class TestComponentInspection(LibraryTestBase):
+
+    def test_component_check_marks_inspected(self):
+        self._set_session(**{SK.CACHED_GAMES: [
+            {"id": VALID_GAME_ID, "name": "Game 1", "is_play_to_win": 1, "is_checked_out": 0},
+        ]})
+
+        resp = self.client.post("/games/component-check", json={
+            "game_id": VALID_GAME_ID,
+            "volunteer": "Alex",
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["volunteer"], "Alex")
+
+        with self.client.session_transaction() as sess:
+            checks = sess.get(SK.COMPONENT_CHECKS, {})
+            self.assertIn(VALID_GAME_ID, checks)
+            self.assertTrue(checks[VALID_GAME_ID]["checked"])
+
+    def test_component_check_requires_volunteer(self):
+        self._set_session(**{SK.CACHED_GAMES: [
+            {"id": VALID_GAME_ID, "name": "Game 1", "is_play_to_win": 1, "is_checked_out": 0},
+        ]})
+
+        resp = self.client.post("/games/component-check", json={
+            "game_id": VALID_GAME_ID,
+            "volunteer": "",
+        })
+        self.assertEqual(resp.status_code, 400)
+
+    def test_component_check_rejects_checked_out_games(self):
+        self._set_session(**{
+            SK.CACHED_GAMES: [
+                {"id": VALID_GAME_ID, "name": "Game 1", "is_play_to_win": 1, "is_checked_out": 1},
+            ],
+            SK.CHECKOUT_MAP: {
+                VALID_GAME_ID: {"renter": "Pat", "checkout_id": VALID_CHECKOUT_ID},
+            },
+        })
+
+        resp = self.client.post("/games/component-check", json={
+            "game_id": VALID_GAME_ID,
+            "volunteer": "Alex",
+        })
+        self.assertEqual(resp.status_code, 409)
+
+    def test_component_uncheck_clears_record(self):
+        self._set_session(**{
+            SK.CACHED_GAMES: [
+                {"id": VALID_GAME_ID, "name": "Game 1", "is_play_to_win": 1, "is_checked_out": 0},
+            ],
+            SK.COMPONENT_CHECKS: {
+                VALID_GAME_ID: {
+                    "checked": True,
+                    "volunteer": "Alex",
+                    "timestamp": "2026-03-26T10:00:00+00:00",
+                },
+            },
+        })
+
+        resp = self.client.post("/games/component-uncheck", json={
+            "game_id": VALID_GAME_ID,
+        })
+        self.assertEqual(resp.status_code, 200)
+
+        with self.client.session_transaction() as sess:
+            checks = sess.get(SK.COMPONENT_CHECKS, {})
+            self.assertNotIn(VALID_GAME_ID, checks)
+
+    def test_drawing_prep_component_checklist_rendering(self):
+        self._set_session(**{
+            SK.CACHED_GAMES: [
+                {"id": VALID_GAME_ID, "name": "Game 1", "is_play_to_win": 1, "is_checked_out": 0},
+                {"id": VALID_GAME_ID_2, "name": "Game 2", "is_play_to_win": 1, "is_checked_out": 1},
+            ],
+            SK.CACHED_ENTRIES: [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": VALID_GAME_ID, "name": "Alice"},
+            ],
+            SK.COMPONENT_CHECKS: {
+                VALID_GAME_ID: {
+                    "checked": True,
+                    "volunteer": "Alex",
+                    "timestamp": "2026-03-26T10:00:00+00:00",
+                },
+            },
+            SK.CHECKOUT_MAP: {
+                VALID_GAME_ID_2: {"renter": "Pat", "checkout_id": VALID_CHECKOUT_ID},
+            },
+        })
+
+        resp = self.client.get("/games/prep")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Track whether each game has been physically inspected", resp.data)
+        self.assertIn(b"/ 2 inspected", resp.data)
+        self.assertIn(b"remaining", resp.data)
+        self.assertIn(b"currently checked out", resp.data)
+
+
 # ── P2W Entry Tests ───────────────────────────────────────────────────
 
 class TestP2WEntry(LibraryTestBase):

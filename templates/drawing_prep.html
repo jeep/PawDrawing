@@ -45,22 +45,71 @@
     .prep-detail { font-size: 0.9rem; color: #555; line-height: 1.6; }
     .prep-detail strong { color: #2c3e50; }
 
-    .prep-game-list {
-        margin: 0.5rem 0;
-        padding: 0;
-        list-style: none;
-    }
-    .prep-game-list li {
-        padding: 0.4rem 0.75rem;
-        border-bottom: 1px solid #eee;
-        font-size: 0.88rem;
+    .component-controls {
         display: flex;
-        justify-content: space-between;
+        gap: 0.5rem;
         align-items: center;
+        margin: 0.5rem 0 0.75rem;
+        flex-wrap: wrap;
     }
-    .prep-game-list li:last-child { border-bottom: none; }
-    .prep-game-list .game-name { font-weight: 500; color: #2c3e50; }
-    .prep-game-list .renter { color: #888; font-size: 0.82rem; }
+    .component-controls input {
+        border: 1px solid #d6dde3;
+        border-radius: 4px;
+        padding: 0.35rem 0.55rem;
+        font-size: 0.84rem;
+        min-width: 200px;
+    }
+    .component-summary {
+        margin: 0.35rem 0 0.7rem;
+        font-size: 0.82rem;
+        color: #4f5f6f;
+    }
+    .component-table-wrap {
+        overflow-x: auto;
+    }
+    .component-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.84rem;
+    }
+    .component-table th,
+    .component-table td {
+        border-bottom: 1px solid #eef2f5;
+        padding: 0.5rem 0.45rem;
+        text-align: left;
+        vertical-align: middle;
+    }
+    .component-table th {
+        color: #5c6b77;
+        font-size: 0.75rem;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+    }
+    .component-row.checked {
+        background: #f6fff8;
+    }
+    .component-status {
+        font-size: 0.76rem;
+        font-weight: 700;
+        border-radius: 3px;
+        padding: 0.12rem 0.38rem;
+        text-transform: uppercase;
+    }
+    .component-status.pending {
+        background: #f4f6f8;
+        color: #66757f;
+    }
+    .component-status.checked {
+        background: #eafaf1;
+        color: #239b56;
+    }
+    .availability.out {
+        color: #c0392b;
+        font-weight: 600;
+    }
+    .availability.in {
+        color: #1e8449;
+    }
 
     .btn-force-in {
         background: #e74c3c;
@@ -74,21 +123,6 @@
     }
     .btn-force-in:hover { background: #c0392b; }
     .btn-force-in:disabled { background: #bdc3c7; cursor: default; }
-
-    .avail-grid {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.3rem;
-        margin-top: 0.5rem;
-    }
-    .avail-item {
-        background: #eafaf1;
-        color: #27ae60;
-        padding: 0.2rem 0.5rem;
-        border-radius: 3px;
-        font-size: 0.78rem;
-        font-weight: 500;
-    }
 
     .suspicious-item {
         padding: 0.5rem 0.75rem;
@@ -221,31 +255,77 @@
     <h3>🧩 Component Check
         {% if not has_data %}
         <span class="prep-status info">No Data</span>
-        {% elif checked_out_p2w|length == 0 %}
-        <span class="prep-status ok">All In</span>
+        {% elif remaining_component_checks == 0 and checked_out_count == 0 %}
+        <span class="prep-status ok">Complete</span>
+        {% elif remaining_component_checks == 0 %}
+        <span class="prep-status warning">Checked {{ checked_out_count }} Out</span>
         {% else %}
-        <span class="prep-status warning">{{ checked_out_p2w|length }} Out</span>
+        <span class="prep-status warning">{{ remaining_component_checks }} Remaining</span>
         {% endif %}
     </h3>
     {% if has_data %}
-    {% if checked_out_p2w %}
-    <p class="prep-detail"><strong>{{ checked_out_p2w|length }}</strong> P2W game{{ 's' if checked_out_p2w|length != 1 }} still checked out:</p>
-    <ul class="prep-game-list" id="checked-out-list">
-        {% for g in checked_out_p2w %}
-        <li data-game-id="{{ g.game_id }}">
-            <span><span class="game-name">{{ g.name }}</span> <span class="renter">— {{ g.renter }}</span></span>
-            <button class="btn-force-in" data-game-id="{{ g.game_id }}" data-checkout-id="{{ g.checkout_id }}">Force In</button>
-        </li>
-        {% endfor %}
-    </ul>
-    {% endif %}
-    {% if available_p2w %}
-    <p class="prep-detail" style="margin-top:0.75rem;"><strong>{{ available_p2w|length }}</strong> P2W game{{ 's' if available_p2w|length != 1 }} available:</p>
-    <div class="avail-grid">
-        {% for name in available_p2w|sort %}
-        <span class="avail-item">✓ {{ name }}</span>
-        {% endfor %}
+    <p class="prep-detail">Track whether each game has been physically inspected for missing pieces/components.</p>
+    <div class="component-controls">
+        <label for="comp-volunteer" class="prep-detail" style="margin:0;"><strong>Inspector:</strong></label>
+        <input type="text" id="comp-volunteer" placeholder="Your name or badge" autocomplete="off">
     </div>
+    <div class="component-summary">
+        <strong>{{ inspected_count }}</strong> / {{ total_component_games }} inspected,
+        <strong>{{ remaining_component_checks }}</strong> remaining,
+        <strong>{{ checked_out_count }}</strong> currently checked out.
+    </div>
+
+    {% if component_items %}
+    <div class="component-table-wrap">
+        <table class="component-table" id="component-table">
+            <thead>
+                <tr>
+                    <th>Game</th>
+                    <th>Availability</th>
+                    <th>Inspection</th>
+                    <th>Checked By</th>
+                    <th>Checked At</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in component_items %}
+                <tr id="comp-row-{{ item.id }}" class="component-row {{ 'checked' if item.checked else '' }}"
+                    data-game-id="{{ item.id }}" data-out="{{ '1' if item.is_checked_out else '0' }}" data-checked="{{ '1' if item.checked else '0' }}">
+                    <td><strong>{{ item.name }}</strong></td>
+                    <td class="availability-cell">
+                        {% if item.is_checked_out %}
+                        <span class="availability out">Out — {{ item.renter }}</span>
+                        {% else %}
+                        <span class="availability in">Available</span>
+                        {% endif %}
+                    </td>
+                    <td class="inspection-status-cell">
+                        {% if item.checked %}
+                        <span class="component-status checked">Inspected</span>
+                        {% else %}
+                        <span class="component-status pending">Pending</span>
+                        {% endif %}
+                    </td>
+                    <td class="volunteer-cell">{{ item.volunteer or '' }}</td>
+                    <td class="timestamp-cell">{{ item.timestamp_display or '' }}</td>
+                    <td>
+                        {% if item.is_checked_out and item.checkout_id %}
+                        <button class="btn-force-in" data-game-id="{{ item.id }}" data-checkout-id="{{ item.checkout_id }}">Force In</button>
+                        {% endif %}
+                        {% if item.checked %}
+                        <button class="btn-refresh comp-uncheck-btn" data-game-id="{{ item.id }}" style="padding:0.28rem 0.6rem;">Undo</button>
+                        {% else %}
+                        <button class="btn-refresh comp-check-btn" data-game-id="{{ item.id }}" style="padding:0.28rem 0.6rem;" {% if item.is_checked_out %}disabled{% endif %}>Mark Inspected</button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="prep-detail" style="color:#888;font-style:italic;">No Play-to-Win games are currently loaded.</p>
     {% endif %}
     {% else %}
     <p class="prep-detail" style="color:#888;font-style:italic;">Load data first to check components.</p>
@@ -315,6 +395,8 @@
 <div id="page-config" style="display:none"
      data-urls='{{ {
          "checkin": url_for("main.checkin"),
+         "componentCheck": url_for("main.mark_component_check"),
+         "componentUncheck": url_for("main.unmark_component_check"),
      }|tojson }}'></div>
 {% endblock %}
 
@@ -323,6 +405,7 @@
 (function() {
     var config = document.getElementById('page-config');
     var urls = JSON.parse(config.dataset.urls);
+    var componentTable = document.getElementById('component-table');
 
     function showToast(msg, type) {
         var t = document.getElementById('toast');
@@ -332,10 +415,135 @@
         setTimeout(function() { t.style.display = 'none'; }, 3000);
     }
 
-    /* Force In buttons */
-    var checkedOutList = document.getElementById('checked-out-list');
-    if (checkedOutList) {
-        checkedOutList.addEventListener('click', function(e) {
+    function updateComponentHeaderBadge() {
+        if (!componentTable) return;
+        var rows = componentTable.querySelectorAll('tbody tr');
+        var remaining = 0;
+        var outCount = 0;
+        for (var i = 0; i < rows.length; i++) {
+            if (rows[i].dataset.checked !== '1') remaining += 1;
+            if (rows[i].dataset.out === '1') outCount += 1;
+        }
+
+        var badge = document.querySelector('#component-section .prep-status');
+        if (!badge) return;
+        if (remaining === 0 && outCount === 0) {
+            badge.className = 'prep-status ok';
+            badge.textContent = 'Complete';
+            return;
+        }
+        badge.className = 'prep-status warning';
+        if (remaining === 0) {
+            badge.textContent = 'Checked ' + outCount + ' Out';
+        } else {
+            badge.textContent = remaining + ' Remaining';
+        }
+    }
+
+    function setRowCheckedState(row, checked, volunteer, timestampDisplay) {
+        row.dataset.checked = checked ? '1' : '0';
+        row.classList.toggle('checked', checked);
+
+        var statusCell = row.querySelector('.inspection-status-cell');
+        var volunteerCell = row.querySelector('.volunteer-cell');
+        var timestampCell = row.querySelector('.timestamp-cell');
+        var actionCell = row.cells[row.cells.length - 1];
+        var gameId = row.dataset.gameId;
+        var isOut = row.dataset.out === '1';
+
+        if (statusCell) {
+            statusCell.innerHTML = checked
+                ? '<span class="component-status checked">Inspected</span>'
+                : '<span class="component-status pending">Pending</span>';
+        }
+        if (volunteerCell) volunteerCell.textContent = checked ? (volunteer || '') : '';
+        if (timestampCell) timestampCell.textContent = checked ? (timestampDisplay || '') : '';
+
+        if (actionCell) {
+            var existing = actionCell.querySelector('.comp-check-btn, .comp-uncheck-btn');
+            if (existing) existing.remove();
+
+            var btn = document.createElement('button');
+            btn.style.padding = '0.28rem 0.6rem';
+            btn.dataset.gameId = gameId;
+            if (checked) {
+                btn.className = 'btn-refresh comp-uncheck-btn';
+                btn.textContent = 'Undo';
+            } else {
+                btn.className = 'btn-refresh comp-check-btn';
+                btn.textContent = 'Mark Inspected';
+                btn.disabled = isOut;
+            }
+            actionCell.appendChild(btn);
+        }
+
+        updateComponentHeaderBadge();
+    }
+
+    if (componentTable) {
+        componentTable.addEventListener('click', function(e) {
+            var checkBtn = e.target.closest('.comp-check-btn');
+            if (checkBtn) {
+                var inspector = document.getElementById('comp-volunteer').value.trim();
+                if (!inspector) {
+                    showToast('Enter your name/badge first', 'warning');
+                    document.getElementById('comp-volunteer').focus();
+                    return;
+                }
+                var checkGameId = checkBtn.dataset.gameId;
+                var checkRow = document.getElementById('comp-row-' + checkGameId);
+                checkBtn.disabled = true;
+
+                fetch(urls.componentCheck, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({game_id: checkGameId, volunteer: inspector})
+                })
+                .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+                .then(function(result) {
+                    if (!result.ok) {
+                        checkBtn.disabled = false;
+                        showToast(result.data.error || 'Failed to mark inspection', 'error');
+                        return;
+                    }
+                    setRowCheckedState(checkRow, true, result.data.volunteer, result.data.timestamp_display);
+                    showToast('Inspection recorded');
+                })
+                .catch(function() {
+                    checkBtn.disabled = false;
+                    showToast('Failed to mark inspection', 'error');
+                });
+                return;
+            }
+
+            var uncheckBtn = e.target.closest('.comp-uncheck-btn');
+            if (uncheckBtn) {
+                var uncheckGameId = uncheckBtn.dataset.gameId;
+                var uncheckRow = document.getElementById('comp-row-' + uncheckGameId);
+                uncheckBtn.disabled = true;
+
+                fetch(urls.componentUncheck, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({game_id: uncheckGameId})
+                })
+                .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+                .then(function(result) {
+                    if (!result.ok) {
+                        uncheckBtn.disabled = false;
+                        showToast(result.data.error || 'Failed to clear inspection', 'error');
+                        return;
+                    }
+                    setRowCheckedState(uncheckRow, false, '', '');
+                    showToast('Inspection cleared');
+                })
+                .catch(function() {
+                    uncheckBtn.disabled = false;
+                    showToast('Failed to clear inspection', 'error');
+                });
+                return;
+            }
+
             var btn = e.target.closest('.btn-force-in');
             if (!btn) return;
             var gameId = btn.dataset.gameId;
@@ -356,30 +564,23 @@
                     showToast(result.data.error || 'Force in failed', 'error');
                     return;
                 }
-                var li = btn.closest('li');
-                var gameName = li.querySelector('.game-name').textContent;
-                li.remove();
+                var row = document.getElementById('comp-row-' + gameId);
+                var gameName = row ? row.cells[0].textContent.trim() : 'Game';
+                if (row) {
+                    row.dataset.out = '0';
+                    var availabilityCell = row.querySelector('.availability-cell');
+                    if (availabilityCell) {
+                        availabilityCell.innerHTML = '<span class="availability in">Available</span>';
+                    }
+                    btn.remove();
 
-                /* Add to available grid */
-                var availGrid = document.querySelector('.avail-grid');
-                if (availGrid) {
-                    var span = document.createElement('span');
-                    span.className = 'avail-item';
-                    span.textContent = '✓ ' + gameName;
-                    availGrid.appendChild(span);
-                }
-
-                /* Update header badge */
-                var remaining = document.querySelectorAll('#checked-out-list li').length;
-                var badge = document.querySelector('#component-section .prep-status');
-                if (badge) {
-                    if (remaining === 0) {
-                        badge.className = 'prep-status ok';
-                        badge.textContent = 'All In';
-                    } else {
-                        badge.textContent = remaining + ' Out';
+                    var checkBtn = row.querySelector('.comp-check-btn');
+                    if (checkBtn && row.dataset.checked !== '1') {
+                        checkBtn.disabled = false;
                     }
                 }
+
+                updateComponentHeaderBadge();
 
                 showToast(gameName + ' forced in');
             })
@@ -389,6 +590,8 @@
                 showToast('Force in failed', 'error');
             });
         });
+
+        updateComponentHeaderBadge();
     }
 })();
 </script>

@@ -205,6 +205,40 @@ def _run_suspicious_check(client, library_id):
                           details=descs)
 
 
+def _parse_component_checks(raw_checks):
+    """Normalize component-check state from session."""
+    if not isinstance(raw_checks, dict):
+        return {}
+    parsed = {}
+    for game_id, record in raw_checks.items():
+        if not isinstance(record, dict):
+            continue
+        parsed[game_id] = {
+            "checked": bool(record.get("checked")),
+            "volunteer": (record.get("volunteer") or "").strip(),
+            "timestamp": (record.get("timestamp") or "").strip(),
+        }
+    return parsed
+
+
+def _format_component_timestamp(raw_timestamp):
+    """Render ISO timestamps into a compact local-friendly display string."""
+    if not raw_timestamp:
+        return ""
+    try:
+        dt = datetime.fromisoformat(str(raw_timestamp).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return ""
+    return dt.strftime("%Y-%m-%d %H:%M")
+
+
+def _is_component_game_checked_out(game, checkout_map):
+    """Determine checked-out state using either local cache or shared checkout map."""
+    game_id = game.get("id", "")
+    checkout_info = checkout_map.get(game_id)
+    return bool(game.get("is_checked_out") or checkout_info is not None), checkout_info
+
+
 # ── Mode switching ────────────────────────────────────────────────────
 
 @main_bp.route("/games/mode", methods=["POST"])
@@ -444,28 +478,41 @@ def drawing_prep():
     entries = session.get(SK.CACHED_ENTRIES)
     has_data = all_games is not None and entries is not None
 
-    # Component check: find checked-out P2W games and available P2W games
-    checked_out_p2w = []
-    available_p2w = []
+    # Component check: inspection checklist separate from checkout status.
+    component_items = []
+    inspected_count = 0
+    checked_out_count = 0
     if all_games:
         checkout_map = session.get(SK.CHECKOUT_MAP, {})
+        component_checks = _parse_component_checks(session.get(SK.COMPONENT_CHECKS, {}))
         for g in all_games:
             if not g.get("is_play_to_win"):
                 continue
             gid = g.get("id", "")
-            co_info = checkout_map.get(gid)
-            is_out = g.get("is_checked_out") or co_info is not None
+            is_out, co_info = _is_component_game_checked_out(g, checkout_map)
             if is_out:
-                renter = (co_info or {}).get("renter") or g.get("_renter_name", "Unknown")
-                checkout_id = (co_info or {}).get("checkout_id") or g.get("_checkout_id", "")
-                checked_out_p2w.append({
-                    "game_id": gid,
-                    "name": g.get("name", "Unknown"),
-                    "renter": renter,
-                    "checkout_id": checkout_id,
-                })
-            else:
-                available_p2w.append(g.get("name", "Unknown"))
+                checked_out_count += 1
+            check_record = component_checks.get(gid, {})
+            checked = bool(check_record.get("checked"))
+            if checked:
+                inspected_count += 1
+            renter = (co_info or {}).get("renter") or g.get("_renter_name", "Unknown")
+            checkout_id = (co_info or {}).get("checkout_id") or g.get("_checkout_id", "")
+            component_items.append({
+                "id": gid,
+                "name": g.get("name", "Unknown"),
+                "is_checked_out": is_out,
+                "renter": renter if is_out else "",
+                "checkout_id": checkout_id,
+                "checked": checked,
+                "volunteer": check_record.get("volunteer", ""),
+                "timestamp": check_record.get("timestamp", ""),
+                "timestamp_display": _format_component_timestamp(check_record.get("timestamp", "")),
+            })
+
+    component_items.sort(key=lambda item: item["name"].lower())
+    total_component_games = len(component_items)
+    remaining_component_checks = max(total_component_games - inspected_count, 0)
 
     # Suspicious activity: gather notifications
     notifications = session.get(SK.NOTIFICATIONS, [])
@@ -497,8 +544,11 @@ def drawing_prep():
         "drawing_prep.html",
         convention_name=convention_name,
         has_data=has_data,
-        checked_out_p2w=checked_out_p2w,
-        available_p2w=available_p2w,
+        component_items=component_items,
+        total_component_games=total_component_games,
+        inspected_count=inspected_count,
+        remaining_component_checks=remaining_component_checks,
+        checked_out_count=checked_out_count,
         suspicious_alerts=suspicious_alerts,
         ejected_all_count=ejected_all_count,
         ejected_game_count=ejected_game_count,
@@ -507,6 +557,65 @@ def drawing_prep():
         unique_participants=unique_participants,
         zero_entry_games=zero_entry_games,
     )
+
+
+@main_bp.route("/games/component-check", methods=["POST"])
+@login_required(api=True)
+def mark_component_check():
+    """AJAX: mark a game's physical component inspection as complete."""
+    data = request.get_json(silent=True) or {}
+    game_id = (data.get("game_id") or "").strip()
+    volunteer = (data.get("volunteer") or "").strip()
+
+    if not game_id or not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID"}), 400
+    if not volunteer:
+        return jsonify({"error": "Volunteer name is required"}), 400
+
+    cached_games = session.get(SK.CACHED_GAMES, [])
+    game = next((g for g in cached_games if g.get("id") == game_id and g.get("is_play_to_win")), None)
+    if not game:
+        return jsonify({"error": "Game not found"}), 404
+
+    checkout_map = session.get(SK.CHECKOUT_MAP, {})
+    is_out, _ = _is_component_game_checked_out(game, checkout_map)
+    if is_out:
+        return jsonify({"error": "Game must be checked in before inspection"}), 409
+
+    checks = _parse_component_checks(session.get(SK.COMPONENT_CHECKS, {}))
+    timestamp = datetime.now(timezone.utc).isoformat()
+    checks[game_id] = {
+        "checked": True,
+        "volunteer": volunteer,
+        "timestamp": timestamp,
+    }
+    session[SK.COMPONENT_CHECKS] = checks
+    return jsonify({
+        "ok": True,
+        "game_id": game_id,
+        "volunteer": volunteer,
+        "timestamp": timestamp,
+        "timestamp_display": _format_component_timestamp(timestamp),
+    })
+
+
+@main_bp.route("/games/component-uncheck", methods=["POST"])
+@login_required(api=True)
+def unmark_component_check():
+    """AJAX: clear a game's physical component inspection marker."""
+    data = request.get_json(silent=True) or {}
+    game_id = (data.get("game_id") or "").strip()
+
+    if not game_id or not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID"}), 400
+
+    checks = _parse_component_checks(session.get(SK.COMPONENT_CHECKS, {}))
+    if game_id not in checks:
+        return jsonify({"error": "Inspection record not found"}), 404
+
+    checks.pop(game_id, None)
+    session[SK.COMPONENT_CHECKS] = checks
+    return jsonify({"ok": True, "game_id": game_id})
 
 
 @main_bp.route("/games/premium", methods=["POST"])
