@@ -52,7 +52,7 @@
         </div>
         {% endif %}
         {% if has_data %}
-        <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin:0;" id="drawing-form" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running Drawing...';document.getElementById('loading-message').textContent='Running drawing\u2026';document.getElementById('loading-note').textContent='This may take a minute or two depending on the number of games and entries.';document.getElementById('loading-overlay').classList.add('active');">
+        <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin:0;" id="drawing-form" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running Drawing...';document.getElementById('loading-message').textContent='Running drawing\u2026';document.getElementById('loading-note').textContent='This may take a minute or two depending on the number of games and entries.';document.getElementById('loading-overlay').classList.add('active');sessionStorage.removeItem('redrawMode');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="rerun-btn">Run Drawing</button>
         </form>
