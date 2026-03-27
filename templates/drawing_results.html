@@ -3,7 +3,7 @@
 {% block title %}PawDrawing — Drawing Results{% endblock %}
 
 {% block nav %}
-<a href="{{ url_for('main.games') }}" onclick="if (!confirm('Go back to Games?\n\nYou will lose the current drawing results.')) { event.preventDefault(); return; } document.getElementById('loading-overlay').classList.add('active');">Back to Games</a>
+<div class="notif-wrapper" id="notif-wrapper" style="display:none"></div>
 <form method="POST" action="{{ url_for('main.logout') }}" style="display:inline">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" style="background:none;border:none;color:#ecf0f1;cursor:pointer;font-size:0.9rem;">
@@ -13,6 +13,7 @@
 {% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/games.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/drawing.css') }}">
 {% endblock %}
 
@@ -20,13 +21,40 @@
 <div class="summary">
     <div class="summary-top">
         <h2>Drawing Results — {{ convention_name }}</h2>
+        {% if not no_drawing %}
         <span class="stat"><strong>{{ results|length }}</strong> games drawn</span>
         <span class="stat" id="pickup-summary"><strong id="pickup-count">{{ picked_up|length }}</strong> of <strong>{{ results|selectattr('winner_name')|list|length }}</strong> picked up</span>
         {% if drawing_timestamp %}
         <span class="stat" style="font-size:0.8rem;color:#888;">Data from {{ drawing_timestamp }}</span>
         {% endif %}
+        {% endif %}
     </div>
-    <div class="summary-buttons">
+    <div class="mode-selector" id="mode-selector" style="margin-top:0.75rem;">
+        <a href="{{ url_for('main.games') }}" class="mode-pill" onclick="document.getElementById('loading-overlay').classList.add('active');">Manage Games</a>
+        <a href="{{ url_for('main.players') }}" class="mode-pill" onclick="document.getElementById('loading-overlay').classList.add('active');">Manage Players</a>
+        <a href="{{ url_for('main.drawing_prep') }}" class="mode-pill" onclick="document.getElementById('loading-overlay').classList.add('active');">Drawing Prep</a>
+        <a href="{{ url_for('main.drawing_results') }}" class="mode-pill active">Drawing</a>
+    </div>
+    {% if no_drawing %}
+    <div style="margin-top:1rem;">
+        {% if not prep_completed %}
+        <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+            <span style="font-size:1.2em;">⚠️</span>
+            <span>You haven't reviewed <strong>Drawing Prep</strong> yet.</span>
+            <a href="{{ url_for('main.drawing_prep') }}" style="color:#856404;font-weight:600;" onclick="document.getElementById('loading-overlay').classList.add('active');">Review now</a>
+        </div>
+        {% endif %}
+        {% if has_data %}
+        <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin:0;" id="drawing-form" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running Drawing...';document.getElementById('loading-message').textContent='Running drawing\u2026';document.getElementById('loading-note').textContent='This may take a minute or two depending on the number of games and entries.';document.getElementById('loading-overlay').classList.add('active');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="rerun-btn">Run Drawing</button>
+        </form>
+        {% else %}
+        <p style="color:#888;font-style:italic;">Load game data on the Management tab first, then come back here to run the drawing.</p>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="summary-buttons" style="margin-top:0.75rem;">
         <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin:0;" onsubmit="{% if picked_up or auto_resolved %}var warnings=[];{% if picked_up %}warnings.push('{{ picked_up|length }} game{{ 's' if picked_up|length != 1 }} already picked up.');{% endif %}{% if auto_resolved %}warnings.push('{{ auto_resolved|length }} conflict{{ 's' if auto_resolved|length != 1 }} already resolved.');{% endif %}warnings.push('');warnings.push('Re-running will discard all progress and redraw ALL games from scratch.');warnings.push('');warnings.push('If you only want to redraw unclaimed games, cancel and use Enter Redraw Mode instead.');if(!confirm(warnings.join('\n'))){return false;}{% endif %}var b=this.querySelector('button');b.disabled=true;b.textContent='Running...';document.getElementById('loading-message').textContent='Running drawing\u2026';document.getElementById('loading-note').textContent='This may take a minute or two depending on the number of games and entries.';document.getElementById('loading-overlay').classList.add('active');sessionStorage.removeItem('redrawMode');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="rerun-btn">Re-run Drawing</button>
@@ -39,8 +67,10 @@
             <input type="checkbox" id="redraw-same-rules"> Apply one-win rules
         </label>
     </div>
+    {% endif %}
 </div>
 
+{% if not no_drawing %}
 <div id="push-result" style="display:none;"></div>
 
 {% if auto_resolved %}
@@ -177,9 +207,9 @@
                 <button class="pickup-btn" data-game-id="{{ r.game_id }}" onclick="togglePickup('{{ r.game_id }}')">Mark Picked Up</button>
                 <button class="award-next-btn" data-game-id="{{ r.game_id }}" onclick="awardNext('{{ r.game_id }}')">Award to Next</button>
                 {% if r.winner_badge and r.winner_badge not in not_here %}
-                <button class="not-here-btn" data-badge-id="{{ r.winner_badge }}" onclick="confirmNotHere('{{ r.winner_badge }}', '{{ r.winner_name|replace("'", "\\'") }}')">Not Here</button>
+                <button class="gone-btn" data-badge-id="{{ r.winner_badge }}" onclick="confirmGone('{{ r.winner_badge }}', '{{ r.winner_name|replace("'", "\\'") }}')">Gone</button>
                 {% elif r.winner_badge and r.winner_badge in not_here %}
-                <span class="not-here-badge">Not Here</span>
+                <span class="not-here-badge">Gone</span>
                 {% endif %}
             </td>
         </tr>
@@ -288,7 +318,7 @@
             data-game-id="{{ r.game_id }}" data-badge-id="{{ r.winner_badge }}">
             <td>
                 {{ r.winner_name }}
-                {% if r.winner_badge in not_here %}<span class="not-here-badge">Not Here</span>{% endif %}
+                {% if r.winner_badge in not_here %}<span class="not-here-badge">Gone</span>{% endif %}
             </td>
             <td>{{ r.winner_badge or '—' }}</td>
             <td>
@@ -299,9 +329,9 @@
             <td>
                 <button class="pickup-btn" data-game-id="{{ r.game_id }}" onclick="togglePickup('{{ r.game_id }}')">Mark Picked Up</button>
                 {% if r.winner_badge and r.winner_badge not in not_here %}
-                <button class="not-here-btn" data-badge-id="{{ r.winner_badge }}" onclick="confirmNotHere('{{ r.winner_badge }}', '{{ r.winner_name|replace("'", "\\'") }}')">Not Here</button>
+                <button class="gone-btn" data-badge-id="{{ r.winner_badge }}" onclick="confirmGone('{{ r.winner_badge }}', '{{ r.winner_name|replace("'", "\\'") }}')">Gone</button>
                 {% elif r.winner_badge and r.winner_badge in not_here %}
-                <span class="not-here-badge">Not Here</span>
+                <span class="not-here-badge">Gone</span>
                 {% endif %}
             </td>
         </tr>
@@ -379,18 +409,20 @@
 {% endif %}
 
 </div>
+{% endif %}{# not no_drawing #}
 
+{% if not no_drawing %}
 <div class="modal-overlay" id="not-here-modal">
     <div class="modal-box">
-        <h3>Mark as Not Here?</h3>
+        <h3>Mark as Gone?</h3>
         <p>This will permanently remove <strong id="modal-person-name"></strong> from all unclaimed games. Their winning games will advance to the next entrant.</p>
-        <p>If this person might still show up, use <strong>Award to Next</strong> instead — that only skips them for one game.</p>
+        <p>If this person might still show up, use <strong>Award to Next</strong> instead — that only advances one game.</p>
         <label>
             <input type="checkbox" id="modal-dismiss-checkbox"> Don't show this warning again for this drawing
         </label>
         <div class="modal-actions">
             <button class="modal-cancel" onclick="closeNotHereModal()">Cancel</button>
-            <button class="modal-confirm" id="modal-confirm-btn" onclick="executeNotHere()">Mark Not Here</button>
+            <button class="modal-confirm" id="modal-confirm-btn" onclick="executeNotHere()">Mark Gone</button>
         </div>
     </div>
 </div>
@@ -411,8 +443,11 @@
      data-not-here='{{ not_here | tojson }}'
      data-warning-dismissed='{{ "true" if not_here_warning_dismissed else "false" }}'>
 </div>
+{% endif %}{# not no_drawing: modal + page-config #}
 {% endblock %}
 
 {% block extra_js %}
+{% if not no_drawing %}
 <script src="{{ url_for('static', filename='js/drawing.js') }}"></script>
+{% endif %}
 {% endblock %}

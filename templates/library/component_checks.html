@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block app_title %}PawLibrary{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/library.css') }}">
+{% endblock %}
+
+{% block nav %}
+{% include 'library/_nav.html' %}
+{% endblock %}
+
+{% block content %}
+<h2>Component Checks</h2>
+<p class="subtitle">{{ checked_count }} of {{ total }} checked &mdash; {{ remaining }} remaining</p>
+
+<div class="component-check-controls">
+    <div class="form-row">
+        <input type="text" id="comp-volunteer" placeholder="Your name" autocomplete="off">
+        {% if show_unchecked %}
+        <a href="{{ url_for('library.component_checks') }}" class="btn btn-small">Show All</a>
+        {% else %}
+        <a href="{{ url_for('library.component_checks', unchecked='1') }}" class="btn btn-small">Show Unchecked Only</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="progress-bar-container">
+    <div class="progress-bar" style="width: {{ (checked_count / total * 100) if total > 0 else 0 }}%"></div>
+</div>
+
+<table class="detail-table component-table">
+    <thead>
+        <tr>
+            <th>Game</th>
+            <th>Catalog #</th>
+            <th>Status</th>
+            <th>Checked By</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for item in items %}
+    <tr id="comp-row-{{ item.id }}" class="{{ 'comp-checked' if item.checked else '' }}">
+        <td>{{ item.name }}</td>
+        <td>{{ item.catalog_number }}</td>
+        <td>
+            {% if item.checked %}
+            <span class="status-badge status-available">Checked</span>
+            {% else %}
+            <span class="status-badge status-out">Pending</span>
+            {% endif %}
+        </td>
+        <td class="comp-volunteer-cell">{{ item.volunteer or '' }}</td>
+        <td>
+            {% if item.checked %}
+            <button class="btn btn-small comp-uncheck-btn" data-game-id="{{ item.id }}">Undo</button>
+            {% else %}
+            <button class="btn btn-small btn-primary comp-check-btn" data-game-id="{{ item.id }}">Mark Checked</button>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+
+    function apiPost(url, body) {
+        return fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        }).then(function(r) { return r.json(); });
+    }
+
+    document.querySelectorAll('.comp-check-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var gameId = this.dataset.gameId;
+            var volunteer = document.getElementById('comp-volunteer').value.trim();
+            if (!volunteer) {
+                alert('Please enter your name first.');
+                document.getElementById('comp-volunteer').focus();
+                return;
+            }
+            var row = document.getElementById('comp-row-' + gameId);
+            btn.disabled = true;
+            apiPost('/library-mgmt/component-check', {
+                game_id: gameId,
+                volunteer: volunteer,
+            }).then(function(data) {
+                if (data.error) {
+                    alert(data.error);
+                    btn.disabled = false;
+                    return;
+                }
+                row.classList.add('comp-checked');
+                row.querySelector('.status-badge').className = 'status-badge status-available';
+                row.querySelector('.status-badge').textContent = 'Checked';
+                row.querySelector('.comp-volunteer-cell').textContent = volunteer;
+                btn.textContent = 'Undo';
+                btn.className = 'btn btn-small comp-uncheck-btn';
+                btn.disabled = false;
+                setupUncheck(btn);
+            });
+        });
+    });
+
+    function setupUncheck(btn) {
+        btn.onclick = function() {
+            var gameId = this.dataset.gameId;
+            var row = document.getElementById('comp-row-' + gameId);
+            btn.disabled = true;
+            apiPost('/library-mgmt/component-uncheck', {
+                game_id: gameId,
+            }).then(function(data) {
+                if (data.error) {
+                    alert(data.error);
+                    btn.disabled = false;
+                    return;
+                }
+                row.classList.remove('comp-checked');
+                row.querySelector('.status-badge').className = 'status-badge status-out';
+                row.querySelector('.status-badge').textContent = 'Pending';
+                row.querySelector('.comp-volunteer-cell').textContent = '';
+                btn.textContent = 'Mark Checked';
+                btn.className = 'btn btn-small btn-primary comp-check-btn';
+                btn.disabled = false;
+            });
+        };
+    }
+
+    document.querySelectorAll('.comp-uncheck-btn').forEach(setupUncheck);
+})();
+</script>
+{% endblock %}

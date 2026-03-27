@@ -1,6 +1,5 @@
 {% extends "base.html" %}
-
-{% block title %}PawDrawing — Login{% endblock %}
+{% block app_title %}PawDrawing — Volunteer Login{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -13,9 +12,15 @@
         padding: 2rem;
     }
     .login-card h2 {
-        margin-bottom: 1.5rem;
+        margin-bottom: 0.5rem;
         text-align: center;
         color: #2c3e50;
+    }
+    .login-card .library-info {
+        text-align: center;
+        color: #666;
+        margin-bottom: 1.5rem;
+        font-size: 0.9rem;
     }
     .form-group {
         margin-bottom: 1.25rem;
@@ -41,7 +46,7 @@
     .btn-login {
         width: 100%;
         padding: 0.7rem;
-        background: #2c3e50;
+        background: #27ae60;
         color: white;
         border: none;
         border-radius: 4px;
@@ -50,7 +55,7 @@
         font-weight: 600;
     }
     .btn-login:hover {
-        background: #34495e;
+        background: #2ecc71;
     }
     .password-wrapper {
         position: relative;
@@ -74,16 +79,25 @@
     .toggle-visibility:hover {
         color: #2c3e50;
     }
+    .owner-link {
+        text-align: center;
+        margin-top: 1rem;
+        font-size: 0.85rem;
+    }
+    .owner-link a {
+        color: #2c3e50;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="login-card">
-    <h2>Log In</h2>
-    <form method="POST" action="{{ url_for('main.login') }}">
+    <h2>Volunteer Login</h2>
+    <p class="library-info">Library: <strong>{{ library_name }}</strong></p>
+    <form method="POST" action="{{ url_for('main.volunteer_login') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
-            <label for="username">Username or Email Address</label>
+            <label for="username">Your TTE Username or Email</label>
             <input type="text" id="username" name="username" required autofocus
                    autocomplete="username">
         </div>
@@ -106,17 +120,11 @@
                         onclick="toggleVisibility('api_key', this)">👁</button>
             </div>
         </div>
-        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.85rem;margin-bottom:1rem;cursor:pointer;">
-            <input type="checkbox" id="remember-key" checked>
-            Remember API key on this device
-        </label>
-        <button type="submit" class="btn-login">Log In</button>
+        <button type="submit" class="btn-login">Log In as Volunteer</button>
     </form>
-    {% if session.get('library_id') %}
-    <div style="text-align:center; margin-top:1rem; font-size:0.85rem;">
-        <a href="{{ url_for('library.volunteer_login') }}">Log in as volunteer</a>
+    <div class="owner-link">
+        <a href="{{ url_for('main.login') }}">Owner login</a>
     </div>
-    {% endif %}
 </div>
 <script>
 function toggleVisibility(fieldId, btn) {
@@ -131,28 +139,5 @@ function toggleVisibility(fieldId, btn) {
         btn.setAttribute('aria-label', btn.getAttribute('aria-label').replace('Hide', 'Show'));
     }
 }
-
-// Restore API key from localStorage
-(function() {
-    const saved = localStorage.getItem('pawdrawing_api_key');
-    if (saved) {
-        document.getElementById('api_key').value = saved;
-    }
-    const remembered = localStorage.getItem('pawdrawing_remember_key');
-    if (remembered === 'false') {
-        document.getElementById('remember-key').checked = false;
-    }
-
-    document.querySelector('.login-card form').addEventListener('submit', function() {
-        const cb = document.getElementById('remember-key');
-        const key = document.getElementById('api_key').value.trim();
-        localStorage.setItem('pawdrawing_remember_key', cb.checked);
-        if (cb.checked && key) {
-            localStorage.setItem('pawdrawing_api_key', key);
-        } else {
-            localStorage.removeItem('pawdrawing_api_key');
-        }
-    });
-})();
 </script>
 {% endblock %}

@@ -3,6 +3,15 @@
 {% block title %}PawDrawing — Games{% endblock %}
 
 {% block nav %}
+<div class="notif-wrapper" id="notif-wrapper">
+    <button class="notif-bell" id="notif-bell" title="Notifications">🔔{% if notification_count %}<span class="notif-badge" id="notif-badge">{{ notification_count }}</span>{% else %}<span class="notif-badge" id="notif-badge" style="display:none">0</span>{% endif %}</button>
+    <div class="notif-dropdown" id="notif-dropdown" style="display:none">
+        <div class="notif-header">Notifications</div>
+        <div class="notif-list" id="notif-list">
+            <p class="notif-empty">No notifications</p>
+        </div>
+    </div>
+</div>
 <form method="POST" action="{{ url_for('main.logout') }}" style="display:inline">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" style="background:none;border:none;color:#ecf0f1;cursor:pointer;font-size:0.9rem;">
@@ -17,24 +26,25 @@
 
 {% block content %}
 <div class="summary">
-    <h2>{{ convention_name }}</h2>
+    <h2>{{ convention_name }}{% if library_name %} · {{ library_name }}{% endif %}</h2>
     <span class="stat"><strong>{{ total_games }}</strong> games</span>
     <span class="stat"><strong>{{ unique_participants }}</strong> participants</span>
     <span class="stat"><strong>{{ total_entries }}</strong> entries</span>
     <span class="stat" id="eject-stat"{% if not ejected_entries %} style="display:none"{% endif %}><strong id="eject-stat-count">{{ ejected_entries|length }}</strong> removed<span class="eject-count">!</span></span>
     <span class="stat" style="font-size:0.8rem;color:#888;">Loaded {{ data_loaded_at }}</span>
     <span class="save-status" id="save-status">Saved</span>
-    <a href="{{ url_for('main.games', refresh='1') }}" class="refresh-btn" id="refresh-btn" onclick="document.getElementById('loading-overlay').classList.add('active');this.style.pointerEvents='none';this.style.opacity='0.6';">Refresh Data</a>
-    <a href="{{ url_for('main.convention_select') }}" class="change-source-btn">Change Source</a>
+    <a href="{{ url_for('main.games', refresh='1') }}" class="refresh-btn" id="refresh-btn" onclick="document.getElementById('loading-overlay').classList.add('active');this.style.pointerEvents='none';this.style.opacity='0.6';">⟳ Refresh</a>
+    <button class="settings-btn" id="settings-open">⚙ Settings</button>
 </div>
 
 <div class="eject-panel" id="eject-panel">
     <div class="action-row">
-        <form method="POST" action="{{ url_for('main.run_drawing_route') }}" style="margin:0;" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Running Drawing...';document.getElementById('loading-message').textContent='Running drawing\u2026';document.getElementById('loading-note').textContent='This may take a minute or two depending on the number of games and entries.';document.getElementById('loading-overlay').classList.add('active');">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn-drawing">Run Drawing</button>
-        </form>
-        <a href="{{ url_for('main.players') }}" class="btn-players">Manage Players</a>
+        <div class="mode-selector" id="mode-selector">
+            <a href="{{ url_for('main.games') }}" class="mode-pill active">Manage Games</a>
+            <a href="{{ url_for('main.players') }}" class="mode-pill" onclick="document.getElementById('loading-overlay').classList.add('active');">Manage Players</a>
+            <a href="{{ url_for('main.drawing_prep') }}" class="mode-pill" onclick="document.getElementById('loading-overlay').classList.add('active');">Drawing Prep</a>
+            <a href="{{ url_for('main.drawing_results') }}" class="mode-pill" onclick="document.getElementById('loading-overlay').classList.add('active');">Drawing</a>
+        </div>
         <span id="eject-panel-count" style="font-size:0.85rem;color:#888;{% if not ejected_entries %}display:none{% endif %}"><span id="eject-panel-num">{{ ejected_entries|length }}</span> player(s) removed from drawing</span>
     </div>
     <div class="eject-list" id="eject-list">
@@ -59,22 +69,36 @@
             <th class="sortable sort-asc" data-sort="name">Game <span class="sort-arrow">▲</span></th>
             <th class="sortable" data-sort="entries">Entries <span class="sort-arrow">▲</span></th>
             <th class="sortable th-premium" data-sort="premium">Premium <span class="sort-arrow">▲</span></th>
+            <th class="th-status sortable" data-sort="status">Status <span class="sort-arrow">▲</span></th>
+            <th class="th-action">Action</th>
         </tr>
     </thead>
     <tbody>
         {% for item in game_data %}
-        <tr class="{{ 'premium' if item.game.get('id') in premium_games else '' }}"
-            data-game-id="{{ item.game.get('id', '') }}"
-            data-game-name="{{ item.game.get('name', 'Unknown')|lower }}"
+        {% set game = item.game %}
+        {% set is_checked_out = game.get('is_checked_out') %}
+        {% set renter = game.get('_renter_name', '') %}
+        {% set checkout_id = game.get('_checkout_id', '') %}
+        <tr class="{{ 'premium' if game.get('id') in premium_games else '' }}"
+            data-game-id="{{ game.get('id', '') }}"
+            data-game-name="{{ game.get('name', 'Unknown')|lower }}"
+            data-catalog="{{ game.get('catalog_number', '') }}"
             data-entrant-count="{{ item.entrant_count }}"
-            data-is-premium="{{ '1' if item.game.get('id') in premium_games else '0' }}">
+            data-is-premium="{{ '1' if game.get('id') in premium_games else '0' }}"
+            data-is-p2w="{{ '1' if game.get('is_play_to_win') else '0' }}"
+            data-checked-out="{{ '1' if is_checked_out else '0' }}"
+            data-renter="{{ renter }}"
+            data-checkout-id="{{ checkout_id }}">
             <td>
                 {% if item.entrant_count > 0 %}
-                <button class="expand-btn" data-game-id="{{ item.game.get('id', '') }}" title="Show entrants">&#9654;</button>
+                <button class="expand-btn" data-game-id="{{ game.get('id', '') }}" title="Show entrants">&#9654;</button>
                 {% endif %}
-                {{ item.game.get('name', 'Unknown') }}
-                {% if item.game.get('id') in premium_games %}
+                {{ game.get('name', 'Unknown') }}
+                {% if game.get('id') in premium_games %}
                     <span class="premium-label">Premium</span>
+                {% endif %}
+                {% if game.get('is_play_to_win') %}
+                    <span class="p2w-badge">P2W</span>
                 {% endif %}
             </td>
             <td>
@@ -87,25 +111,138 @@
             <td class="td-premium">
                 <label class="toggle">
                     <input type="checkbox" class="premium-toggle"
-                           data-game-id="{{ item.game.get('id', '') }}"
-                           {{ 'checked' if item.game.get('id') in premium_games else '' }}>
+                           data-game-id="{{ game.get('id', '') }}"
+                           {{ 'checked' if game.get('id') in premium_games else '' }}>
                     <span class="slider"></span>
                 </label>
+            </td>
+            <td class="td-status">
+                {% if is_checked_out %}
+                    <span class="status-out">{{ renter or 'Checked Out' }}</span>
+                {% else %}
+                    <span class="status-available">Available</span>
+                {% endif %}
+            </td>
+            <td class="td-action">
+                {% if is_checked_out %}
+                    <button class="btn-checkin" data-game-id="{{ game.get('id', '') }}"
+                            data-checkout-id="{{ checkout_id }}"
+                            data-renter="{{ renter }}"
+                            data-game-name="{{ game.get('name', 'Unknown') }}"
+                            data-is-p2w="{{ '1' if game.get('is_play_to_win') else '0' }}">Check In</button>
+                {% else %}
+                    <button class="btn-checkout" data-game-id="{{ game.get('id', '') }}"
+                            data-game-name="{{ game.get('name', 'Unknown') }}"
+                            data-is-p2w="{{ '1' if game.get('is_play_to_win') else '0' }}">Check Out</button>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
 {% else %}
-<p>No Play-to-Win games found for this convention.</p>
+<p>No games found for this convention.</p>
 {% endif %}
 
+{# ── Checkout Modal ── #}
+<div class="modal-overlay" id="checkout-modal" style="display:none">
+    <div class="modal-card">
+        <h3>Check Out: <span id="checkout-game-name"></span></h3>
+        <input type="hidden" id="checkout-game-id">
+        <div class="modal-field">
+            <label for="checkout-badge">Badge #</label>
+            <input type="text" id="checkout-badge" placeholder="Badge number" autocomplete="off">
+        </div>
+        <div class="modal-field">
+            <label for="checkout-name">Name</label>
+            <input type="text" id="checkout-name" placeholder="Renter name" autocomplete="off">
+            <span class="badge-status" id="checkout-badge-status"></span>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-cancel" id="checkout-cancel">Cancel</button>
+            <button class="btn-primary" id="checkout-submit">Check Out</button>
+        </div>
+    </div>
+</div>
+
+{# ── Check In Modal ── #}
+<div class="modal-overlay" id="checkin-modal" style="display:none">
+    <div class="modal-card">
+        <h3>Check In: <span id="checkin-game-name"></span></h3>
+        <p class="checkin-renter">Returning from <strong id="checkin-renter-name"></strong></p>
+        <input type="hidden" id="checkin-game-id">
+        <input type="hidden" id="checkin-checkout-id">
+        <input type="hidden" id="checkin-is-p2w">
+
+        <div class="p2w-section" id="p2w-section" style="display:none">
+            <div class="p2w-header">Add to Drawing for <span id="p2w-game-label"></span>?</div>
+            <div class="p2w-entrants" id="p2w-entrants">
+                {# Dynamically populated #}
+            </div>
+            <div class="p2w-add-row">
+                <input type="text" id="p2w-badge" placeholder="Badge #" autocomplete="off" class="p2w-input-sm">
+                <input type="text" id="p2w-name" placeholder="Name" autocomplete="off" class="p2w-input">
+                <button class="btn-add" id="p2w-add-btn">+ Add</button>
+            </div>
+        </div>
+
+        <div class="modal-actions">
+            <button class="btn-cancel" id="checkin-cancel">Cancel</button>
+            <button class="btn-secondary" id="checkin-skip">Skip</button>
+            <button class="btn-primary" id="checkin-submit">Check In</button>
+        </div>
+    </div>
+</div>
+
+{# ── Settings Panel ── #}
+<div class="modal-overlay" id="settings-modal" style="display:none">
+    <div class="modal-card settings-card">
+        <div class="settings-title-row">
+            <h3>Settings</h3>
+            <button class="settings-close" id="settings-close">✕</button>
+        </div>
+        <div class="settings-section">
+            <div class="settings-label">Convention</div>
+            <div class="settings-value">{{ convention_name }}{% if library_name %} · {{ library_name }}{% endif %}</div>
+            <a href="{{ url_for('main.convention_select') }}" class="btn-secondary" style="margin-top:0.5rem;display:inline-block;text-decoration:none;text-align:center;">Change Source</a>
+        </div>
+        <div class="settings-section">
+            <div class="settings-label">Checkout Alerts</div>
+            <div class="settings-row">
+                <span>Warn after</span>
+                <input type="number" id="alert-hours" min="1" max="24" value="{{ alert_hours }}" class="alert-hours-input">
+                <span>hours</span>
+            </div>
+        </div>
+        <div class="settings-section">
+            <div class="settings-label">Play-to-Win</div>
+            <button class="btn-secondary" id="mark-all-p2w-btn" style="margin-top:0.5rem;">Mark All Games as P2W</button>
+        </div>
+    </div>
+</div>
+
+{# ── Toast notification ── #}
+<div class="toast" id="toast" style="display:none"></div>
+
 <div id="page-config" style="display:none"
+     data-mode="{{ app_mode }}"
      data-urls='{{ {
          "ejectPlayer": url_for("main.eject_player"),
          "unejectPlayer": url_for("main.uneject_player"),
          "getEntrants": url_for("main.get_entrants", game_id="__GID__"),
-         "setPremiumGames": url_for("main.set_premium_games")
+         "setPremiumGames": url_for("main.set_premium_games"),
+         "switchMode": url_for("main.switch_mode"),
+         "badgeLookup": url_for("main.badge_lookup"),
+         "activeCheckout": url_for("main.active_checkout"),
+         "checkout": url_for("main.create_checkout"),
+         "checkin": url_for("main.checkin"),
+         "p2wEntry": url_for("main.create_p2w_entry"),
+         "p2wSuggestions": url_for("main.p2w_suggestions"),
+         "notifications": url_for("main.get_notifications"),
+         "dismissNotification": url_for("main.dismiss_notification"),
+         "updateSettings": url_for("main.update_settings"),
+         "markAllP2W": url_for("main.mark_all_p2w"),
+         "checkoutStatus": url_for("main.checkout_status")
      } | tojson }}'>
 </div>
 {% endblock %}

@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+
+{% block title %}PawDrawing — Drawing Prep{% endblock %}
+
+{% block nav %}
+<form method="POST" action="{{ url_for('main.logout') }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" style="background:none;border:none;color:#ecf0f1;cursor:pointer;font-size:0.9rem;">
+        Logout ({{ session.get('tte_username', '') }})
+    </button>
+</form>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/games.css') }}">
+<style>
+    .prep-section {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1rem;
+    }
+    .prep-section h3 {
+        margin: 0 0 0.75rem 0;
+        color: #2c3e50;
+        font-size: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .prep-status {
+        display: inline-block;
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.15rem 0.5rem;
+        border-radius: 3px;
+        text-transform: uppercase;
+    }
+    .prep-status.ok { background: #eafaf1; color: #27ae60; }
+    .prep-status.warning { background: #fef9e7; color: #f39c12; }
+    .prep-status.alert { background: #fdecea; color: #e74c3c; }
+    .prep-status.info { background: #ebf5fb; color: #3498db; }
+
+    .prep-detail { font-size: 0.9rem; color: #555; line-height: 1.6; }
+    .prep-detail strong { color: #2c3e50; }
+
+    .prep-game-list {
+        margin: 0.5rem 0;
+        padding: 0;
+        list-style: none;
+    }
+    .prep-game-list li {
+        padding: 0.4rem 0.75rem;
+        border-bottom: 1px solid #eee;
+        font-size: 0.88rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .prep-game-list li:last-child { border-bottom: none; }
+    .prep-game-list .game-name { font-weight: 500; color: #2c3e50; }
+    .prep-game-list .renter { color: #888; font-size: 0.82rem; }
+
+    .btn-force-in {
+        background: #e74c3c;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 0.25rem 0.6rem;
+        font-size: 0.78rem;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .btn-force-in:hover { background: #c0392b; }
+    .btn-force-in:disabled { background: #bdc3c7; cursor: default; }
+
+    .avail-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+        margin-top: 0.5rem;
+    }
+    .avail-item {
+        background: #eafaf1;
+        color: #27ae60;
+        padding: 0.2rem 0.5rem;
+        border-radius: 3px;
+        font-size: 0.78rem;
+        font-weight: 500;
+    }
+
+    .suspicious-item {
+        padding: 0.5rem 0.75rem;
+        border-left: 3px solid #f39c12;
+        background: #fef9e7;
+        margin-bottom: 0.5rem;
+        border-radius: 0 4px 4px 0;
+        font-size: 0.88rem;
+    }
+    .suspicious-item.alert-type {
+        border-left-color: #e74c3c;
+        background: #fdecea;
+    }
+    .suspicious-detail {
+        font-size: 0.82rem;
+        color: #666;
+        margin-top: 0.25rem;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 0.75rem;
+        margin-top: 0.5rem;
+    }
+    .stat-card {
+        background: #f8f9fa;
+        border-radius: 6px;
+        padding: 0.75rem;
+        text-align: center;
+    }
+    .stat-card .stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #2c3e50;
+    }
+    .stat-card .stat-label {
+        font-size: 0.78rem;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .refresh-section {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .refresh-note {
+        font-size: 0.82rem;
+        color: #888;
+        font-style: italic;
+    }
+    .btn-refresh {
+        background: #3498db;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        padding: 0.5rem 1.2rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .btn-refresh:hover { background: #2980b9; }
+    .btn-refresh:disabled { background: #bdc3c7; cursor: default; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="summary">
+    <h2>Drawing Prep — {{ convention_name }}</h2>
+</div>
+
+<div class="eject-panel">
+    <div class="action-row">
+        <div class="mode-selector" id="mode-selector">
+            <a href="{{ url_for('main.games') }}" class="mode-pill" onclick="document.getElementById('loading-overlay').classList.add('active');">Manage Games</a>
+            <a href="{{ url_for('main.players') }}" class="mode-pill" onclick="document.getElementById('loading-overlay').classList.add('active');">Manage Players</a>
+            <a href="{{ url_for('main.drawing_prep') }}" class="mode-pill active">Drawing Prep</a>
+            <a href="{{ url_for('main.drawing_results') }}" class="mode-pill" onclick="document.getElementById('loading-overlay').classList.add('active');">Drawing</a>
+        </div>
+    </div>
+</div>
+
+{# ── Refresh Data ── #}
+<div class="prep-section">
+    <h3>📡 Refresh Data</h3>
+    <div class="refresh-section">
+        <a href="{{ url_for('main.games', refresh='1', ret='prep') }}" class="btn-refresh" id="refresh-btn"
+           onclick="this.textContent='Refreshing…';this.style.pointerEvents='none';this.style.opacity='0.6';document.getElementById('loading-message').textContent='Refreshing data from TTE…';document.getElementById('loading-note').textContent='This may take several seconds for large libraries.';document.getElementById('loading-overlay').classList.add('active');">
+            ⟳ Refresh from TTE
+        </a>
+        <span class="refresh-note">Fetches the latest games, entries, and checkouts from tabletop.events. May take several seconds for large libraries.</span>
+    </div>
+    {% if not has_data %}
+    <p style="color:#e74c3c;margin-top:0.5rem;font-weight:500;">⚠ No data loaded yet. Click Refresh to load game data before running the drawing.</p>
+    {% endif %}
+</div>
+
+{# ── Drawing Stats ── #}
+<div class="prep-section">
+    <h3>📊 Drawing Overview</h3>
+    {% if has_data %}
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value">{{ total_games }}</div>
+            <div class="stat-label">Total Games</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ total_entries }}</div>
+            <div class="stat-label">Entries</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ unique_participants }}</div>
+            <div class="stat-label">Players</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" {% if zero_entry_games > 0 %}style="color:#f39c12"{% endif %}>{{ zero_entry_games }}</div>
+            <div class="stat-label">No Entries</div>
+        </div>
+    </div>
+    {% else %}
+    <p class="prep-detail" style="color:#888;font-style:italic;">Load data first to see drawing stats.</p>
+    {% endif %}
+</div>
+
+{# ── Component Check ── #}
+<div class="prep-section" id="component-section">
+    <h3>🧩 Component Check
+        {% if not has_data %}
+        <span class="prep-status info">No Data</span>
+        {% elif checked_out_p2w|length == 0 %}
+        <span class="prep-status ok">All In</span>
+        {% else %}
+        <span class="prep-status warning">{{ checked_out_p2w|length }} Out</span>
+        {% endif %}
+    </h3>
+    {% if has_data %}
+    {% if checked_out_p2w %}
+    <p class="prep-detail"><strong>{{ checked_out_p2w|length }}</strong> P2W game{{ 's' if checked_out_p2w|length != 1 }} still checked out:</p>
+    <ul class="prep-game-list" id="checked-out-list">
+        {% for g in checked_out_p2w %}
+        <li data-game-id="{{ g.game_id }}">
+            <span><span class="game-name">{{ g.name }}</span> <span class="renter">— {{ g.renter }}</span></span>
+            <button class="btn-force-in" data-game-id="{{ g.game_id }}" data-checkout-id="{{ g.checkout_id }}">Force In</button>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    {% if available_p2w %}
+    <p class="prep-detail" style="margin-top:0.75rem;"><strong>{{ available_p2w|length }}</strong> P2W game{{ 's' if available_p2w|length != 1 }} available:</p>
+    <div class="avail-grid">
+        {% for name in available_p2w|sort %}
+        <span class="avail-item">✓ {{ name }}</span>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% else %}
+    <p class="prep-detail" style="color:#888;font-style:italic;">Load data first to check components.</p>
+    {% endif %}
+</div>
+
+{# ── Suspicious Activity ── #}
+<div class="prep-section">
+    <h3>🔍 Suspicious Activity
+        {% if not has_data %}
+        <span class="prep-status info">No Data</span>
+        {% elif suspicious_alerts|length == 0 %}
+        <span class="prep-status ok">None</span>
+        {% else %}
+        <span class="prep-status alert">{{ suspicious_alerts|length }} Alert{{ 's' if suspicious_alerts|length != 1 }}</span>
+        {% endif %}
+    </h3>
+    {% if has_data %}
+    {% if suspicious_alerts %}
+    {% for alert in suspicious_alerts %}
+    <div class="suspicious-item {{ 'alert-type' if alert.type == 'alert' }}">
+        <strong>{{ alert.message }}</strong>
+        {% if alert.details %}
+        <div class="suspicious-detail">
+            {% for detail in alert.details %}
+            {{ detail }}{% if not loop.last %}<br>{% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="prep-detail" style="color:#27ae60;">No suspicious checkout patterns detected.</p>
+    {% endif %}
+    {% else %}
+    <p class="prep-detail" style="color:#888;font-style:italic;">Load data first to check for suspicious activity.</p>
+    {% endif %}
+</div>
+
+{# ── Ejection Summary ── #}
+<div class="prep-section">
+    <h3>🚫 Player Removals
+        {% if ejected_all_count == 0 and ejected_game_count == 0 %}
+        <span class="prep-status ok">None</span>
+        {% else %}
+        <span class="prep-status warning">{{ ejected_all_count + ejected_game_count }}</span>
+        {% endif %}
+    </h3>
+    {% if ejected_all_count > 0 or ejected_game_count > 0 %}
+    <p class="prep-detail">
+        {% if ejected_all_count > 0 %}
+        <strong>{{ ejected_all_count }}</strong> player{{ 's' if ejected_all_count != 1 }} removed from all games.
+        {% endif %}
+        {% if ejected_game_count > 0 %}
+        <strong>{{ ejected_game_count }}</strong> per-game removal{{ 's' if ejected_game_count != 1 }}.
+        {% endif %}
+        <a href="{{ url_for('main.players') }}" style="color:#3498db;">Review on Manage Players →</a>
+    </p>
+    {% else %}
+    <p class="prep-detail" style="color:#888;">No players have been removed from the drawing.</p>
+    {% endif %}
+</div>
+
+{# ── Toast ── #}
+<div class="toast" id="toast" style="display:none"></div>
+
+<div id="page-config" style="display:none"
+     data-urls='{{ {
+         "checkin": url_for("main.checkin"),
+     }|tojson }}'></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    var config = document.getElementById('page-config');
+    var urls = JSON.parse(config.dataset.urls);
+
+    function showToast(msg, type) {
+        var t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'toast ' + (type || 'success');
+        t.style.display = 'block';
+        setTimeout(function() { t.style.display = 'none'; }, 3000);
+    }
+
+    /* Force In buttons */
+    var checkedOutList = document.getElementById('checked-out-list');
+    if (checkedOutList) {
+        checkedOutList.addEventListener('click', function(e) {
+            var btn = e.target.closest('.btn-force-in');
+            if (!btn) return;
+            var gameId = btn.dataset.gameId;
+            var checkoutId = btn.dataset.checkoutId;
+            btn.disabled = true;
+            btn.textContent = 'Forcing…';
+
+            fetch(urls.checkin, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({checkout_id: checkoutId, game_id: gameId})
+            })
+            .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+            .then(function(result) {
+                if (!result.ok) {
+                    btn.disabled = false;
+                    btn.textContent = 'Force In';
+                    showToast(result.data.error || 'Force in failed', 'error');
+                    return;
+                }
+                var li = btn.closest('li');
+                var gameName = li.querySelector('.game-name').textContent;
+                li.remove();
+
+                /* Add to available grid */
+                var availGrid = document.querySelector('.avail-grid');
+                if (availGrid) {
+                    var span = document.createElement('span');
+                    span.className = 'avail-item';
+                    span.textContent = '✓ ' + gameName;
+                    availGrid.appendChild(span);
+                }
+
+                /* Update header badge */
+                var remaining = document.querySelectorAll('#checked-out-list li').length;
+                var badge = document.querySelector('#component-section .prep-status');
+                if (badge) {
+                    if (remaining === 0) {
+                        badge.className = 'prep-status ok';
+                        badge.textContent = 'All In';
+                    } else {
+                        badge.textContent = remaining + ' Out';
+                    }
+                }
+
+                showToast(gameName + ' forced in');
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = 'Force In';
+                showToast('Force in failed', 'error');
+            });
+        });
+    }
+})();
+</script>
+{% endblock %}

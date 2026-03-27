@@ -3,7 +3,6 @@
 {% block title %}PawDrawing — Player Management{% endblock %}
 
 {% block nav %}
-<a href="{{ url_for('main.games') }}" onclick="document.getElementById('loading-overlay').classList.add('active');">Back to Games</a>
 <form method="POST" action="{{ url_for('main.logout') }}" style="display:inline">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" style="background:none;border:none;color:#ecf0f1;cursor:pointer;font-size:0.9rem;">
@@ -13,6 +12,7 @@
 {% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/games.css') }}">
 <style>
     .summary {
         background: white;
@@ -142,10 +142,24 @@
         white-space: nowrap;
     }
     .game-list .game-tag.removed-game {
-        background: #fdecea;
+        background: #f5f5f5;
         text-decoration: line-through;
         color: #999;
     }
+    .tag-action {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 0.85rem;
+        padding: 0 0.1rem;
+        margin-left: 0.15rem;
+        line-height: 1;
+        vertical-align: middle;
+    }
+    .tag-action.remove { color: #e74c3c; }
+    .tag-action.remove:hover { color: #c0392b; }
+    .tag-action.restore { color: #27ae60; }
+    .tag-action.restore:hover { color: #1e8449; }
 
     .expand-btn {
         background: none;
@@ -196,6 +210,13 @@
     <span class="stat"{% if removed_count == 0 %} style="display:none"{% endif %}><strong id="removed-count">{{ removed_count }}</strong> removed</span>
 </div>
 
+<div class="mode-selector" id="mode-selector" style="margin-bottom:1rem;">
+    <a href="{{ url_for('main.games') }}" class="mode-pill" onclick="document.getElementById('loading-overlay').classList.add('active');">Manage Games</a>
+    <a href="{{ url_for('main.players') }}" class="mode-pill active">Manage Players</a>
+    <a href="{{ url_for('main.drawing_prep') }}" class="mode-pill" onclick="document.getElementById('loading-overlay').classList.add('active');">Drawing Prep</a>
+    <a href="{{ url_for('main.drawing_results') }}" class="mode-pill" onclick="document.getElementById('loading-overlay').classList.add('active');">Drawing</a>
+</div>
+
 <div class="search-bar">
     <input type="text" id="search-input" placeholder="Search by name or badge ID…" autocomplete="off">
     <span class="search-count" id="search-count"></span>
@@ -233,7 +254,17 @@
             <td>
                 <div class="game-list">
                     {% for g in player.games %}
-                    <span class="game-tag{{ ' removed-game' if is_removed_all or g.game_id in per_game_removals }}">{{ g.game_name }}</span>
+                    {% set game_removed = is_removed_all or g.game_id in per_game_removals %}
+                    <span class="game-tag{{ ' removed-game' if game_removed }}" data-game-id="{{ g.game_id }}" data-badge-id="{{ player.badge_id }}">
+                        {{- g.game_name -}}
+                        {%- if not is_removed_all -%}
+                            {%- if g.game_id in per_game_removals -%}
+                            <button class="tag-action restore" onclick="tagAction(this)" title="Restore">&#8634;</button>
+                            {%- else -%}
+                            <button class="tag-action remove" onclick="tagAction(this)" title="Remove from game">&times;</button>
+                            {%- endif -%}
+                        {%- endif -%}
+                    </span>
                     {% endfor %}
                 </div>
             </td>
@@ -284,6 +315,107 @@
         });
     });
 
+    /* ── Tag-level remove/restore ── */
+    window.tagAction = function(btn) {
+        var tag = btn.closest('.game-tag');
+        var badgeId = tag.dataset.badgeId;
+        var gameId = tag.dataset.gameId;
+        var isRestore = btn.classList.contains('restore');
+        btn.disabled = true;
+
+        var url = isRestore ? '{{ url_for("main.uneject_player") }}' : '{{ url_for("main.eject_player") }}';
+        fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({badge_id: badgeId, game_id: gameId})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!isRestore && data.error && data.error !== 'Already ejected') { btn.disabled = false; return; }
+            if (isRestore && !data.ok) { btn.disabled = false; return; }
+
+            if (isRestore) {
+                tag.classList.remove('removed-game');
+                btn.className = 'tag-action remove';
+                btn.innerHTML = '&times;';
+                btn.title = 'Remove from game';
+            } else {
+                tag.classList.add('removed-game');
+                btn.className = 'tag-action restore';
+                btn.innerHTML = '&#8634;';
+                btn.title = 'Restore';
+            }
+            btn.disabled = false;
+            updateRemovedCount(isRestore ? -1 : 1);
+            syncDetailRow(badgeId, gameId, !isRestore);
+            updatePartialBadge(badgeId);
+        })
+        .catch(function() { btn.disabled = false; });
+    };
+
+    /* Sync detail row when tag action is used */
+    function syncDetailRow(badgeId, gameId, removed) {
+        var row = document.querySelector('.game-detail-row[data-parent-badge="' + badgeId + '"][data-game-id="' + gameId + '"]');
+        if (!row) return;
+        var detailBtn = row.querySelector('.game-remove-btn');
+        if (removed) {
+            row.classList.add('removed-game');
+            if (detailBtn) {
+                detailBtn.className = 'game-remove-btn restore';
+                detailBtn.textContent = 'Restore';
+                detailBtn.onclick = function() { restorePlayer(detailBtn); };
+            }
+        } else {
+            row.classList.remove('removed-game');
+            if (detailBtn) {
+                detailBtn.className = 'game-remove-btn remove';
+                detailBtn.textContent = 'Remove from Game';
+                detailBtn.onclick = function() { removePlayer(detailBtn); };
+            }
+        }
+    }
+
+    /* Sync tag when detail row action is used */
+    function syncTag(badgeId, gameId, removed) {
+        var tag = document.querySelector('.game-tag[data-badge-id="' + badgeId + '"][data-game-id="' + gameId + '"]');
+        if (!tag) return;
+        var tagBtn = tag.querySelector('.tag-action');
+        if (removed) {
+            tag.classList.add('removed-game');
+            if (tagBtn) {
+                tagBtn.className = 'tag-action restore';
+                tagBtn.innerHTML = '&#8634;';
+                tagBtn.title = 'Restore';
+            }
+        } else {
+            tag.classList.remove('removed-game');
+            if (tagBtn) {
+                tagBtn.className = 'tag-action remove';
+                tagBtn.innerHTML = '&times;';
+                tagBtn.title = 'Remove from game';
+            }
+        }
+    }
+
+    /* Update partial badge on player row */
+    function updatePartialBadge(badgeId) {
+        var playerRow = document.querySelector('tr[data-badge-id="' + badgeId + '"]');
+        if (!playerRow || playerRow.classList.contains('removed')) return;
+        var tags = playerRow.querySelectorAll('.game-tag');
+        var hasRemoved = false;
+        tags.forEach(function(t) { if (t.classList.contains('removed-game')) hasRemoved = true; });
+        var badge = playerRow.querySelector('.partial-badge');
+        if (hasRemoved && !badge) {
+            var nameCell = playerRow.querySelector('td');
+            var span = document.createElement('span');
+            span.className = 'partial-badge';
+            span.textContent = 'Partial';
+            nameCell.appendChild(span);
+        } else if (!hasRemoved && badge) {
+            badge.remove();
+        }
+    }
+
     /* ── Remove player ── */
     window.removePlayer = function(btn) {
         var badgeId = btn.dataset.badgeId;
@@ -313,6 +445,8 @@
                 btn.disabled = false;
                 btn.onclick = function() { restorePlayer(btn); };
                 updateRemovedCount(1);
+                syncTag(badgeId, gameId, true);
+                updatePartialBadge(badgeId);
                 return;
             }
             window.location.reload();
@@ -351,6 +485,8 @@
                 btn.disabled = false;
                 btn.onclick = function() { removePlayer(btn); };
                 updateRemovedCount(-1);
+                syncTag(badgeId, gameId, false);
+                updatePartialBadge(badgeId);
                 return;
             }
             window.location.reload();

@@ -787,12 +787,12 @@ class TestDrawingRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/login", resp.headers["Location"])
 
-    def test_drawing_results_requires_drawing_state(self):
+    def test_drawing_results_no_drawing_shows_prompt(self):
         with self.client.session_transaction() as sess:
             sess["tte_session_id"] = "session-123"
         resp = self.client.get("/drawing/results")
-        self.assertEqual(resp.status_code, 302)
-        self.assertIn("/games", resp.headers["Location"])
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Drawing Results", resp.data)
 
     def test_drawing_post_redirects_to_results(self):
         with self.client.session_transaction() as sess:
@@ -2520,7 +2520,7 @@ class TestRefreshData(unittest.TestCase):
 
         resp = self.client.get("/games")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn(b"Refresh Data", resp.data)
+        self.assertIn(b"Refresh", resp.data)
         self.assertIn(b"loading-overlay", resp.data)
 
     @patch("routes.helpers.TTEClient")
@@ -3109,8 +3109,8 @@ class TestPlayersRoute(unittest.TestCase):
         self.assertIn("/games", resp.headers["Location"])
 
     @patch("routes.helpers.TTEClient")
-    def test_players_has_manage_players_link_from_games(self, MockClient):
-        """Games page links to the player management page."""
+    def test_games_page_has_players_mode_pill(self, MockClient):
+        """Games page has a Players mode pill linking to player management."""
         mock_instance = MagicMock()
         mock_instance.get_library_games.return_value = [
             {"id": "A0000001-0000-4000-A000-000000000001", "name": "Catan"},
@@ -3129,7 +3129,8 @@ class TestPlayersRoute(unittest.TestCase):
 
         resp = self.client.get("/games")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn(b"Manage Players", resp.data)
+        self.assertIn(b"Players", resp.data)
+        self.assertIn(b"/games/players", resp.data)
 
 
 class TestHealthRoute(unittest.TestCase):

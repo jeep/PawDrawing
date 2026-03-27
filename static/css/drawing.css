@@ -317,7 +317,7 @@
     .view-panel { display: none; }
     .view-panel.active { display: block; }
 
-    .pickup-btn, .award-next-btn, .not-here-btn {
+    .pickup-btn, .award-next-btn, .gone-btn {
         border: none;
         border-radius: 4px;
         padding: 0.3rem 0.7rem;
@@ -394,14 +394,14 @@
     .award-next-btn:hover { background: #d35400; }
     .award-next-btn:disabled { background: #ccc; cursor: not-allowed; }
 
-    .not-here-btn {
+    .gone-btn {
         background: none;
         border: 1px solid #e74c3c;
         color: #e74c3c;
         font-size: 0.75rem;
     }
-    .not-here-btn:hover { background: #fdecea; }
-    .not-here-btn:disabled { background: #eee; color: #aaa; border-color: #ccc; cursor: not-allowed; }
+    .gone-btn:hover { background: #fdecea; }
+    .gone-btn:disabled { background: #eee; color: #aaa; border-color: #ccc; cursor: not-allowed; }
     .not-here-badge {
         display: inline-block;
         background: #e74c3c;
@@ -416,14 +416,14 @@
 
     /* Redraw mode actions hidden by default */
     .award-next-btn,
-    .not-here-btn,
+    .gone-btn,
     .not-here-badge,
     .redraw-btn,
     .redraw-option {
         display: none;
     }
     body.redraw-mode .award-next-btn { display: inline-block; }
-    body.redraw-mode .not-here-btn { display: inline-block; }
+    body.redraw-mode .gone-btn { display: inline-block; }
     body.redraw-mode .not-here-badge { display: inline-block; }
     body.redraw-mode .redraw-btn { display: inline-flex; }
     body.redraw-mode .redraw-option {

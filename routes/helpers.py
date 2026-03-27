@@ -98,6 +98,22 @@ def _parse_eject_payload():
     return badge_id, game_id
 
 
+def check_checkout_privilege():
+    """Check if the current user has checkout privilege.
+
+    In owner mode, always returns True.
+    In volunteer mode, returns the cached privilege flag.
+    Returns a (jsonify-error, status) tuple if denied, or None if allowed.
+    """
+    if session.get(SK.AUTH_MODE) != "volunteer":
+        return None  # owner mode — always allowed
+    if session.get(SK.HAS_CHECKOUT_PRIVILEGE):
+        return None  # volunteer with confirmed privilege
+    return jsonify({
+        "error": "Your account does not have checkout privileges on this library."
+    }), 403
+
+
 def _handle_api_json_error(exc, action="complete this request"):
     """Handle TTEAPIError for JSON/AJAX endpoints.
 

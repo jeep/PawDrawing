@@ -19,13 +19,20 @@
             padding: 1rem 2rem;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: center;
+            position: relative;
         }
         header h1 { font-size: 1.4rem; }
+        .header-right {
+            position: absolute;
+            right: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
         nav a {
             color: #ecf0f1;
             text-decoration: none;
-            margin-left: 1.5rem;
         }
         nav a:hover { text-decoration: underline; }
         .container {
@@ -77,10 +84,12 @@
 </head>
 <body>
     <header>
-        <h1>PawDrawing</h1>
-        <nav>
-            {% block nav %}{% endblock %}
-        </nav>
+        <h1>{% block app_title %}PawDrawing{% endblock %}</h1>
+        <div class="header-right">
+            <nav>
+                {% block nav %}{% endblock %}
+            </nav>
+        </div>
     </header>
     <div class="container">
         {% with messages = get_flashed_messages(with_categories=true) %}

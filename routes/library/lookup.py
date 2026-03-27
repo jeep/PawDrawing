@@ -1,0 +1,306 @@
+"""Library Management game and person lookup routes."""
+
+import logging
+
+from flask import jsonify, render_template, request, session, url_for
+
+from session_keys import SK
+from tte_client import TTEAPIError
+
+from . import library_bp
+from routes.helpers import (
+    _get_client,
+    is_valid_tte_id,
+    login_required,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _handle_api_json_error(exc, action="complete this request"):
+    """Handle TTEAPIError for JSON/AJAX endpoints."""
+    status = getattr(exc, "status_code", None)
+    if status in (401, 403):
+        logger.warning("API auth error during '%s': session cleared", action)
+        session.clear()
+        return jsonify({"error": "Session expired — please log in again."}), 401
+    if status == 429:
+        logger.warning("Rate limited during '%s'", action)
+        return jsonify({"error": "Rate limit reached — please wait a moment and try again."}), 429
+    logger.error("API error during '%s': %s", action, exc)
+    return jsonify({"error": f"Could not {action}: {exc}"}), 500
+
+
+@library_bp.route("/game/<game_id>")
+@login_required
+def game_detail(game_id):
+    """Game detail view — fresh data from TTE."""
+    if not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID"}), 400
+
+    client = _get_client()
+    try:
+        game = client.get_library_game(game_id)
+        checkouts = client.get_library_game_checkouts(game_id)
+    except TTEAPIError as exc:
+        return _handle_api_json_error(exc, "load game details")
+
+    active_checkouts = [c for c in checkouts if not c.get("is_checked_in")]
+    checkout_history = [c for c in checkouts if c.get("is_checked_in")]
+    checkout_history.sort(key=lambda c: c.get("checkin_date", ""), reverse=True)
+
+    # Get P2W entries if applicable
+    p2w_entries = []
+    if game.get("is_play_to_win"):
+        try:
+            p2w_entries = client.get_library_game_playtowins(game_id)
+        except TTEAPIError:
+            logger.warning("Failed to load P2W entries for game %s", game_id)
+
+    # Build a map of P2W entries keyed by renter name for linking to checkouts
+    p2w_by_name = {}
+    for e in p2w_entries:
+        name = (e.get("name") or e.get("renter_name") or "Unknown").lower()
+        p2w_by_name.setdefault(name, []).append(e)
+
+    # Annotate each checkout with its associated P2W entries
+    for c in checkout_history:
+        renter = (c.get("renter_name") or "").lower()
+        c["p2w_entries"] = p2w_by_name.get(renter, [])
+    for c in active_checkouts:
+        renter = (c.get("renter_name") or "").lower()
+        c["p2w_entries"] = p2w_by_name.get(renter, [])
+
+    # Check if a drawing has been run and this game has a winner
+    drawing_state = session.get("drawing_state", [])
+    drawing_winner = None
+    for item in drawing_state:
+        if item.get("game", {}).get("id") == game_id:
+            from drawing import get_current_winners
+            winners = get_current_winners(drawing_state)
+            w = winners.get(game_id)
+            if w:
+                drawing_winner = {
+                    "name": w.get("name", "Unknown"),
+                    "badge_id": w.get("badge_id", ""),
+                    "total_entries": len(item.get("shuffled", [])),
+                    "position": item.get("winner_index", 0) + 1,
+                }
+            break
+
+    return render_template(
+        "library/game_detail.html",
+        game=game,
+        active_checkouts=active_checkouts,
+        checkout_history=checkout_history[:20],
+        p2w_entries=p2w_entries,
+        p2w_entry_count=len(p2w_entries),
+        drawing_winner=drawing_winner,
+    )
+
+
+@library_bp.route("/game-search")
+@login_required(api=True)
+def game_search():
+    """AJAX: search games in the cached catalog."""
+    query = request.args.get("q", "").strip().lower()
+    if not query:
+        return jsonify({"results": []})
+
+    games = session.get(SK.CACHED_GAMES, [])
+    results = []
+    for game in games:
+        name = (game.get("name") or "").lower()
+        catalog = (game.get("catalog_number") or "").lower()
+        if query in name or query in catalog:
+            results.append({
+                "id": game.get("id"),
+                "name": game.get("name"),
+                "catalog_number": game.get("catalog_number"),
+                "is_checked_out": game.get("is_checked_out"),
+                "is_play_to_win": game.get("is_play_to_win"),
+                "is_in_circulation": game.get("is_in_circulation"),
+            })
+    results.sort(key=lambda g: g.get("name", ""))
+    return jsonify({"results": results[:50]})
+
+
+@library_bp.route("/person/<badge_number>")
+@login_required
+def person_detail(badge_number):
+    """Person detail view — current checkouts and history."""
+    if not badge_number or not badge_number.strip():
+        return jsonify({"error": "Badge number is required"}), 400
+
+    badge_number = badge_number.strip()
+    library_id = session.get(SK.LIBRARY_ID)
+    convention_id = session.get(SK.CONVENTION_ID)
+    if not library_id:
+        return jsonify({"error": "No library selected"}), 400
+
+    # Get person name from cache
+    person_cache = session.get(SK.PERSON_CACHE, {})
+    person_info = person_cache.get(badge_number, {})
+    person_name = person_info.get("name", "")
+
+    client = _get_client()
+
+    # Fetch current checkouts (not checked in) for this person
+    try:
+        all_active = client.get_library_checkouts(library_id, checked_in=False)
+    except TTEAPIError as exc:
+        return _handle_api_json_error(exc, "load person checkouts")
+
+    # If not in cache, try to find in active checkouts by badge (FR-PRSN-05)
+    if not person_name:
+        for co in all_active:
+            if co.get("badge_id") == badge_number or str(co.get("badge_number", "")) == badge_number:
+                person_name = co.get("renter_name", "")
+                if person_name:
+                    person_cache[badge_number] = {"name": person_name, "badge_id": co.get("badge_id", badge_number)}
+                    session[SK.PERSON_CACHE] = person_cache
+                    person_info = person_cache[badge_number]
+                    break
+
+    if not person_name:
+        person_name = badge_number
+
+    # Build game name lookup from cached catalog
+    games = session.get(SK.CACHED_GAMES, [])
+    game_names = {g.get("id"): g.get("name", "Unknown") for g in games}
+
+    # Filter to this person's checkouts
+    current_checkouts = [
+        c for c in all_active
+        if c.get("renter_name", "").lower() == person_name.lower()
+        or c.get("badge_id") == person_info.get("badge_id")
+    ]
+    for c in current_checkouts:
+        c["game_name"] = game_names.get(c.get("librarygame_id"), "Unknown Game")
+
+    # Fetch checkout history
+    try:
+        all_checkouts = client.get_library_checkouts(library_id, checked_in=True)
+    except TTEAPIError as exc:
+        return _handle_api_json_error(exc, "load person history")
+
+    checkout_history = [
+        c for c in all_checkouts
+        if c.get("renter_name", "").lower() == person_name.lower()
+        or c.get("badge_id") == person_info.get("badge_id")
+    ]
+    checkout_history.sort(key=lambda c: c.get("checkin_date", ""), reverse=True)
+    for c in checkout_history:
+        c["game_name"] = game_names.get(c.get("librarygame_id"), "Unknown Game")
+
+    # Fetch P2W entries for this person (FR-PRSN-02)
+    p2w_entries = []
+    try:
+        all_p2w = client.get_library_playtowins(library_id)
+        p2w_entries = [
+            e for e in all_p2w
+            if (e.get("name") or e.get("renter_name") or "").lower() == person_name.lower()
+        ]
+        for e in p2w_entries:
+            e["game_name"] = game_names.get(e.get("librarygame_id"), "Unknown Game")
+    except TTEAPIError:
+        logger.warning("Failed to load P2W entries for person %s", badge_number)
+
+    return render_template(
+        "library/person_detail.html",
+        person_name=person_name,
+        badge_number=badge_number,
+        current_checkouts=current_checkouts,
+        checkout_history=checkout_history[:20],
+        p2w_entries=p2w_entries,
+    )
+
+
+@library_bp.route("/person-search")
+@login_required(api=True)
+def person_search():
+    """AJAX: search people in the local badge cache."""
+    query = request.args.get("q", "").strip().lower()
+    if not query:
+        return jsonify({"results": []})
+
+    person_cache = session.get(SK.PERSON_CACHE, {})
+    results = []
+    for badge_number, info in person_cache.items():
+        name = (info.get("name") or "").lower()
+        if query in name or query in badge_number.lower():
+            results.append({
+                "badge_number": badge_number,
+                "name": info.get("name"),
+                "badge_id": info.get("badge_id"),
+            })
+    results.sort(key=lambda p: p.get("name", ""))
+    return jsonify({"results": results[:50]})
+
+
+@library_bp.route("/people")
+@login_required
+def people_list():
+    """People list — all known attendees from the badge cache."""
+    person_cache = session.get(SK.PERSON_CACHE, {})
+    library_id = session.get(SK.LIBRARY_ID)
+
+    # Build people list from cache
+    people = []
+    for badge_number, info in person_cache.items():
+        people.append({
+            "badge_number": badge_number,
+            "name": info.get("name", badge_number),
+        })
+    people.sort(key=lambda p: p["name"].lower())
+
+    # Get active checkouts to show who currently has games
+    active_by_name = {}
+    if library_id:
+        games = session.get(SK.CACHED_GAMES, [])
+        game_names = {g.get("id"): g.get("name", "Unknown") for g in games}
+        for g in games:
+            renter = g.get("_renter_name", "")
+            if renter and g.get("is_checked_out"):
+                active_by_name.setdefault(renter.lower(), []).append(
+                    game_names.get(g.get("id"), "Unknown")
+                )
+
+    # Annotate people with their active checkouts
+    for p in people:
+        p["active_games"] = active_by_name.get(p["name"].lower(), [])
+
+    return render_template(
+        "library/people_list.html",
+        people=people,
+        total=len(people),
+    )
+
+
+@library_bp.route("/person-add", methods=["POST"])
+@login_required(api=True)
+def person_add():
+    """AJAX: add a person to the local badge cache."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid request"}), 400
+
+    badge_number = (data.get("badge_number") or "").strip()
+    name = (data.get("name") or "").strip()
+
+    if not badge_number:
+        return jsonify({"error": "Badge number is required"}), 400
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+    if len(badge_number) > 200 or len(name) > 200:
+        return jsonify({"error": "Input too long"}), 400
+
+    person_cache = session.get(SK.PERSON_CACHE) or {}
+    person_cache[badge_number] = {
+        "name": name,
+        "badge_id": person_cache.get(badge_number, {}).get("badge_id", ""),
+    }
+    session[SK.PERSON_CACHE] = person_cache
+
+    logger.info("Person added to cache: badge=%s name=%s", badge_number, name)
+    return jsonify({"success": True})
