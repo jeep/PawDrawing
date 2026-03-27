@@ -1258,6 +1258,40 @@ class TestDrawingRoutes(unittest.TestCase):
         self.assertIn(b'id="search-count"', resp.data)
         self.assertIn(b"Filter by game name", resp.data)
 
+    def test_drawing_excludes_damaged_games(self):
+        game_a = "A0000001-0000-4000-A000-000000000001"
+        game_b = "A0000002-0000-4000-A000-000000000002"
+        with self.client.session_transaction() as sess:
+            sess["tte_session_id"] = "session-123"
+            sess["library_id"] = "10000001-0000-4000-A000-000000000001"
+            sess["convention_id"] = "C0000001-0000-4000-A000-000000000001"
+            sess["convention_name"] = "GameFest"
+            sess["premium_games"] = []
+            sess["cached_games"] = [
+                {"id": game_a, "name": "Catan"},
+                {"id": game_b, "name": "Ticket to Ride"},
+            ]
+            sess["cached_entries"] = [
+                {"id": "e1", "badge_id": "B1", "librarygame_id": game_a, "name": "Alice"},
+                {"id": "e2", "badge_id": "B2", "librarygame_id": game_b, "name": "Bob"},
+            ]
+            sess["component_checks"] = {
+                game_a: {"checked": True, "damaged": True, "volunteer": "Vol", "timestamp": "2025-01-01"},
+            }
+
+        resp = self.client.post("/drawing", follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+        # Damaged game should be excluded from results
+        self.assertNotIn(b"Catan", resp.data)
+        # Non-damaged game should still appear
+        self.assertIn(b"Ticket to Ride", resp.data)
+
+        with self.client.session_transaction() as sess:
+            drawing_state = sess.get("drawing_state", [])
+            game_ids = [g["game"]["id"] for g in drawing_state]
+            self.assertNotIn(game_a, game_ids)
+            self.assertIn(game_b, game_ids)
+
 
 class TestDismissConflictGameRoute(unittest.TestCase):
 

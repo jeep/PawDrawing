@@ -88,6 +88,13 @@
     .component-row.checked {
         background: #f6fff8;
     }
+    .component-row.damaged {
+        background: #fdecea;
+    }
+    .component-row.damaged td:first-child strong {
+        text-decoration: line-through;
+        color: #999;
+    }
     .component-status {
         font-size: 0.76rem;
         font-weight: 700;
@@ -102,6 +109,10 @@
     .component-status.checked {
         background: #eafaf1;
         color: #239b56;
+    }
+    .component-status.damaged {
+        background: #fdecea;
+        color: #c0392b;
     }
     .availability.out {
         color: #c0392b;
@@ -123,6 +134,19 @@
     }
     .btn-force-in:hover { background: #c0392b; }
     .btn-force-in:disabled { background: #bdc3c7; cursor: default; }
+
+    .btn-damaged {
+        background: none;
+        border: 1px solid #e74c3c;
+        color: #e74c3c;
+        border-radius: 4px;
+        padding: 0.25rem 0.6rem;
+        font-size: 0.78rem;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .btn-damaged:hover { background: #fdecea; }
+    .btn-damaged:disabled { background: #bdc3c7; border-color: #bdc3c7; color: white; cursor: default; }
 
     .suspicious-item {
         padding: 0.5rem 0.75rem;
@@ -329,7 +353,8 @@
     <div class="component-summary">
         <strong>{{ inspected_count }}</strong> / {{ total_component_games }} inspected,
         <strong>{{ remaining_component_checks }}</strong> remaining,
-        <strong>{{ checked_out_count }}</strong> currently checked out.
+        <strong>{{ checked_out_count }}</strong> currently checked out{% if damaged_count > 0 %},
+        <strong style="color:#c0392b;">{{ damaged_count }}</strong> removed (damaged){% endif %}.
     </div>
 
     {% if component_items %}
@@ -347,8 +372,8 @@
             </thead>
             <tbody>
                 {% for item in component_items %}
-                <tr id="comp-row-{{ item.id }}" class="component-row {{ 'checked' if item.checked else '' }}"
-                    data-game-id="{{ item.id }}" data-out="{{ '1' if item.is_checked_out else '0' }}" data-checked="{{ '1' if item.checked else '0' }}">
+                <tr id="comp-row-{{ item.id }}" class="component-row {{ 'damaged' if item.damaged else 'checked' if item.checked else '' }}"
+                    data-game-id="{{ item.id }}" data-out="{{ '1' if item.is_checked_out else '0' }}" data-checked="{{ '1' if item.checked else '0' }}" data-damaged="{{ '1' if item.damaged else '0' }}">
                     <td><strong>{{ item.name }}</strong></td>
                     <td class="availability-cell">
                         {% if item.is_checked_out %}
@@ -358,7 +383,9 @@
                         {% endif %}
                     </td>
                     <td class="inspection-status-cell">
-                        {% if item.checked %}
+                        {% if item.damaged %}
+                        <span class="component-status damaged">Removed</span>
+                        {% elif item.checked %}
                         <span class="component-status checked">Inspected</span>
                         {% else %}
                         <span class="component-status pending">Pending</span>
@@ -370,10 +397,14 @@
                         {% if item.is_checked_out and item.checkout_id %}
                         <button class="btn-force-in" data-game-id="{{ item.id }}" data-checkout-id="{{ item.checkout_id }}">Force In</button>
                         {% endif %}
-                        {% if item.checked %}
+                        {% if item.damaged %}
+                        <button class="btn-refresh comp-undamage-btn" data-game-id="{{ item.id }}" style="padding:0.28rem 0.6rem;">Undo Removal</button>
+                        {% elif item.checked %}
                         <button class="btn-refresh comp-uncheck-btn" data-game-id="{{ item.id }}" style="padding:0.28rem 0.6rem;">Undo</button>
+                        <button class="btn-damaged comp-damage-btn" data-game-id="{{ item.id }}">Remove from Drawing</button>
                         {% else %}
                         <button class="btn-refresh comp-check-btn" data-game-id="{{ item.id }}" style="padding:0.28rem 0.6rem;" {% if item.is_checked_out %}disabled{% endif %}>Mark Inspected</button>
+                        <button class="btn-damaged comp-damage-btn" data-game-id="{{ item.id }}">Remove from Drawing</button>
                         {% endif %}
                     </td>
                 </tr>
@@ -397,6 +428,8 @@
          "checkin": url_for("main.checkin"),
          "componentCheck": url_for("main.mark_component_check"),
          "componentUncheck": url_for("main.unmark_component_check"),
+         "componentDamaged": url_for("main.mark_component_damaged"),
+         "componentUndamage": url_for("main.unmark_component_damaged"),
      }|tojson }}'></div>
 {% endblock %}
 
@@ -420,20 +453,24 @@
         var rows = componentTable.querySelectorAll('tbody tr');
         var remaining = 0;
         var outCount = 0;
+        var damagedCount = 0;
         for (var i = 0; i < rows.length; i++) {
+            if (rows[i].dataset.damaged === '1') { damagedCount += 1; continue; }
             if (rows[i].dataset.checked !== '1') remaining += 1;
             if (rows[i].dataset.out === '1') outCount += 1;
         }
 
         var badge = document.querySelector('#component-section .prep-status');
         if (!badge) return;
-        if (remaining === 0 && outCount === 0) {
+        if (remaining === 0 && outCount === 0 && damagedCount === 0) {
             badge.className = 'prep-status ok';
             badge.textContent = 'Complete';
             return;
         }
         badge.className = 'prep-status warning';
-        if (remaining === 0) {
+        if (remaining === 0 && damagedCount > 0) {
+            badge.textContent = damagedCount + ' Removed';
+        } else if (remaining === 0) {
             badge.textContent = 'Checked ' + outCount + ' Out';
         } else {
             badge.textContent = remaining + ' Remaining';
@@ -442,6 +479,8 @@
 
     function setRowCheckedState(row, checked, volunteer, timestampDisplay) {
         row.dataset.checked = checked ? '1' : '0';
+        row.dataset.damaged = '0';
+        row.classList.remove('damaged');
         row.classList.toggle('checked', checked);
 
         var statusCell = row.querySelector('.inspection-status-cell');
@@ -460,8 +499,8 @@
         if (timestampCell) timestampCell.textContent = checked ? (timestampDisplay || '') : '';
 
         if (actionCell) {
-            var existing = actionCell.querySelector('.comp-check-btn, .comp-uncheck-btn');
-            if (existing) existing.remove();
+            var existing = actionCell.querySelector('.comp-check-btn, .comp-uncheck-btn, .comp-damage-btn, .comp-undamage-btn');
+            while (existing) { existing.remove(); existing = actionCell.querySelector('.comp-check-btn, .comp-uncheck-btn, .comp-damage-btn, .comp-undamage-btn'); }
 
             var btn = document.createElement('button');
             btn.style.padding = '0.28rem 0.6rem';
@@ -475,6 +514,49 @@
                 btn.disabled = isOut;
             }
             actionCell.appendChild(btn);
+
+            var damageBtn = document.createElement('button');
+            damageBtn.className = 'btn-damaged comp-damage-btn';
+            damageBtn.dataset.gameId = gameId;
+            damageBtn.textContent = 'Remove from Drawing';
+            actionCell.appendChild(damageBtn);
+        }
+
+        updateComponentHeaderBadge();
+    }
+
+    function setRowDamagedState(row, damaged, volunteer, timestampDisplay) {
+        row.dataset.damaged = damaged ? '1' : '0';
+        row.dataset.checked = damaged ? '1' : '0';
+        row.classList.toggle('damaged', damaged);
+        row.classList.remove('checked');
+
+        var statusCell = row.querySelector('.inspection-status-cell');
+        var volunteerCell = row.querySelector('.volunteer-cell');
+        var timestampCell = row.querySelector('.timestamp-cell');
+        var actionCell = row.cells[row.cells.length - 1];
+        var gameId = row.dataset.gameId;
+
+        if (statusCell) {
+            statusCell.innerHTML = damaged
+                ? '<span class="component-status damaged">Removed</span>'
+                : '<span class="component-status pending">Pending</span>';
+        }
+        if (volunteerCell) volunteerCell.textContent = damaged ? (volunteer || '') : '';
+        if (timestampCell) timestampCell.textContent = damaged ? (timestampDisplay || '') : '';
+
+        if (actionCell) {
+            var existing = actionCell.querySelector('.comp-check-btn, .comp-uncheck-btn, .comp-damage-btn, .comp-undamage-btn');
+            while (existing) { existing.remove(); existing = actionCell.querySelector('.comp-check-btn, .comp-uncheck-btn, .comp-damage-btn, .comp-undamage-btn'); }
+
+            if (damaged) {
+                var undoBtn = document.createElement('button');
+                undoBtn.className = 'btn-refresh comp-undamage-btn';
+                undoBtn.style.padding = '0.28rem 0.6rem';
+                undoBtn.dataset.gameId = gameId;
+                undoBtn.textContent = 'Undo Removal';
+                actionCell.appendChild(undoBtn);
+            }
         }
 
         updateComponentHeaderBadge();
@@ -540,6 +622,73 @@
                 .catch(function() {
                     uncheckBtn.disabled = false;
                     showToast('Failed to clear inspection', 'error');
+                });
+                return;
+            }
+
+            var damageBtn = e.target.closest('.comp-damage-btn');
+            if (damageBtn) {
+                var gameName = '';
+                var damageRow = document.getElementById('comp-row-' + damageBtn.dataset.gameId);
+                if (damageRow) gameName = damageRow.cells[0].textContent.trim();
+                if (!confirm('Remove "' + gameName + '" from the drawing?\n\nThis game will be excluded due to damage or missing pieces.')) {
+                    return;
+                }
+                var inspector = document.getElementById('comp-volunteer').value.trim();
+                if (!inspector) {
+                    showToast('Enter your name/badge first', 'warning');
+                    document.getElementById('comp-volunteer').focus();
+                    return;
+                }
+                var damageGameId = damageBtn.dataset.gameId;
+                damageBtn.disabled = true;
+
+                fetch(urls.componentDamaged, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({game_id: damageGameId, volunteer: inspector})
+                })
+                .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+                .then(function(result) {
+                    if (!result.ok) {
+                        damageBtn.disabled = false;
+                        showToast(result.data.error || 'Failed to mark as damaged', 'error');
+                        return;
+                    }
+                    setRowDamagedState(damageRow, true, result.data.volunteer, result.data.timestamp_display);
+                    showToast(gameName + ' removed from drawing');
+                })
+                .catch(function() {
+                    damageBtn.disabled = false;
+                    showToast('Failed to mark as damaged', 'error');
+                });
+                return;
+            }
+
+            var undamageBtn = e.target.closest('.comp-undamage-btn');
+            if (undamageBtn) {
+                var undamageGameId = undamageBtn.dataset.gameId;
+                var undamageRow = document.getElementById('comp-row-' + undamageGameId);
+                undamageBtn.disabled = true;
+
+                fetch(urls.componentUndamage, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({game_id: undamageGameId})
+                })
+                .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+                .then(function(result) {
+                    if (!result.ok) {
+                        undamageBtn.disabled = false;
+                        showToast(result.data.error || 'Failed to restore game', 'error');
+                        return;
+                    }
+                    setRowDamagedState(undamageRow, false, '', '');
+                    showToast('Game restored to drawing');
+                })
+                .catch(function() {
+                    undamageBtn.disabled = false;
+                    showToast('Failed to restore game', 'error');
                 });
                 return;
             }

@@ -70,6 +70,15 @@ def run_drawing_route():
 
     ejected_entries = session.get(SK.EJECTED_ENTRIES, [])
     filtered = apply_ejections(entries, ejected_entries)
+
+    # Exclude games marked as damaged during component check
+    component_checks = session.get(SK.COMPONENT_CHECKS, {})
+    damaged_ids = {gid for gid, rec in component_checks.items()
+                   if isinstance(rec, dict) and rec.get("damaged")}
+    if damaged_ids:
+        all_games = [g for g in all_games if g.get("id") not in damaged_ids]
+        filtered = [e for e in filtered if e.get("librarygame_id") not in damaged_ids]
+
     game_data = group_entries_by_game(filtered, all_games)
     premium_games = session.get(SK.PREMIUM_GAMES, [])
 

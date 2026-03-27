@@ -227,6 +227,7 @@ def _parse_component_checks(raw_checks):
             continue
         parsed[game_id] = {
             "checked": bool(record.get("checked")),
+            "damaged": bool(record.get("damaged")),
             "volunteer": (record.get("volunteer") or "").strip(),
             "timestamp": (record.get("timestamp") or "").strip(),
         }
@@ -598,6 +599,7 @@ def drawing_prep():
     # Component check: inspection checklist separate from checkout status.
     component_items = []
     inspected_count = 0
+    damaged_count = 0
     checked_out_count = 0
     if all_games:
         checkout_map = session.get(SK.CHECKOUT_MAP, {})
@@ -611,8 +613,11 @@ def drawing_prep():
                 checked_out_count += 1
             check_record = component_checks.get(gid, {})
             checked = bool(check_record.get("checked"))
+            damaged = bool(check_record.get("damaged"))
             if checked:
                 inspected_count += 1
+            if damaged:
+                damaged_count += 1
             renter = (co_info or {}).get("renter") or g.get("_renter_name", "Unknown")
             checkout_id = (co_info or {}).get("checkout_id") or g.get("_checkout_id", "")
             component_items.append({
@@ -622,6 +627,7 @@ def drawing_prep():
                 "renter": renter if is_out else "",
                 "checkout_id": checkout_id,
                 "checked": checked,
+                "damaged": damaged,
                 "volunteer": check_record.get("volunteer", ""),
                 "timestamp": check_record.get("timestamp", ""),
                 "timestamp_display": _format_component_timestamp(check_record.get("timestamp", "")),
@@ -664,6 +670,7 @@ def drawing_prep():
         component_items=component_items,
         total_component_games=total_component_games,
         inspected_count=inspected_count,
+        damaged_count=damaged_count,
         remaining_component_checks=remaining_component_checks,
         checked_out_count=checked_out_count,
         suspicious_alerts=suspicious_alerts,
@@ -730,6 +737,62 @@ def unmark_component_check():
     if game_id not in checks:
         return jsonify({"error": "Inspection record not found"}), 404
 
+    checks.pop(game_id, None)
+    session[SK.COMPONENT_CHECKS] = checks
+    return jsonify({"ok": True, "game_id": game_id})
+
+
+@main_bp.route("/games/component-damaged", methods=["POST"])
+@login_required(api=True)
+def mark_component_damaged():
+    """AJAX: mark a game as damaged and exclude it from the drawing."""
+    data = request.get_json(silent=True) or {}
+    game_id = (data.get("game_id") or "").strip()
+    volunteer = (data.get("volunteer") or "").strip()
+
+    if not game_id or not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID"}), 400
+    if not volunteer:
+        return jsonify({"error": "Volunteer name is required"}), 400
+
+    cached_games = session.get(SK.CACHED_GAMES, [])
+    game = next((g for g in cached_games if g.get("id") == game_id and g.get("is_play_to_win")), None)
+    if not game:
+        return jsonify({"error": "Game not found"}), 404
+
+    checks = _parse_component_checks(session.get(SK.COMPONENT_CHECKS, {}))
+    timestamp = datetime.now(timezone.utc).isoformat()
+    checks[game_id] = {
+        "checked": True,
+        "damaged": True,
+        "volunteer": volunteer,
+        "timestamp": timestamp,
+    }
+    session[SK.COMPONENT_CHECKS] = checks
+    return jsonify({
+        "ok": True,
+        "game_id": game_id,
+        "volunteer": volunteer,
+        "timestamp": timestamp,
+        "timestamp_display": _format_component_timestamp(timestamp),
+    })
+
+
+@main_bp.route("/games/component-undamage", methods=["POST"])
+@login_required(api=True)
+def unmark_component_damaged():
+    """AJAX: clear the damaged flag from a game, restoring it to the drawing."""
+    data = request.get_json(silent=True) or {}
+    game_id = (data.get("game_id") or "").strip()
+
+    if not game_id or not is_valid_tte_id(game_id):
+        return jsonify({"error": "Invalid game ID"}), 400
+
+    checks = _parse_component_checks(session.get(SK.COMPONENT_CHECKS, {}))
+    if game_id not in checks or not checks[game_id].get("damaged"):
+        return jsonify({"error": "Game is not marked as damaged"}), 404
+
+    # Clear the damaged flag; also clear checked since it needs re-inspection
     checks.pop(game_id, None)
     session[SK.COMPONENT_CHECKS] = checks
     return jsonify({"ok": True, "game_id": game_id})

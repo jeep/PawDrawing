@@ -276,6 +276,100 @@ class TestComponentInspection(LibraryTestBase):
         self.assertIn(b"remaining", resp.data)
         self.assertIn(b"currently checked out", resp.data)
 
+    def test_component_damaged_marks_game(self):
+        self._set_session(**{SK.CACHED_GAMES: [
+            {"id": VALID_GAME_ID, "name": "Game 1", "is_play_to_win": 1, "is_checked_out": 0},
+        ]})
+
+        resp = self.client.post("/games/component-damaged", json={
+            "game_id": VALID_GAME_ID,
+            "volunteer": "Alex",
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+
+        with self.client.session_transaction() as sess:
+            checks = sess.get(SK.COMPONENT_CHECKS, {})
+            self.assertTrue(checks[VALID_GAME_ID]["damaged"])
+            self.assertTrue(checks[VALID_GAME_ID]["checked"])
+
+    def test_component_damaged_requires_volunteer(self):
+        self._set_session(**{SK.CACHED_GAMES: [
+            {"id": VALID_GAME_ID, "name": "Game 1", "is_play_to_win": 1, "is_checked_out": 0},
+        ]})
+
+        resp = self.client.post("/games/component-damaged", json={
+            "game_id": VALID_GAME_ID,
+            "volunteer": "",
+        })
+        self.assertEqual(resp.status_code, 400)
+
+    def test_component_undamage_clears_record(self):
+        self._set_session(**{
+            SK.CACHED_GAMES: [
+                {"id": VALID_GAME_ID, "name": "Game 1", "is_play_to_win": 1, "is_checked_out": 0},
+            ],
+            SK.COMPONENT_CHECKS: {
+                VALID_GAME_ID: {
+                    "checked": True,
+                    "damaged": True,
+                    "volunteer": "Alex",
+                    "timestamp": "2026-03-26T10:00:00+00:00",
+                },
+            },
+        })
+
+        resp = self.client.post("/games/component-undamage", json={
+            "game_id": VALID_GAME_ID,
+        })
+        self.assertEqual(resp.status_code, 200)
+
+        with self.client.session_transaction() as sess:
+            checks = sess.get(SK.COMPONENT_CHECKS, {})
+            self.assertNotIn(VALID_GAME_ID, checks)
+
+    def test_component_undamage_rejects_non_damaged(self):
+        self._set_session(**{
+            SK.CACHED_GAMES: [
+                {"id": VALID_GAME_ID, "name": "Game 1", "is_play_to_win": 1, "is_checked_out": 0},
+            ],
+            SK.COMPONENT_CHECKS: {
+                VALID_GAME_ID: {
+                    "checked": True,
+                    "volunteer": "Alex",
+                    "timestamp": "2026-03-26T10:00:00+00:00",
+                },
+            },
+        })
+
+        resp = self.client.post("/games/component-undamage", json={
+            "game_id": VALID_GAME_ID,
+        })
+        self.assertEqual(resp.status_code, 404)
+
+    def test_drawing_prep_shows_damaged_count(self):
+        self._set_session(**{
+            SK.CACHED_GAMES: [
+                {"id": VALID_GAME_ID, "name": "Game 1", "is_play_to_win": 1, "is_checked_out": 0},
+                {"id": VALID_GAME_ID_2, "name": "Game 2", "is_play_to_win": 1, "is_checked_out": 0},
+            ],
+            SK.CACHED_ENTRIES: [],
+            SK.COMPONENT_CHECKS: {
+                VALID_GAME_ID: {
+                    "checked": True,
+                    "damaged": True,
+                    "volunteer": "Alex",
+                    "timestamp": "2026-03-26T10:00:00+00:00",
+                },
+            },
+        })
+
+        resp = self.client.get("/games/prep")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"removed (damaged)", resp.data)
+        self.assertIn(b"Removed", resp.data)
+
 
 # ── P2W Entry Tests ───────────────────────────────────────────────────
 
