@@ -139,38 +139,6 @@ def restore_game():
     })
 
 
-@main_bp.route("/drawing/remove-game", methods=["POST"])
-@login_required
-def remove_game():
-    """Remove a game from the active drawing (e.g. damaged/missing pieces)."""
-    drawing_state = _require_active_drawing()
-    if isinstance(drawing_state, tuple):
-        return drawing_state
-
-    data = request.get_json(silent=True)
-    if not data or "game_id" not in data:
-        return jsonify({"error": "Invalid request"}), 400
-
-    game_id = data["game_id"]
-    if not is_valid_tte_id(game_id):
-        return jsonify({"error": "Invalid game ID format"}), 400
-
-    original_len = len(drawing_state)
-    drawing_state = [item for item in drawing_state if item["game"]["id"] != game_id]
-    if len(drawing_state) == original_len:
-        return jsonify({"ok": False, "error": "Game not found in drawing"}), 404
-
-    session[SK.DRAWING_STATE] = drawing_state
-
-    # Clean up picked_up list if the game was there
-    picked_up = session.get(SK.PICKED_UP, [])
-    if game_id in picked_up:
-        picked_up.remove(game_id)
-        session[SK.PICKED_UP] = picked_up
-
-    return jsonify({"ok": True, "game_id": game_id})
-
-
 @main_bp.route("/drawing/award-to", methods=["POST"])
 @login_required
 def award_to():

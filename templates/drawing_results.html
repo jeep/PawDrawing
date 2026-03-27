@@ -242,7 +242,6 @@
                 {% elif r.has_entries %}
                 <button class="restore-btn" data-game-id="{{ r.game_id }}" onclick="restoreGame('{{ r.game_id }}')">Restore</button>
                 {% endif %}
-                <button class="remove-game-btn" data-game-id="{{ r.game_id }}" onclick="removeGame('{{ r.game_id }}', '{{ r.game_name|replace("'", "\\'") }}')">Remove</button>
             </td>
         </tr>
         {% endfor %}
@@ -467,7 +466,6 @@
          "awardNext": url_for("main.award_next"),
          "awardTo": url_for("main.award_to"),
          "restoreGame": url_for("main.restore_game"),
-         "removeGame": url_for("main.remove_game"),
          "markNotHere": url_for("main.mark_not_here"),
          "redrawAllUnclaimed": url_for("main.redraw_all_unclaimed"),
          "resolveConflicts": url_for("main.resolve_conflicts"),
